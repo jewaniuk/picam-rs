@@ -56,6 +56,11 @@ fn main() {
         .clang_arg(format!("-I{}", include_dir.display()))
         .clang_arg("--target=x86_64-pc-windows-msvc")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .default_enum_style(bindgen::EnumVariation::Rust {
+            non_exhaustive: false,
+        }) // most enums are real Rust enums
+        .newtype_enum("^PicamError$") // exception: raw integer, never undefined behaviour on an unknown value
+        .newtype_enum("^PicamParameter$") // same exception, same reason
         .allowlist_function("Picam.*")
         .allowlist_type("Picam.*")
         .allowlist_type("^pi[a-z0-9]+$");
