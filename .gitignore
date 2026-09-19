@@ -21,7 +21,8 @@ target
 #.idea/
 
 # header files for teledyne princeton instruments cameras
-/vendor
+vendor/
+.cargo/
 
 # Added by cargo
 /target
