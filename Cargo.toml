@@ -5,6 +5,8 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+thiserror = "2.0.20"
+tracing = "0.1.44"
 
 [build-dependencies]
 bindgen = "0.73.2"
