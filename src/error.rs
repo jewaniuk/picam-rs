@@ -135,6 +135,12 @@ pub enum Error {
     /// A PICam error code this crate doesn't recognize.
     #[error("unrecognized PICam error code: {0}")]
     Unknown(i32),
+
+    /// Errors that do not come from the PICam API.
+    #[error("value too long to fit in PICam's fixed-size buffer")]
+    ValueTooLong,
+    #[error("string contains an embedded null byte")]
+    InvalidString,
 }
 
 impl Error {

@@ -61,6 +61,8 @@ fn main() {
         }) // most enums are real Rust enums
         .newtype_enum("^PicamError$") // exception: raw integer, never undefined behaviour on an unknown value
         .newtype_enum("^PicamParameter$") // same exception, same reason
+        .newtype_enum("^PicamModel$") // same exception, same reason
+        .newtype_enum("^PicamComputerInterface$") // same exception, same reason
         .allowlist_function("Picam.*")
         .allowlist_type("Picam.*")
         .allowlist_type("^pi[a-z0-9]+$");
