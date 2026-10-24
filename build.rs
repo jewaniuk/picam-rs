@@ -63,6 +63,14 @@ fn main() {
         .newtype_enum("^PicamParameter$") // same exception, same reason
         .newtype_enum("^PicamModel$") // same exception, same reason
         .newtype_enum("^PicamComputerInterface$") // same exception, same reason
+        .newtype_enum("^PicamValueType") // same exception, same reason
+        .newtype_enum("^PicamEnumeratedType") // same exception, same reason
+        .newtype_enum("^PicamValueAccess") // same exception, same reason
+        .newtype_enum("^PicamConstraintType") // same exception, same reason
+        .newtype_enum("^PicamConstraintScope") // same exception, same reason
+        .newtype_enum("^PicamConstraintSeverity") // same exception, same reason
+        .newtype_enum("^PicamConstraintCategory") // same exception, same reason
+        .bitfield_enum("^PicamRoisConstraintRulesMask$")
         .allowlist_function("Picam.*")
         .allowlist_type("Picam.*")
         .allowlist_type("^pi[a-z0-9]+$");

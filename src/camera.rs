@@ -2,9 +2,18 @@
 
 use std::sync::Arc;
 
-use crate::convert::{FirmwareDetail, c_char_array_to_string, string_to_c_char_array};
+use crate::constraint::{
+    CollectionConstraint, ModulationsConstraint, PulseConstraint, RangeConstraint, RoisConstraint,
+};
+use crate::convert::{
+    FirmwareDetail, c_char_array_to_string, collect_raw_array, string_to_c_char_array,
+};
 use crate::error::{Result, picam_call};
 use crate::library::Library;
+use crate::parameter::{
+    OnlineSettablePicamValue, Parameter, PicamValue, ReadablePicamValue, can_read, can_set_online,
+    can_wait_for_status, constraint_type, enumerated_type, is_relevant, value_access, value_type,
+};
 use crate::sys;
 
 /// An open connection to a PICam camera.
@@ -63,17 +72,17 @@ impl Camera {
         let mut count: sys::piint = 0;
         picam_call!(sys::Picam_GetOpenCameras(&mut array, &mut count))?;
 
-        // SAFETY: PICam has just given us a valid pointer to `count`
-        // contiguous `PicamHandle`s
-        let handles = unsafe { std::slice::from_raw_parts(array, count as usize) }
-            .iter()
-            .map(|&handle| CameraHandle {
+        // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
+        let handles = unsafe {
+            collect_raw_array(array, count, |&handle| CameraHandle {
                 handle,
                 _marker: std::marker::PhantomData,
             })
-            .collect();
+        };
 
-        picam_call!(sys::Picam_DestroyHandles(array))?;
+        if !array.is_null() {
+            picam_call!(sys::Picam_DestroyHandles(array))?;
+        }
         Ok(handles)
     }
 
@@ -145,12 +154,488 @@ impl Camera {
             &mut array, &mut count
         ))?;
 
-        // SAFETY: PICam has just given us a valid pointer to `count`
-        // contiguous `PicamModel`s.
-        let models = unsafe { std::slice::from_raw_parts(array, count as usize) }.to_vec();
+        // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
+        let models = unsafe { collect_raw_array(array, count, |&m| m) };
 
-        picam_call!(sys::Picam_DestroyModels(array))?;
+        if !array.is_null() {
+            picam_call!(sys::Picam_DestroyModels(array))?;
+        }
         Ok(models)
+    }
+
+    /// Gets the current value of `parameter`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::Error::ParameterDoesNotExist`] if
+    /// `parameter` doesn't apply to this camera, or an error if
+    /// PICam is unable to read it.
+    pub fn get<T: PicamValue>(&self, parameter: Parameter) -> Result<T> {
+        T::get(self.handle, parameter)
+    }
+
+    /// Sets `parameter` to `value`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::Error::ParameterValueIsReadOnly`] if
+    /// `parameter` can't be set, [`crate::error::Error::InvalidParameterValue`]
+    /// if `value` is out of range, or an error if PICam is unable to set it.
+    pub fn set<T: PicamValue>(&self, parameter: Parameter, value: T) -> Result<()> {
+        T::set(self.handle, parameter, value)
+    }
+
+    /// Gets the factory default value of `parameter`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to read the default value.
+    pub fn default_value<T: PicamValue>(&self, parameter: Parameter) -> Result<T> {
+        T::default_value(self.handle, parameter)
+    }
+
+    /// Reports whether `value` could currently be set for `parameter`,
+    /// without actually setting it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to check this.
+    pub fn can_set<T: PicamValue>(&self, parameter: Parameter, value: T) -> Result<bool> {
+        T::can_set(self.handle, parameter, value)
+    }
+
+    /// Reports whether `parameter` can be set online (without committing).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to check this.
+    pub fn can_set_online(&self, parameter: Parameter) -> Result<bool> {
+        can_set_online(self.handle, parameter)
+    }
+
+    /// Reports whether `parameter` can be read directly from hardware
+    /// via [`Camera::read`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to check this.
+    pub fn can_read(&self, parameter: Parameter) -> Result<bool> {
+        can_read(self.handle, parameter)
+    }
+
+    /// Reports whether `parameter` is a waitable status parameter.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to check this.
+    pub fn can_wait_for_status(&self, parameter: Parameter) -> Result<bool> {
+        can_wait_for_status(self.handle, parameter)
+    }
+
+    /// Reports whether `parameter` is currently relevant to this
+    /// camera's configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to check this.
+    pub fn is_relevant(&self, parameter: Parameter) -> Result<bool> {
+        is_relevant(self.handle, parameter)
+    }
+
+    /// Gets the underlying value type of `parameter`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to check this.
+    pub fn value_type(&self, parameter: Parameter) -> Result<sys::PicamValueType> {
+        value_type(self.handle, parameter)
+    }
+
+    /// Gets the enumerated type `parameter`'s value belongs to, if any.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to check this.
+    pub fn enumerated_type(&self, parameter: Parameter) -> Result<sys::PicamEnumeratedType> {
+        enumerated_type(self.handle, parameter)
+    }
+
+    /// Gets whether/how `parameter`'s value can currently be accessed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to check this.
+    pub fn value_access(&self, parameter: Parameter) -> Result<sys::PicamValueAccess> {
+        value_access(self.handle, parameter)
+    }
+
+    /// Gets the kind of constraint that applies to `parameter`'s value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to check this.
+    pub fn constraint_type(&self, parameter: Parameter) -> Result<sys::PicamConstraintType> {
+        constraint_type(self.handle, parameter)
+    }
+
+    /// Lists the parameters relevant to this camera.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to enumerate parameters.
+    pub fn parameters(&self) -> Result<Vec<Parameter>> {
+        let mut array: *const sys::PicamParameter = std::ptr::null();
+        let mut count: sys::piint = 0;
+        picam_call!(sys::Picam_GetParameters(
+            self.handle,
+            &mut array,
+            &mut count
+        ))?;
+
+        // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
+        let parameters =
+            unsafe { collect_raw_array(array, count, |&raw| Parameter::from_raw(raw)) };
+
+        if !array.is_null() {
+            picam_call!(sys::Picam_DestroyParameters(array))?;
+        }
+        Ok(parameters)
+    }
+
+    /// Reports whether `parameter` applies to this camera.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to check this.
+    pub fn does_parameter_exist(&self, parameter: Parameter) -> Result<bool> {
+        let mut exists: sys::pibln = 0;
+        picam_call!(sys::Picam_DoesParameterExist(
+            self.handle,
+            parameter.to_raw(),
+            &mut exists
+        ))?;
+        Ok(exists != 0)
+    }
+
+    /// Reports whether all pending parameter changes have been committed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to check this.
+    pub fn are_parameters_committed(&self) -> Result<bool> {
+        let mut committed: sys::pibln = 0;
+        picam_call!(sys::Picam_AreParametersCommitted(
+            self.handle,
+            &mut committed
+        ))?;
+        Ok(committed != 0)
+    }
+
+    /// Commits all pending parameter changes made via [`Camera::set`],
+    /// validating them against PICam's constraints.
+    ///
+    /// Returns the parameters that failed to commit, if any. An empty
+    /// `Vec` means every pending change was accepted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to attempt the commit at all.
+    pub fn commit_parameters(&self) -> Result<Vec<Parameter>> {
+        let mut array: *const sys::PicamParameter = std::ptr::null();
+        let mut count: sys::piint = 0;
+        picam_call!(sys::Picam_CommitParameters(
+            self.handle,
+            &mut array,
+            &mut count
+        ))?;
+
+        // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
+        let failed = unsafe { collect_raw_array(array, count, |&raw| Parameter::from_raw(raw)) };
+
+        if !array.is_null() {
+            picam_call!(sys::Picam_DestroyParameters(array))?;
+        }
+        Ok(failed)
+    }
+
+    /// Restores all parameters to their factory default values.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to do this.
+    pub fn restore_parameters_to_default_values(&self) -> Result<()> {
+        picam_call!(sys::Picam_RestoreParametersToDefaultValues(self.handle))
+    }
+
+    /// Lists the discrete values `parameter` (a "status parameter") can take.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to query this.
+    pub fn status_parameter_purview(&self, parameter: Parameter) -> Result<Vec<sys::piint>> {
+        let mut ptr: *const sys::PicamStatusPurview = std::ptr::null();
+        picam_call!(sys::Picam_GetStatusParameterPurview(
+            self.handle,
+            parameter.to_raw(),
+            &mut ptr
+        ))?;
+
+        let values = if ptr.is_null() {
+            Vec::new()
+        } else {
+            // SAFETY: on success with a non-null pointer, PICam guarantees
+            // `values_array` has `values_count` valid, contiguous entries
+            unsafe {
+                let raw = &*ptr;
+                collect_raw_array(raw.values_array, raw.values_count, |&v| v)
+            }
+        };
+
+        if !ptr.is_null() {
+            picam_call!(sys::Picam_DestroyStatusPurviews(ptr))?;
+        }
+        Ok(values)
+    }
+
+    /// Estimates how long (in milliseconds) it would take for `parameter`
+    /// to reach `value`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to estimate this.
+    pub fn estimate_time_to_status_parameter_value(
+        &self,
+        parameter: Parameter,
+        value: sys::piint,
+    ) -> Result<sys::piint> {
+        let mut estimated_time: sys::piint = 0;
+        picam_call!(sys::Picam_EstimateTimeToStatusParameterValue(
+            self.handle,
+            parameter.to_raw(),
+            value,
+            &mut estimated_time
+        ))?;
+        Ok(estimated_time)
+    }
+
+    /// Blocks until `parameter` reaches `value`, or `time_out` milliseconds
+    /// have elapsed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::Error::TimeOutOccurred`] if `timeout`
+    /// elapses first, or an error if PICam is unable to wait for this.
+    pub fn wait_for_status_parameter_value(
+        &self,
+        parameter: Parameter,
+        value: sys::piint,
+        timeout: sys::piint,
+    ) -> Result<()> {
+        picam_call!(sys::Picam_WaitForStatusParameterValue(
+            self.handle,
+            parameter.to_raw(),
+            value,
+            timeout
+        ))
+    }
+
+    /// Reads the current value of `parameter` directly from hardware,
+    /// bypassing PiCam's cached/committed value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to read it.
+    pub fn read<T: ReadablePicamValue>(&self, parameter: Parameter) -> Result<T> {
+        T::read(self.handle, parameter)
+    }
+
+    /// Sets `parameter` to `value` and applies it immediately, without
+    /// needing [`Camera::commit_parameters`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to set it.
+    pub fn set_online<T: OnlineSettablePicamValue>(
+        &self,
+        parameter: Parameter,
+        value: T,
+    ) -> Result<()> {
+        T::set_online(self.handle, parameter, value)
+    }
+
+    /// Gets the collection constraint on `parameter`'s value, if any.
+    ///
+    /// `category` selects which kind of constraint to query: the values
+    /// PICam is capable of accepting, the values currently required, or
+    /// the values currently recommended.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::Error::ParameterHasInvalidConstraintType`]
+    /// if `parameter` isn't collection-constrained, or an error if PICam
+    /// is unable to query this.
+    pub fn collection_constraint(
+        &self,
+        parameter: Parameter,
+        category: sys::PicamConstraintCategory,
+    ) -> Result<CollectionConstraint> {
+        let mut ptr: *const sys::PicamCollectionConstraint = std::ptr::null();
+        picam_call!(sys::Picam_GetParameterCollectionConstraint(
+            self.handle,
+            parameter.to_raw(),
+            category,
+            &mut ptr
+        ))?;
+
+        if ptr.is_null() {
+            return Err(crate::error::Error::UnexpectedNullPointer);
+        }
+
+        // SAFETY: just checked `ptr` is non-null; PICam guarantees a valid
+        // `PicamCollectionConstraint`.
+        let constraint = CollectionConstraint::from_raw(unsafe { &*ptr });
+        picam_call!(sys::Picam_DestroyCollectionConstraints(ptr))?;
+        Ok(constraint)
+    }
+
+    /// Gets the range constraint on `parameter`'s value, if any.
+    ///
+    /// `category` selects which kind of constraint to query: the values
+    /// PICam is capable of accepting, the values currently required, or
+    /// the values currently recommended.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::Error::ParameterHasInvalidConstraintType`]
+    /// if `parameter` isn't range-constrained, or an error if PICam
+    /// is unable to query this.
+    pub fn range_constraint(
+        &self,
+        parameter: Parameter,
+        category: sys::PicamConstraintCategory,
+    ) -> Result<RangeConstraint> {
+        let mut ptr: *const sys::PicamRangeConstraint = std::ptr::null();
+        picam_call!(sys::Picam_GetParameterRangeConstraint(
+            self.handle,
+            parameter.to_raw(),
+            category,
+            &mut ptr
+        ))?;
+
+        if ptr.is_null() {
+            return Err(crate::error::Error::UnexpectedNullPointer);
+        }
+
+        // SAFETY: just checked `ptr` is non-null; PICam guarantees a valid
+        // `PicamRangeConstraint`.
+        let constraint = RangeConstraint::from_raw(unsafe { &*ptr });
+        picam_call!(sys::Picam_DestroyRangeConstraints(ptr))?;
+        Ok(constraint)
+    }
+
+    /// Gets the ROI constraint on `parameter`'s value, if any.
+    ///
+    /// `category` selects which kind of constraint to query: the values
+    /// PICam is capable of accepting, the values currently required, or
+    /// the values currently recommended.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::Error::ParameterHasInvalidConstraintType`]
+    /// if `parameter` isn't ROI-constrained, or an error if PICam is
+    /// unable to query this.
+    pub fn rois_constraint(
+        &self,
+        parameter: Parameter,
+        category: sys::PicamConstraintCategory,
+    ) -> Result<RoisConstraint> {
+        let mut ptr: *const sys::PicamRoisConstraint = std::ptr::null();
+        picam_call!(sys::Picam_GetParameterRoisConstraint(
+            self.handle,
+            parameter.to_raw(),
+            category,
+            &mut ptr
+        ))?;
+
+        if ptr.is_null() {
+            return Err(crate::error::Error::UnexpectedNullPointer);
+        }
+
+        // SAFETY: just checked `ptr` is non-null; PICam guarantees a valid
+        // `PicamRoisConstraint`.
+        let constraint = RoisConstraint::from_raw(unsafe { &*ptr });
+        picam_call!(sys::Picam_DestroyRoisConstraints(ptr))?;
+        Ok(constraint)
+    }
+
+    /// Gets the pulse constraint on `parameter`'s value, if any.
+    ///
+    /// `category` selects which kind of constraint to query: the values
+    /// PICam is capable of accepting, the values currently required, or
+    /// the values currently recommended.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::Error::ParameterHasInvalidConstraintType`]
+    /// if `parameter` isn't pulse-constrained, or an error if PICam is
+    /// unable to query this.
+    pub fn pulse_constraint(
+        &self,
+        parameter: Parameter,
+        category: sys::PicamConstraintCategory,
+    ) -> Result<PulseConstraint> {
+        let mut ptr: *const sys::PicamPulseConstraint = std::ptr::null();
+        picam_call!(sys::Picam_GetParameterPulseConstraint(
+            self.handle,
+            parameter.to_raw(),
+            category,
+            &mut ptr
+        ))?;
+
+        if ptr.is_null() {
+            return Err(crate::error::Error::UnexpectedNullPointer);
+        }
+
+        // SAFETY: just checked `ptr` is non-null; PICam guarantees a valid
+        // `PicamPulseConstraint`.
+        let constraint = PulseConstraint::from_raw(unsafe { &*ptr });
+        picam_call!(sys::Picam_DestroyPulseConstraints(ptr))?;
+        Ok(constraint)
+    }
+
+    /// Gets the modulations constraint on `parameter`'s value, if any.
+    ///
+    /// `category` selects which kind of constraint to query: the values
+    /// PICam is capable of accepting, the values currently required, or
+    /// the values currently recommended.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::error::Error::ParameterHasInvalidConstraintType`]
+    /// if `parameter` isn't modulations-constrained, or an error if PICam is
+    /// unable to query this.
+    pub fn modulations_constraint(
+        &self,
+        parameter: Parameter,
+        category: sys::PicamConstraintCategory,
+    ) -> Result<ModulationsConstraint> {
+        let mut ptr: *const sys::PicamModulationsConstraint = std::ptr::null();
+        picam_call!(sys::Picam_GetParameterModulationsConstraint(
+            self.handle,
+            parameter.to_raw(),
+            category,
+            &mut ptr
+        ))?;
+
+        if ptr.is_null() {
+            return Err(crate::error::Error::UnexpectedNullPointer);
+        }
+
+        // SAFETY: just checked `ptr` is non-null; PICam guarantees a valid
+        // `PicamModulationsConstraint`.
+        let constraint = ModulationsConstraint::from_raw(unsafe { &*ptr });
+        picam_call!(sys::Picam_DestroyModulationsConstraints(ptr))?;
+        Ok(constraint)
     }
 }
 
@@ -319,7 +804,14 @@ impl CameraId {
         tracing::debug!("connecting demo camera: {serial_number}");
         let c_serial_number = std::ffi::CString::new(serial_number)
             .map_err(|_| crate::error::Error::InvalidString)?;
+
+        // SAFETY: `PicamCameraID` is a plain-data struct with no invariant
+        // that forbids an all-zero bit pattern, `model`/`computer_interface`
+        // are newtypes (any i32 is a valid value), and the name fields are
+        // just byte arrays, `Picam_GetCameraID` fully overwrites this before
+        // we read any of it back
         let mut raw: sys::PicamCameraID = unsafe { std::mem::zeroed() };
+
         picam_call!(sys::Picam_ConnectDemoCamera(
             model,
             c_serial_number.as_ptr(),
@@ -370,14 +862,12 @@ impl CameraId {
             &raw_id, &mut array, &mut count
         ))?;
 
-        // SAFETY: PICam has just given us a valid pointer to `count`
-        // contiguous `PicamFirmwareDetail`s
-        let details = unsafe { std::slice::from_raw_parts(array, count as usize) }
-            .iter()
-            .map(FirmwareDetail::from_raw)
-            .collect();
+        // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
+        let details = unsafe { collect_raw_array(array, count, FirmwareDetail::from_raw) };
 
-        picam_call!(sys::Picam_DestroyFirmwareDetails(array))?;
+        if !array.is_null() {
+            picam_call!(sys::Picam_DestroyFirmwareDetails(array))?;
+        }
         Ok(details)
     }
 }
@@ -390,13 +880,10 @@ fn collect_and_destroy_ids(
     array: *const sys::PicamCameraID,
     count: sys::piint,
 ) -> Result<Vec<CameraId>> {
-    // SAFETY: the caller just received `array`/`count` from a PICam
-    // "ALLOCATES" function, which guarantees `count` valid, contiguous
-    // `PicamCameraID`s at `array` until `Picam_DestroyCameraIDs` is called
-    let ids = unsafe { std::slice::from_raw_parts(array, count as usize) }
-        .iter()
-        .map(CameraId::from_raw)
-        .collect();
-    picam_call!(sys::Picam_DestroyCameraIDs(array))?;
+    // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
+    let ids = unsafe { collect_raw_array(array, count, CameraId::from_raw) };
+    if !array.is_null() {
+        picam_call!(sys::Picam_DestroyCameraIDs(array))?;
+    }
     Ok(ids)
 }
