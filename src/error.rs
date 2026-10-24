@@ -251,6 +251,7 @@ impl Error {
 /// This macro makes the return value safe to handle, not the call itself.
 macro_rules! picam_call {
     ($expr:expr) => {{
+        // SAFETY: upheld by the caller, see the `# Safety` section above
         let code = unsafe { $expr };
         if code == $crate::sys::PicamError::PicamError_None {
             Ok(())

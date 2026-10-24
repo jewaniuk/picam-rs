@@ -13,3 +13,13 @@ tracing = "0.1.44"
 
 [build-dependencies]
 bindgen = "0.73.2"
+
+[lints.rust]
+missing_docs = "warn"
+missing_debug_implementations = "warn"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "warn"
+missing_safety_doc = "warn"
+missing_errors_doc = "warn"
