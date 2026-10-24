@@ -24,5 +24,8 @@ target
 vendor/
 .cargo/
 
+# manuals and reference material, copyrighted and only kept on the lab computer
+reference/
+
 # Added by cargo
 /target
