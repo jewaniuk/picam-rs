@@ -6,7 +6,7 @@ mod library;
 mod parameter;
 mod sys;
 
-pub use camera::Camera;
+pub use camera::{Camera, CameraHandle, CameraId};
 pub use constraint::{
     CollectionConstraint, ModulationsConstraint, PulseConstraint, RangeConstraint, RoisConstraint,
 };

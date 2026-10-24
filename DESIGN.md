@@ -132,6 +132,20 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 - `pub(crate)` helpers get at least a short doc comment when their purpose isn't obvious from the name.
 - When PICam behaviour is unclear, the PICam Programmer's Manual is the source of truth. Note in the code when an assumption has been checked against it.
 
+## Testing
+
+**Settled:**
+
+- **Three tiers:**
+  1. Pure-Rust unit tests (enum round trips, error mapping, conversions) live next to the code in `#[cfg(test)]` modules and never touch PICam.
+  2. Integration tests in `tests/` run against the real PICam runtime using **demo cameras** (`CameraId::connect_demo`), so they need a Windows machine with the SDK installed but no hardware.
+  3. Real-hardware tests are only ever run by the maintainer, and are gated behind `#[ignore]`.
+- **One test at a time, a fresh library per test.** PICam can only be initialized once per process at a time, and the tests in one `tests/*.rs` file run in parallel threads of one process. So every integration test that touches PICam starts by calling `common::library()` (a fresh `Library` held under a global lock) or `common::lock()` (the lock alone, for tests that create `Library` themselves). Both are in `tests/common/mod.rs`. Never call `Library::new()` in a test without holding the lock.
+  - This relies on PICam allowing re-initialization within one process, which `tests/library.rs::reinitializes_after_drop` checks. **If that test fails**, switch to the fallback: one shared `Arc<Library>` per test binary, kept in a `static OnceLock`, with tests written so they don't depend on each other's PICam state.
+- Each test uses its own demo-camera serial number, so demo cameras never collide.
+- Each file in `tests/` starts with a `//!` doc comment saying what it tests (`missing_docs` requires it).
+- When a test drops a camera or library part-way through, it does so explicitly with `drop(...)`. Variables that must live until the end of a test are named `_name`, never `_`, because `let _ = ...` drops the value immediately.
+
 ## Progress tracking
 
 - `cargo run -p xtask -- progress` counts `dead_code` warnings from `cargo check` and reports how many of the 199 header functions are wired into the safe layer, overall and per header. Add `--list` to print every function still unwrapped. It is plain Rust (the `xtask` workspace member, never published), so it runs the same on macOS and Windows. Because the tool relies on these warnings, the crate deliberately has **no** `#![allow(dead_code)]`; don't add one.
@@ -177,5 +191,6 @@ These largely mirror patterns already in `camera.rs`.
 
 - **`Model`:** PICam defines 300+ camera models. Hand-writing a full `define_picam_enum!` list was explicitly deferred. Options include a public newtype with `Display` through `Picam_GetEnumerationString`, or generating the variant list.
 - **Intra-doc link paths:** the code currently mixes `crate::Error::X` and `crate::error::Error::X`. Since `error` is a private module, the public path `crate::Error::X` is probably the right standard.
+- **Functions that need an initialized library but don't take one:** `Library`'s docs say you can't do anything without a live `Library`, but `Camera::available_ids`, `Camera::unavailable_ids`, `Camera::available_demo_models` and `CameraId::connect_demo` take no `&Library`. They fail at run time with `Error::LibraryNotInitialized` instead of being prevented at compile time. `Camera::list_open_cameras` does take `&Library`. Decide whether all of these should take `&Library` for consistency.
 - **Acquisition API design:** blocking versus non-blocking, buffer ownership, and how frames are handed to the user.
 - **Callback design** for `picam_advanced.h`.
