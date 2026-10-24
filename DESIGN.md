@@ -134,7 +134,7 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 
 ## Progress tracking
 
-- `progress.sh` counts `dead_code` warnings from `cargo check` and reports how many of the 199 header functions are wired into the safe layer. For that reason, the crate deliberately has **no** `#![allow(dead_code)]`; don't add one.
+- `cargo run -p xtask -- progress` counts `dead_code` warnings from `cargo check` and reports how many of the 199 header functions are wired into the safe layer, overall and per header. Add `--list` to print every function still unwrapped. It is plain Rust (the `xtask` workspace member, never published), so it runs the same on macOS and Windows. Because the tool relies on these warnings, the crate deliberately has **no** `#![allow(dead_code)]`; don't add one.
 - The README's "to test" list collects behaviour that can only be confirmed on real hardware or with the SDK running. Add to it whenever an assumption can't be checked from the manual.
 
 ## Roadmap
