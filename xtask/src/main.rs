@@ -7,6 +7,13 @@
 //!   wrapper, using `dead_code` warnings from `cargo check` on the raw
 //!   bindings in `sys` as the signal. Pass `--list` to also print every
 //!   function that is still unwrapped, grouped by header.
+//! - `gate`: runs the checks a branch must pass before it is pushed or turned
+//!   into a pull request (formatting, clippy and, on Windows, the tests).
+//! - `hook pre-bash` and `hook post-edit`: Claude Code hooks, run from
+//!   `.claude/settings.json` rather than by hand.
+
+mod gate;
+mod hook;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
@@ -28,12 +35,19 @@ const HEADER_NAMES: [&str; 5] = [
 /// Where the PICam SDK installs its headers on Windows, matching `build.rs`.
 const DEFAULT_INCLUDE_DIR: &str = r"C:\Program Files\Princeton Instruments\PICam\Includes";
 
-const USAGE: &str = "usage: cargo run -p xtask -- progress [--list]";
+const USAGE: &str =
+    "usage: cargo run -p xtask -- <progress [--list] | gate | hook <pre-bash | post-edit>>";
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
-    let result = match args.first().map(String::as_str) {
-        Some("progress") => progress(args[1..].iter().any(|arg| arg == "--list")),
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let root = workspace_root();
+    let result = match args.as_slice() {
+        ["progress", rest @ ..] => progress(&root, rest.contains(&"--list")),
+        ["gate"] => gate::run(&root, gate::Output::Inherit),
+        // hooks pick their own exit codes, see `hook`
+        ["hook", "pre-bash"] => return hook::pre_bash(&root),
+        ["hook", "post-edit"] => return hook::post_edit(),
         _ => Err(USAGE.to_string()),
     };
     match result {
@@ -52,9 +66,8 @@ fn main() -> ExitCode {
 ///
 /// Returns an error if `cargo check` can't be run, if `picam-rs` doesn't
 /// compile, or if a header can't be read.
-fn progress(list_unwrapped: bool) -> Result<(), String> {
-    let root = workspace_root();
-    let dead_code_messages = dead_code_messages(&root)?;
+fn progress(root: &Path, list_unwrapped: bool) -> Result<(), String> {
+    let dead_code_messages = dead_code_messages(root)?;
 
     // count warnings by the kind of item they're about, i.e. the text before
     // the first backtick ("function", "enum", "type alias" and so on)
@@ -83,7 +96,7 @@ fn progress(list_unwrapped: bool) -> Result<(), String> {
 
     // cross-reference against the real headers, independent of whatever
     // bindgen actually generated
-    let include_dir = include_dir(&root);
+    let include_dir = include_dir(root);
     let mut total = 0;
     let mut total_unwrapped = 0;
     let mut per_header = Vec::new();
@@ -133,11 +146,8 @@ fn progress(list_unwrapped: bool) -> Result<(), String> {
 ///
 /// Returns an error if `cargo` can't be run or `picam-rs` doesn't compile.
 fn dead_code_messages(root: &Path) -> Result<Vec<String>, String> {
-    // `CARGO` is set by `cargo run` to the cargo binary that launched us
-    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
-    let output = Command::new(cargo)
+    let output = cargo(root)
         .args(["check", "--message-format=json", "--package", "picam-rs"])
-        .current_dir(root)
         .output()
         .map_err(|e| format!("could not run cargo check: {e}"))?;
 
@@ -173,6 +183,15 @@ fn dead_code_messages(root: &Path) -> Result<Vec<String>, String> {
         ));
     }
     Ok(dead_code)
+}
+
+/// Returns a `cargo` command that runs in the workspace root.
+fn cargo(root: &Path) -> Command {
+    // `CARGO` is set by `cargo run` to the cargo binary that launched us
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let mut command = Command::new(cargo);
+    command.current_dir(root);
+    command
 }
 
 /// Returns the workspace root, which is the `picam-rs` crate root.

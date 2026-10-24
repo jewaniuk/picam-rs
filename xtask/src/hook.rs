@@ -1,0 +1,157 @@
+//! Claude Code hooks, wired up in `.claude/settings.json`.
+//!
+//! Claude Code sends each hook a JSON description of the tool call on stdin
+//! and acts on the exit code: 0 lets the call go ahead, and 2 blocks it and
+//! shows stderr to the agent so it can see why. Any other exit code only
+//! warns, so everything here that means "block" must exit with 2.
+
+use std::io::Read;
+use std::path::Path;
+use std::process::{Command, ExitCode};
+
+use serde_json::Value;
+
+use crate::gate::{self, Output};
+
+/// The exit code that makes Claude Code block a tool call.
+const BLOCK: u8 = 2;
+
+/// Runs before every Bash command. Blocks pushes to `main`, force pushes,
+/// branch deletion and `gh pr merge`, and runs the gate before any other
+/// `git push` or `gh pr create`.
+///
+/// Fails closed: if the hook input can't be read, the command is blocked.
+pub fn pre_bash(root: &Path) -> ExitCode {
+    match check_bash(root) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(reason) => {
+            eprintln!("{reason}");
+            ExitCode::from(BLOCK)
+        }
+    }
+}
+
+/// Runs after every file edit, and formats the file with `rustfmt` if it is
+/// Rust.
+///
+/// Never blocks. A file that doesn't parse part-way through a change is left
+/// alone, since the compiler reports it anyway.
+pub fn post_edit() -> ExitCode {
+    if let Ok(input) = read_input()
+        && let Some(path) = input["tool_input"]["file_path"].as_str()
+        && path.ends_with(".rs")
+    {
+        // output is discarded, a parse error here is just noise
+        let _ = Command::new("rustfmt")
+            .args(["--edition", "2024", path])
+            .output();
+    }
+    ExitCode::SUCCESS
+}
+
+/// Decides whether a Bash command may run.
+///
+/// # Errors
+///
+/// Returns the reason to show the agent when the command is blocked.
+fn check_bash(root: &Path) -> Result<(), String> {
+    let input = read_input()?;
+    let command = input["tool_input"]["command"]
+        .as_str()
+        .ok_or("hook input has no `tool_input.command`, so the command was blocked")?;
+
+    // split on the shell's command separators (`&&`, `||`, `;`, `|`, `&`
+    // and newlines) so each command in a chain is checked on its own
+    let mut needs_gate = false;
+    for segment in command.split([';', '|', '&', '\n']) {
+        let words: Vec<&str> = segment.split_whitespace().collect();
+        match words.as_slice() {
+            ["git", "push", rest @ ..] => {
+                check_push(rest)?;
+                needs_gate = true;
+            }
+            ["gh", "pr", "create", ..] => needs_gate = true,
+            ["gh", "pr", "merge", ..] => {
+                return Err("agents never merge PRs, the maintainer does \
+                            (CLAUDE.md, \"Git and GitHub\")"
+                    .to_string());
+            }
+            _ => {}
+        }
+    }
+
+    if needs_gate {
+        if current_branch(root)? == "main" {
+            return Err("you are on `main`. Work on a branch and open a PR \
+                        (CLAUDE.md, \"Workflow for each chunk\")"
+                .to_string());
+        }
+        gate::run(root, Output::Capture).map_err(|e| {
+            format!("the gate failed, so the command was blocked. Fix this first:\n\n{e}")
+        })?;
+    }
+    Ok(())
+}
+
+/// Checks the arguments of a `git push` for anything an agent must never
+/// do: target `main`, force push, delete a branch, or push every ref.
+///
+/// # Errors
+///
+/// Returns the reason to show the agent when the push is blocked.
+fn check_push(args: &[&str]) -> Result<(), String> {
+    for arg in args {
+        let targets_main = matches!(*arg, "main" | "refs/heads/main")
+            || arg.ends_with(":main")
+            || arg.ends_with(":refs/heads/main");
+        if targets_main {
+            return Err("agents never push to `main`. Push your branch and open \
+                        a PR (CLAUDE.md, \"Git and GitHub\")"
+                .to_string());
+        }
+        let forbidden = arg.starts_with("--force")
+            || arg.starts_with('+')
+            || matches!(*arg, "-f" | "-d" | "--delete" | "--all" | "--mirror");
+        if forbidden {
+            return Err(format!(
+                "`git push {arg}` is not allowed. Force pushing, deleting \
+                 branches and pushing every ref need the maintainer \
+                 (CLAUDE.md, stop-and-ask rule 13)"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Returns the name of the checked-out branch, or `HEAD` when detached.
+///
+/// # Errors
+///
+/// Returns an error if `git` can't be run or fails.
+fn current_branch(root: &Path) -> Result<String, String> {
+    let output = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(root)
+        .output()
+        .map_err(|e| format!("could not run git to find the current branch: {e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "could not find the current branch:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Reads and parses the JSON that Claude Code sends on stdin.
+///
+/// # Errors
+///
+/// Returns an error if stdin can't be read or isn't valid JSON.
+fn read_input() -> Result<Value, String> {
+    let mut text = String::new();
+    std::io::stdin()
+        .read_to_string(&mut text)
+        .map_err(|e| format!("could not read the hook input: {e}"))?;
+    serde_json::from_str(&text).map_err(|e| format!("hook input is not valid JSON: {e}"))
+}

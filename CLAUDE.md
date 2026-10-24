@@ -17,11 +17,11 @@ This repository is **public**. Never commit PICam SDK files (headers, libraries,
 | build | `cargo build -p picam-rs` |
 | all tests (needs the SDK installed) | `cargo test -p picam-rs` |
 | format | `cargo fmt --all` |
-| the gate, which must pass before pushing | `cargo clippy -p picam-rs --all-targets -- -D warnings -A dead_code` |
+| the gate, which must pass before pushing | `cargo run -p xtask -- gate` (format check, `cargo clippy -p picam-rs --all-targets -- -D warnings -A dead_code`, then the tests) |
 | progress | `cargo run -p xtask -- progress` (add `--list` for every unwrapped function) |
 | public API listing | `cargo public-api --package picam-rs` |
 
-The gate also runs automatically through a hook whenever you push or open a PR, and blocks either one if it fails.
+Hooks in `.claude/settings.json` format every Rust file you edit, and run the gate before every `git push` and `gh pr create`, blocking either one if it fails. They also block pushes to `main`, force pushes and `gh pr merge`. When a hook blocks a command, read its message and fix the cause. Never try to get around a hook.
 
 ## Workflow for each chunk
 
@@ -37,7 +37,7 @@ Work is done one **chunk** at a time: one coherent group of roughly 10 to 20 fun
 2. **Wait for approval.** The maintainer approves, redirects or rejects the plan. Don't start until it's approved.
 3. **Branch.** Create a branch from an up-to-date `main`, named `stage-<n>/<short-topic>`, e.g. `stage-1/seal-value-traits`.
 4. **Implement** exactly the approved plan, committing as you go.
-5. **Test and check.** Run `cargo fmt --all`, the tests, the gate and the progress tool. Fix what fails, within the rules below.
+5. **Test and check.** Run the gate and the progress tool. Fix what fails, within the rules below.
 6. **Open a PR** against `main` with `gh pr create`, using the [report format](#report-format) as its description.
 7. **Stop.** Report the PR link and end. Don't start the next chunk.
 
