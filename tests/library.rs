@@ -32,6 +32,11 @@ fn version_without_library() {
     // that none is needed
     let _guard = common::lock();
 
+    assert_eq!(
+        Library::is_initialized(),
+        Ok(false),
+        "no library should be alive while the lock is held"
+    );
     let version = Library::version().expect("PICam should report its version");
     println!("PICam runtime {version}");
     let bindings = Version {

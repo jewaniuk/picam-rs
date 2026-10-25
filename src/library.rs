@@ -160,7 +160,7 @@ pub struct Version {
 impl Version {
     /// Reports whether this is a beta release, which PICam marks with a
     /// release date of 0 (PICam manual 3.2.1).
-    pub fn is_beta(&self) -> bool {
+    pub fn is_beta(self) -> bool {
         self.released == 0
     }
 }

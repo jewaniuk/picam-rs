@@ -219,7 +219,7 @@ Decided with the maintainer on 2026-10-25. Two chunks, after stage 1, because th
   - Enum parameters switch from `i32` to their enum through a mapping table in the generator, matched by name with overrides. It is checked against `Camera::enumerated_type` on the demo models, and any parameter no demo model has goes on the README's "to test" list.
   - The acquisition enums (`AcquisitionState`, `AcquisitionErrorsMask` and `AcquisitionStateErrorsMask`) wait for acquisition. The advanced API's (`DiscoveryAction`, `HandleType` and `DynamicsMask`) wait for stage 4.
 
-### 3. Remaining `picam.h` (8 functions)
+### 3. Remaining `picam.h` (7 functions, plus `Picam_DestroyCalibrations` in stage 5)
 
 - [x] quick wins: `Picam_GetVersion`, `Picam_IsLibraryInitialized`. `Picam_DestroyCalibrations` moved to stage 5: it frees only the array `PicamAccessory_GetLightSourceReference` allocates (manual 4.3.3.4 and 7.4.6.1), so it is wrapped with that call
 - [ ] acquisition: `Picam_Acquire`, `Picam_StartAcquisition`, `Picam_StopAcquisition`, `Picam_IsAcquisitionRunning`, `Picam_WaitForAcquisitionUpdate`. This is the most important remaining piece and needs careful design: who owns the frame buffers, and how data is copied out. An agent may write it, but only after the longer design discussion in `CLAUDE.md`, with the actual code shown and approved first (decided with the maintainer on 2026-10-25).
