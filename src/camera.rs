@@ -429,7 +429,7 @@ impl Camera {
         Ok(estimated_time)
     }
 
-    /// Blocks until `parameter` reaches `value`, or `time_out` milliseconds
+    /// Blocks until `parameter` reaches `value`, or `timeout` milliseconds
     /// have elapsed.
     ///
     /// # Errors
@@ -451,7 +451,7 @@ impl Camera {
     }
 
     /// Reads the current value of `parameter` directly from hardware,
-    /// bypassing PiCam's cached/committed value.
+    /// bypassing PICam's cached/committed value.
     ///
     /// # Errors
     ///
@@ -775,6 +775,7 @@ impl CameraId {
     /// without opening it.
     ///
     /// # Errors
+    ///
     /// Returns [`crate::Error::ValueTooLong`] if this ID's fields
     /// don't fit in PICam's fixed-size buffers, or an error if PICam is unable
     /// to query connection status.

@@ -44,10 +44,10 @@ const PARAMETER_RENAMES: [(&str, &str); 1] = [("SeNsRWindowHeight", "SensrWindow
 /// Models whose whole PICam name converts badly to a constant name.
 const MODEL_NAME_OVERRIDES: [(&str, &str); 1] = [("RetigaE7", "RETIGA_E7")];
 
-/// Name prefixes where PICam runs a product name and a model number
-/// together, e.g. `PIMax41024I` for the PI-MAX4 1024i, so the automatic
-/// conversion can't tell where one ends. The rest of the name is still
-/// converted automatically.
+/// Name prefixes the automatic conversion can't split: PICam runs a product
+/// name and a model number together, e.g. `PIMax41024I` for the PI-MAX4
+/// 1024i, or a product name's capitals hide a word boundary, e.g. `ProEMHS`
+/// for the ProEM-HS. The rest of the name is still converted automatically.
 const MODEL_PREFIX_OVERRIDES: [(&str, &str); 8] = [
     ("ProEMHS", "PRO_EM_HS"),
     ("PIMax3", "PI_MAX3"),
