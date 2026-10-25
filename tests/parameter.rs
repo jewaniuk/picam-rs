@@ -198,3 +198,67 @@ fn parameter_info_through_camera() {
     id.disconnect_demo(&test_library.library)
         .expect("demo camera should disconnect");
 }
+
+/// Flips an on/off parameter, commits it and reads it back, which goes
+/// through `bool`'s get, can-set and set.
+#[test]
+fn bool_values_through_camera() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "PARAM0004";
+
+    let test_library = common::library();
+    let id = connect_demo(&test_library.library, SERIAL_NUMBER);
+    let camera =
+        Camera::open(&id, Arc::clone(&test_library.library)).expect("demo camera should open");
+
+    // which on/off parameters a demo camera has, and which can be flipped,
+    // isn't documented, so take the first one that can
+    let candidates = [
+        params::CORRECT_PIXEL_BIAS,
+        params::INVERT_OUTPUT_SIGNAL,
+        params::ANTICIPATE_TRIGGER,
+        params::NORMALIZE_ORIENTATION,
+        params::DISABLE_DATA_FORMATTING,
+        params::TRACK_FRAMES,
+        params::CORRECT_FOR_DARK_CURRENT,
+        params::DESPECKLE,
+        params::CLEAN_SERIAL_REGISTER,
+        params::CLEAN_BEFORE_EXPOSURE,
+        params::CLEAN_UNTIL_TRIGGER,
+        params::DISABLE_COOLING_FAN,
+    ];
+    let flippable = candidates.into_iter().find_map(|handle| {
+        if !camera.does_parameter_exist(handle).ok()? {
+            return None;
+        }
+        let current = camera.get(handle).ok()?;
+        camera
+            .can_set(handle, !current)
+            .ok()?
+            .then_some((handle, current))
+    });
+    let (handle, current) =
+        flippable.expect("the demo camera should have an on/off parameter that can be flipped");
+
+    camera
+        .set(handle, !current)
+        .expect("on/off parameter should be set");
+    let failed = camera
+        .commit_parameters()
+        .expect("parameters should be committed");
+    assert!(
+        failed.is_empty(),
+        "no parameters should fail, got {failed:?}"
+    );
+    assert_eq!(
+        camera
+            .get(handle)
+            .expect("on/off parameter should be read back"),
+        !current,
+        "{handle:?} should have flipped"
+    );
+
+    drop(camera);
+    id.disconnect_demo(&test_library.library)
+        .expect("demo camera should disconnect");
+}

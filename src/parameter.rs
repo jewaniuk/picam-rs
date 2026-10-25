@@ -126,7 +126,8 @@ macro_rules! define_parameters {
             $(
                 #[doc = concat!(
                     "[`Parameter::", stringify!($name), "`](crate::Parameter::",
-                    stringify!($name), "), whose value is a `", stringify!($ty), "`."
+                    stringify!($name), "), with values of type `", stringify!($ty),
+                    "` (PICam value type `", stringify!($value_type), "`)."
                 )]
                 pub const $handle: TypedParameter<$ty> = TypedParameter::new(Parameter::$name);
             )*
@@ -149,7 +150,8 @@ include!("generated/parameters.rs");
 ///
 /// fn set_up(camera: &Camera) -> Result<()> {
 ///     camera.set(params::EXPOSURE_TIME, 5.0)?;
-///     camera.set(params::ENABLE_INTENSIFIER, true)
+///     camera.set(params::ENABLE_INTENSIFIER, true)?;
+///     camera.set_online(params::EXPOSURE_TIME, 5.0)
 /// }
 /// ```
 ///
@@ -172,7 +174,10 @@ include!("generated/parameters.rs");
 /// ```
 ///
 /// Neither does an operation PICam doesn't support for the parameter's type,
-/// such as setting an on/off parameter online:
+/// such as setting an on/off parameter online. Enum parameters are the
+/// exception for now: they are `i32` until their enums are wrapped, so an
+/// operation PICam supports only for integer parameters still compiles for
+/// them and fails at run time instead:
 ///
 /// ```compile_fail,E0277
 /// use picam_rs::{Camera, Result, params};
@@ -470,7 +475,10 @@ impl_readable_value!(i32, Picam_ReadParameterIntegerValue);
 impl_readable_value!(f64, Picam_ReadParameterFloatingPointValue);
 
 // picam gets and sets booleans through its integer calls, as 0 for false and
-// 1 for true (PICam manual 5.1.1.42, and 5.4.2 for which calls accept them)
+// 1 for true (PICam manual 5.1.1.42). 5.4.2.1, 5.4.2.3, 5.4.2.7 and 5.4.2.12
+// list boolean parameters for get, set, default and read. 5.4.2.2 lists no
+// types for can-set, but tests/handles.rs shows picam accepts them there
+
 impl sealed::RawPicamValue for bool {
     fn get(handle: RawHandle, parameter: Parameter) -> Result<Self> {
         <i32 as sealed::RawPicamValue>::get(handle, parameter).map(|value| value != 0)

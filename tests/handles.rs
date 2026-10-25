@@ -157,3 +157,32 @@ fn every_handle_matches_picam() {
         findings.problems.join("\n")
     );
 }
+
+/// Shows that PICam reports a wrong value type as
+/// `Error::ParameterHasInvalidValueType`, which the checks above look for, by
+/// reading an integer parameter through the floating-point call.
+#[test]
+fn wrong_value_type_is_reported() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "HANDLECTRL";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let models = Camera::available_demo_models(library).expect("demo models should be listed");
+    let model = *models
+        .first()
+        .expect("PICam should offer at least one demo model");
+    let id =
+        CameraId::connect_demo(library, model, SERIAL_NUMBER).expect("demo camera should connect");
+    let camera = Camera::open(&id, Arc::clone(library)).expect("demo camera should open");
+
+    let result = camera.get_untyped::<f64>(Parameter::SensorActiveWidth);
+    assert!(
+        matches!(result, Err(Error::ParameterHasInvalidValueType)),
+        "reading an integer parameter as f64 should be rejected, got {result:?}"
+    );
+
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
