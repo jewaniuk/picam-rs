@@ -1,5 +1,9 @@
 //! PICam parameter identifiers and value access.
 
+use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::marker::PhantomData;
+
 use crate::convert::{collect_raw_array, define_picam_enum, enumeration_string};
 use crate::error::{Result, picam_call};
 use crate::library::Library;
@@ -29,7 +33,7 @@ define_picam_enum!(
     PicamEnumeratedType_ValueType,
     /// A whole number, used as `i32`.
     Integer = PicamValueType_Integer,
-    /// A true/false value, used as `i32` (zero is false).
+    /// A true/false value, used as `bool`.
     Boolean = PicamValueType_Boolean,
     /// One value of a PICam enum, used as `i32`. [`crate::Camera::enumerated_type`]
     /// says which enum.
@@ -59,8 +63,14 @@ define_picam_enum!(
 );
 include!("generated/enumerated_types.rs");
 
+/// Defines `Parameter` and the typed handles in `params`. Each entry gives
+/// the variant, its raw name, its handle's name and value type, and PICam's
+/// value type (unused here, but tests compare it with PICam's).
 macro_rules! define_parameters {
-    ($($(#[$meta:meta])* $name:ident = $raw:ident),* $(,)?) => {
+    ($(
+        $(#[$meta:meta])*
+        $name:ident = $raw:ident, $handle:ident: $ty:ty, $value_type:ident;
+    )*) => {
         /// Identifies a specific camera parameter (exposure time, ROI,
         /// gain, and so on).
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -100,10 +110,140 @@ macro_rules! define_parameters {
                 )
             }
         }
+
+        /// A typed handle for every parameter in the PICam SDK this crate was
+        /// generated from (5.15), to pass to [`Camera::get`](crate::Camera::get)
+        /// and the other value methods.
+        ///
+        /// Each handle's value type comes from the parameter's definition in
+        /// PICam's header, so a wrong type doesn't compile. A parameter with no
+        /// handle here, such as one a newer PICam runtime added, can still be
+        /// used through [`Camera::get_untyped`](crate::Camera::get_untyped) and
+        /// the other `_untyped` methods.
+        pub mod params {
+            use super::{Modulation, Parameter, Pulse, Roi, TypedParameter};
+
+            $(
+                #[doc = concat!(
+                    "[`Parameter::", stringify!($name), "`](crate::Parameter::",
+                    stringify!($name), "), with values of type `", stringify!($ty),
+                    "` (PICam value type `", stringify!($value_type), "`)."
+                )]
+                pub const $handle: TypedParameter<$ty> = TypedParameter::new(Parameter::$name);
+            )*
+        }
     };
 }
 
 include!("generated/parameters.rs");
+
+/// A parameter together with the Rust type of its value, so the compiler
+/// checks the type when getting or setting it. Every parameter has one in
+/// [`params`], and none can be made any other way.
+///
+/// ```no_run
+/// use picam_rs::{Camera, Result, params};
+///
+/// fn exposure_time(camera: &Camera) -> Result<f64> {
+///     camera.get(params::EXPOSURE_TIME)
+/// }
+///
+/// fn set_up(camera: &Camera) -> Result<()> {
+///     camera.set(params::EXPOSURE_TIME, 5.0)?;
+///     camera.set(params::ENABLE_INTENSIFIER, true)?;
+///     camera.set_online(params::EXPOSURE_TIME, 5.0)
+/// }
+/// ```
+///
+/// A value of the wrong type doesn't compile:
+///
+/// ```compile_fail,E0308
+/// use picam_rs::{Camera, Result, params};
+///
+/// fn exposure_time(camera: &Camera) -> Result<i32> {
+///     camera.get(params::EXPOSURE_TIME)
+/// }
+/// ```
+///
+/// ```compile_fail,E0308
+/// use picam_rs::{Camera, Result, params};
+///
+/// fn set_exposure_time(camera: &Camera) -> Result<()> {
+///     camera.set(params::EXPOSURE_TIME, 5_i32)
+/// }
+/// ```
+///
+/// Neither does an operation PICam doesn't support for the parameter's type,
+/// such as setting an on/off parameter online. Enum parameters are the
+/// exception for now: they are `i32` until their enums are wrapped, so an
+/// operation PICam supports only for integer parameters still compiles for
+/// them and fails at run time instead:
+///
+/// ```compile_fail,E0277
+/// use picam_rs::{Camera, Result, params};
+///
+/// fn enable_intensifier(camera: &Camera) -> Result<()> {
+///     camera.set_online(params::ENABLE_INTENSIFIER, true)
+/// }
+/// ```
+pub struct TypedParameter<T> {
+    parameter: Parameter,
+    value: PhantomData<fn() -> T>,
+}
+
+impl<T> TypedParameter<T> {
+    /// Makes a handle. Only the generated constants in `params` call this, so
+    /// every handle's type matches its parameter.
+    const fn new(parameter: Parameter) -> Self {
+        TypedParameter {
+            parameter,
+            value: PhantomData,
+        }
+    }
+
+    /// Returns the untyped parameter this handle refers to.
+    pub const fn parameter(self) -> Parameter {
+        self.parameter
+    }
+}
+
+impl<T> From<TypedParameter<T>> for Parameter {
+    fn from(handle: TypedParameter<T>) -> Self {
+        handle.parameter
+    }
+}
+
+// written by hand rather than derived, since deriving would require `T` to
+// implement each trait too, and `Vec<Roi>` isn't `Copy`
+impl<T> Clone for TypedParameter<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for TypedParameter<T> {}
+
+impl<T> fmt::Debug for TypedParameter<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("TypedParameter")
+            .field(&self.parameter)
+            .finish()
+    }
+}
+
+impl<T> PartialEq for TypedParameter<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.parameter == other.parameter
+    }
+}
+
+impl<T> Eq for TypedParameter<T> {}
+
+impl<T> Hash for TypedParameter<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.parameter.hash(state);
+    }
+}
 
 /// The crate-private halves of the value traits, which seal them.
 ///
@@ -195,14 +335,14 @@ use sealed::RawHandle;
 
 /// A value type PICam can get or set for a parameter.
 ///
-/// This trait is sealed: it is implemented for `i32`, `i64`, `f64`,
+/// This trait is sealed: it is implemented for `i32`, `bool`, `i64`, `f64`,
 /// `Vec<Roi>`, `Vec<Modulation>` and [`Pulse`], and can't be implemented
 /// outside this crate. It is meant to be used as a bound:
 ///
 /// ```no_run
-/// use picam_rs::{Camera, Parameter, PicamValue, Result};
+/// use picam_rs::{Camera, PicamValue, Result, TypedParameter};
 ///
-/// fn current<T: PicamValue>(camera: &Camera, parameter: Parameter) -> Result<T> {
+/// fn current<T: PicamValue>(camera: &Camera, parameter: TypedParameter<T>) -> Result<T> {
 ///     camera.get(parameter)
 /// }
 /// ```
@@ -312,9 +452,9 @@ impl_parameter_info!(
 /// A value type that can be read directly from hardware, bypassing PICam's
 /// committed-value cache.
 ///
-/// This trait is sealed: it is implemented only for `i32` and `f64`, the two
-/// value types PICam supports this for, and can't be implemented outside this
-/// crate.
+/// This trait is sealed: it is implemented only for `i32`, `bool` and `f64`,
+/// the value types PICam supports this for, and can't be implemented outside
+/// this crate.
 pub trait ReadablePicamValue: PicamValue + sealed::RawReadablePicamValue {}
 
 macro_rules! impl_readable_value {
@@ -334,12 +474,46 @@ macro_rules! impl_readable_value {
 impl_readable_value!(i32, Picam_ReadParameterIntegerValue);
 impl_readable_value!(f64, Picam_ReadParameterFloatingPointValue);
 
+// picam gets and sets booleans through its integer calls, as 0 for false and
+// 1 for true (PICam manual 5.1.1.42). 5.4.2.1, 5.4.2.3, 5.4.2.7 and 5.4.2.12
+// list boolean parameters for get, set, default and read. 5.4.2.2 lists no
+// types for can-set, but tests/handles.rs shows picam accepts them there
+
+impl sealed::RawPicamValue for bool {
+    fn get(handle: RawHandle, parameter: Parameter) -> Result<Self> {
+        <i32 as sealed::RawPicamValue>::get(handle, parameter).map(|value| value != 0)
+    }
+
+    fn set(handle: RawHandle, parameter: Parameter, value: Self) -> Result<()> {
+        <i32 as sealed::RawPicamValue>::set(handle, parameter, i32::from(value))
+    }
+
+    fn default_value(handle: RawHandle, parameter: Parameter) -> Result<Self> {
+        <i32 as sealed::RawPicamValue>::default_value(handle, parameter).map(|value| value != 0)
+    }
+
+    fn can_set(handle: RawHandle, parameter: Parameter, value: Self) -> Result<bool> {
+        <i32 as sealed::RawPicamValue>::can_set(handle, parameter, i32::from(value))
+    }
+}
+
+impl PicamValue for bool {}
+
+impl sealed::RawReadablePicamValue for bool {
+    fn read(handle: RawHandle, parameter: Parameter) -> Result<Self> {
+        <i32 as sealed::RawReadablePicamValue>::read(handle, parameter).map(|value| value != 0)
+    }
+}
+
+impl ReadablePicamValue for bool {}
+
 /// A value type that can be set and applied to hardware immediately,
 /// without needing [`crate::Camera::commit_parameters`].
 ///
 /// This trait is sealed: it is implemented only for `i32`, `f64` and
 /// [`Pulse`], the three value types PICam supports this for, and can't be
-/// implemented outside this crate.
+/// implemented outside this crate. `bool` isn't one, since PICam only sets
+/// integer parameters online, not on/off ones (PICam manual 5.4.1.20).
 pub trait OnlineSettablePicamValue: PicamValue + sealed::RawOnlineSettablePicamValue {}
 
 macro_rules! impl_online_settable_scalar {

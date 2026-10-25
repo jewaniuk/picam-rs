@@ -48,7 +48,7 @@ The crate only runs on Windows, the only platform the lab uses. The SDK also shi
 | `error` | `Error`, `Result`, `picam_call!` | done |
 | `library` | `Library` (initialize/uninitialize lifecycle) | done |
 | `camera` | `Camera`, `CameraId`, `CameraHandle`, discovery, demo cameras, parameter/constraint methods | done apart from acquisition |
-| `parameter` | `Parameter`, value traits, `Roi`/`Pulse`/`Modulation`, parameter info queries | done |
+| `parameter` | `Parameter`, `TypedParameter` and the generated `params` handles, value traits, `Roi`/`Pulse`/`Modulation`, parameter info queries | done |
 | `constraint` | constraint structs and their enums | done |
 | `model` | `Model`, with a constant per camera or accessory model from `src/generated/models.rs` | done |
 | `convert` | shared FFI helpers (string/array conversion, `define_picam_enum!`, `FirmwareDetail`, enum names through `Picam_GetEnumerationString`) | done |
@@ -78,7 +78,7 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 ### Models (settled)
 
 - `Model` is a newtype over PICam's model code, which identifies cameras and accessories alike (manual 4.1). It has a private field and is not an enum, so any code PICam reports is a valid `Model`.
-- Each model in the SDK the crate was generated from has an associated constant (`Model::PIXIS_100F`), generated from the header. Constant names are converted automatically from PICam's names, with a few overrides in `xtask/src/generate.rs` where a product name and model number run together.
+- Each model in the SDK the crate was generated from has an associated constant (`Model::PIXIS_100F`), generated from the header. Constant names are converted automatically from PICam's names, with a few overrides in `xtask/src/generate.rs` where a product name and model number run together, or where a product name's capitals hide a word boundary (`ProEMHS` → `PRO_EM_HS`).
 - PICam's "series" values stand for a model family rather than a single model (manual 4.1). `Model::is_series` reports them, based on the crate's own list (a PICam name ending in `Series`), since PICam has no call that answers it. Its docs say so.
 - `Debug` shows the constant name when there is one, and `Model::name(&Library)` gives PICam's readable name.
 
@@ -104,7 +104,9 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 
 ### Parameters (settled)
 
-- `Camera::get::<T>()`, `set`, `default_value` and `can_set` are generic over the `PicamValue` trait. It is implemented for `i32` (`piint`), `i64` (`pi64s`), `f64` (`piflt`), `Vec<Roi>`, `Vec<Modulation>` and `Pulse`.
+- Parameters are typed. Every parameter has a generated handle in the public `params` module, a `TypedParameter<T>` whose `T` comes from the value type in the parameter's `PI_V` definition (`params::EXPOSURE_TIME: TypedParameter<f64>`). Handles can't be made any other way, so none claims the wrong type.
+- `Camera::get`, `set`, `default_value`, `can_set`, `read` and `set_online` take a handle, so a wrong value type, or an operation PICam doesn't support for that type, doesn't compile. Enum parameters are the exception until their enums are wrapped: as `i32`, an operation PICam supports only for integer parameters (such as `set_online`) still compiles for them and fails at run time. Their `_untyped` twins (`get_untyped::<T>(Parameter)` and so on) are the explicit fallback for parameters with no handle, such as `Parameter::Unknown` values from `Camera::parameters`. The methods that only describe a parameter (`value_type`, the constraints and so on) take `impl Into<Parameter>`, so either works.
+- The value methods are generic over the `PicamValue` trait. It is implemented for `i32`, `bool`, `i64`, `f64`, `Vec<Roi>`, `Vec<Modulation>` and `Pulse`. `bool` goes through PICam's integer calls as 0 or 1 (manual 5.1.1.42), and isn't online-settable because PICam only sets integer parameters online (5.4.1.20). Enum parameters are `i32` until their enums are wrapped (roadmap stage 2).
 - `ReadablePicamValue` (`Camera::read`) and `OnlineSettablePicamValue` (`Camera::set_online`) are sub-traits implemented only for the types PICam supports those operations for.
 - The value traits are sealed. Their methods that take a handle live on supertraits in the private `parameter::sealed` module (`RawPicamValue`, `RawReadablePicamValue`, `RawOnlineSettablePicamValue`) and take a `RawHandle`, a wrapper around the raw handle that only the crate can construct. So users can neither implement the traits nor call those methods. A plain sealed supertrait (a `pub trait` in a private module) is not enough on its own, because its methods can still be called through a generic bound (`T::get(ptr, ...)` with `T: PicamValue`), and the raw handle is just `*mut c_void`. A truly `pub(crate)` supertrait would need `#[allow(private_bounds)]`. Any future public trait whose methods need a PICam handle (accessory parameters, for example) follows the same pattern.
 - Changes made with `set` are pending until `Camera::commit_parameters`, which returns the parameters that failed validation (an empty `Vec` means all were accepted).
@@ -132,7 +134,7 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 
 - No `sys` type may appear in a public signature or a public field. `sys` is private, so users can't even name those types. Use the `define_picam_enum!` wrappers and Rust primitives (`i32`, `i64`, `f64`, `bool`) instead of `sys::piint`, `sys::pi64s`, `sys::piflt` or `sys::pibln`.
 - Public names treat acronyms as words, following Rust convention: `CameraId`, `Error::InvalidCameraId`, `Parameter::EmIccdGain`, not PICam's `CameraID` or `EMIccdGain`. Generated names get this from `type_case` in `xtask/src/generate.rs`, with an override table for names it can't convert (such as the SeNsR product name, `Parameter::SensrWindowHeight`). Enum variants whose name differs from PICam's carry `#[doc(alias = "...")]` with PICam's spelling, so rustdoc search still finds them.
-- Every public type is re-exported from `lib.rs`. Modules themselves stay private.
+- Every public type is re-exported from `lib.rs`. Modules themselves stay private, except `params`, a generated set of typed parameter handles that would crowd the crate root.
 - Follow Rust API conventions (the Rust API Guidelines) wherever possible: idiomatic names, `Result` for anything fallible, owned return types, and RAII for resources.
 
 ## Documentation standards
@@ -195,15 +197,16 @@ As of 2026-10-25: 84 / 199 functions wrapped.
 
 Decided with the maintainer on 2026-10-25. Two chunks, after stage 1, because the generated handles copy stage 1's renamed parameter names.
 
-- [ ] **typed parameter handles:**
+- [x] **typed parameter handles:**
   - Each parameter gets a generated handle that carries its Rust value type, so `camera.get(…)` infers the type and a wrong type doesn't compile.
   - The type comes from the value type in the parameter's `PI_V` code, and on/off parameters become `bool`.
   - `get`, `set`, `default_value`, `can_set`, `read` and `set_online` take a handle.
   - `Parameter` stays, for parameters learned at run time (`Camera::parameters`, `Camera::commit_parameters`, `Unknown`) and for the functions that don't touch values, which accept either.
-  - An untyped fallback stays for parameters without a handle. Before it reads or writes an enum value, it checks the parameter's enumerated type with `Picam_GetParameterEnumeratedType`, since PICam reads every enum through the same integer call and can't catch a mismatch itself.
+  - An untyped fallback stays for parameters without a handle: the `_untyped` methods.
   - Enum parameters are typed `i32` until the next chunk.
-  - How the handles are named is an open question.
+  - The handles live in the public `params` module (decided with the maintainer on 2026-10-25).
 - [ ] **hardware value enums:**
+  - Before the untyped fallback reads or writes an enum value, it checks the parameter's enumerated type with `Picam_GetParameterEnumeratedType`, since PICam reads every enum through the same integer call and can't catch a mismatch itself. This waits for this chunk because no enum value types exist before it.
   - Generate the 39 hardware enums, `ActiveShutter` through `VacuumStatus`. The six `*Mask` enums use `bitflags`, and the rest use `define_picam_enum!`.
   - Docs are short and generated: each enum names its `Parameter`, and each value names its PICam constant.
   - Enum parameters switch from `i32` to their enum through a mapping table in the generator, matched by name with overrides. It is checked against `Camera::enumerated_type` on the demo models, and any parameter no demo model has goes on the README's "to test" list.
@@ -230,6 +233,6 @@ These largely mirror patterns already in `camera.rs`.
 
 ## Open questions
 
-- **Naming the typed parameter handles** (stage 2): constants on `Parameter` (`Parameter::EXPOSURE_TIME` next to the variant `Parameter::ExposureTime`), which keeps everything in one place and matches `Model`'s constants but spells each parameter two ways side by side, or a public `params` module, which reads cleanly but would be an exception to modules staying private. To settle when planning that chunk.
+- **Connecting many demo models corrupts PICam's heap:** with SDK 5.15, the 65th `Picam_ConnectDemoCamera` call for a distinct demo model in one library session corrupts PICam's heap and kills the process (`STATUS_HEAP_CORRUPTION`). Reusing one model, or starting a fresh library, avoids it. It was reproduced with raw `sys` calls in a temporary test (since removed): `Picam_InitializeLibrary`, `Picam_GetAvailableDemoCameraModels`, then a loop of `Picam_ConnectDemoCamera` with the same serial number every time and a zeroed `PicamCameraID`, followed by `Picam_DisconnectDemoCamera` on the ID PICam returned, with no camera opened. Connecting the same model 80 times was fine, while a different model each time crashed on the 65th connect. Through the wrapper it also crashed on the 65th distinct model, with unique or reused serial numbers and with or without opening each camera, and starting the loop at model 60 crashed at model 124, so the trigger is the count of distinct models, not one model. So it is a PICam bug, but it means safe code can trigger memory corruption through `CameraId::connect_demo`. Options: document it, or have `Library` count the distinct demo models connected and return an error before the 65th. `tests/handles.rs` works around it with a fresh library per 32 models.
 - **Acquisition API design:** blocking versus non-blocking, buffer ownership, and how frames are handed to the user.
 - **Callback design** for `picam_advanced.h`.

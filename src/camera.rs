@@ -15,8 +15,8 @@ use crate::model::Model;
 use crate::parameter::sealed::RawHandle;
 use crate::parameter::{
     ComputerInterface, EnumeratedType, OnlineSettablePicamValue, Parameter, PicamValue,
-    ReadablePicamValue, ValueAccess, ValueType, can_read, can_set_online, can_wait_for_status,
-    constraint_type, enumerated_type, is_relevant, value_access, value_type,
+    ReadablePicamValue, TypedParameter, ValueAccess, ValueType, can_read, can_set_online,
+    can_wait_for_status, constraint_type, enumerated_type, is_relevant, value_access, value_type,
 };
 use crate::sys;
 
@@ -171,44 +171,115 @@ impl Camera {
         Ok(models)
     }
 
-    /// Gets the current value of `parameter`.
+    /// Gets the current value of `parameter`, a handle from
+    /// [`params`](crate::params) that fixes the value's type.
     ///
     /// # Errors
     ///
     /// Returns [`crate::Error::ParameterDoesNotExist`] if
     /// `parameter` doesn't apply to this camera, or an error if
     /// PICam is unable to read it.
-    pub fn get<T: PicamValue>(&self, parameter: Parameter) -> Result<T> {
+    pub fn get<T: PicamValue>(&self, parameter: TypedParameter<T>) -> Result<T> {
+        self.get_untyped(parameter.parameter())
+    }
+
+    /// Gets the current value of `parameter` as a `T` the caller chooses.
+    ///
+    /// Prefer [`Camera::get`], which takes the type from the parameter. This
+    /// is for parameters with no handle in [`params`](crate::params), such as
+    /// [`Parameter::Unknown`] values from [`Camera::parameters`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
+    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
+    /// share PICam's integer calls, so either is accepted for integer, on/off
+    /// and enum parameters), [`crate::Error::ParameterDoesNotExist`]
+    /// if `parameter` doesn't apply to this camera, or an error if PICam is
+    /// unable to read it.
+    pub fn get_untyped<T: PicamValue>(&self, parameter: Parameter) -> Result<T> {
         T::get(RawHandle(self.handle), parameter)
     }
 
-    /// Sets `parameter` to `value`.
+    /// Sets `parameter`, a handle from [`params`](crate::params), to `value`.
     ///
     /// # Errors
     ///
     /// Returns [`crate::Error::ParameterValueIsReadOnly`] if
     /// `parameter` can't be set, [`crate::Error::InvalidParameterValue`]
     /// if `value` is out of range, or an error if PICam is unable to set it.
-    pub fn set<T: PicamValue>(&self, parameter: Parameter, value: T) -> Result<()> {
+    pub fn set<T: PicamValue>(&self, parameter: TypedParameter<T>, value: T) -> Result<()> {
+        self.set_untyped(parameter.parameter(), value)
+    }
+
+    /// Sets `parameter` to a `value` of a type the caller chooses.
+    ///
+    /// Prefer [`Camera::set`]. This is for parameters with no handle in
+    /// [`params`](crate::params).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
+    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
+    /// share PICam's integer calls, so either is accepted for integer, on/off
+    /// and enum parameters), [`crate::Error::ParameterValueIsReadOnly`]
+    /// if `parameter` can't be set, [`crate::Error::InvalidParameterValue`] if
+    /// `value` is out of range, or an error if PICam is unable to set it.
+    pub fn set_untyped<T: PicamValue>(&self, parameter: Parameter, value: T) -> Result<()> {
         T::set(RawHandle(self.handle), parameter, value)
     }
 
-    /// Gets the factory default value of `parameter`.
+    /// Gets the factory default value of `parameter`, a handle from
+    /// [`params`](crate::params).
     ///
     /// # Errors
     ///
     /// Returns an error if PICam is unable to read the default value.
-    pub fn default_value<T: PicamValue>(&self, parameter: Parameter) -> Result<T> {
+    pub fn default_value<T: PicamValue>(&self, parameter: TypedParameter<T>) -> Result<T> {
+        self.default_value_untyped(parameter.parameter())
+    }
+
+    /// Gets the factory default value of `parameter` as a `T` the caller
+    /// chooses.
+    ///
+    /// Prefer [`Camera::default_value`]. This is for parameters with no handle
+    /// in [`params`](crate::params).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
+    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
+    /// share PICam's integer calls, so either is accepted for integer, on/off
+    /// and enum parameters), or an error if PICam is unable to read
+    /// the default value.
+    pub fn default_value_untyped<T: PicamValue>(&self, parameter: Parameter) -> Result<T> {
         T::default_value(RawHandle(self.handle), parameter)
     }
 
-    /// Reports whether `value` could currently be set for `parameter`,
-    /// without actually setting it.
+    /// Reports whether `value` could currently be set for `parameter`, a
+    /// handle from [`params`](crate::params), without actually setting it.
     ///
     /// # Errors
     ///
     /// Returns an error if PICam is unable to check this.
-    pub fn can_set<T: PicamValue>(&self, parameter: Parameter, value: T) -> Result<bool> {
+    pub fn can_set<T: PicamValue>(&self, parameter: TypedParameter<T>, value: T) -> Result<bool> {
+        self.can_set_untyped(parameter.parameter(), value)
+    }
+
+    /// Reports whether a `value` of a type the caller chooses could currently
+    /// be set for `parameter`, without actually setting it.
+    ///
+    /// Prefer [`Camera::can_set`]. This is for parameters with no handle in
+    /// [`params`](crate::params).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
+    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
+    /// share PICam's integer calls, so either is accepted for integer, on/off
+    /// and enum parameters), or an error if PICam is unable to check
+    /// this.
+    pub fn can_set_untyped<T: PicamValue>(&self, parameter: Parameter, value: T) -> Result<bool> {
         T::can_set(RawHandle(self.handle), parameter, value)
     }
 
@@ -217,8 +288,8 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to check this.
-    pub fn can_set_online(&self, parameter: Parameter) -> Result<bool> {
-        can_set_online(self.handle, parameter)
+    pub fn can_set_online(&self, parameter: impl Into<Parameter>) -> Result<bool> {
+        can_set_online(self.handle, parameter.into())
     }
 
     /// Reports whether `parameter` can be read directly from hardware
@@ -227,8 +298,8 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to check this.
-    pub fn can_read(&self, parameter: Parameter) -> Result<bool> {
-        can_read(self.handle, parameter)
+    pub fn can_read(&self, parameter: impl Into<Parameter>) -> Result<bool> {
+        can_read(self.handle, parameter.into())
     }
 
     /// Reports whether `parameter` is a waitable status parameter.
@@ -236,8 +307,8 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to check this.
-    pub fn can_wait_for_status(&self, parameter: Parameter) -> Result<bool> {
-        can_wait_for_status(self.handle, parameter)
+    pub fn can_wait_for_status(&self, parameter: impl Into<Parameter>) -> Result<bool> {
+        can_wait_for_status(self.handle, parameter.into())
     }
 
     /// Reports whether `parameter` is currently relevant to this
@@ -246,8 +317,8 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to check this.
-    pub fn is_relevant(&self, parameter: Parameter) -> Result<bool> {
-        is_relevant(self.handle, parameter)
+    pub fn is_relevant(&self, parameter: impl Into<Parameter>) -> Result<bool> {
+        is_relevant(self.handle, parameter.into())
     }
 
     /// Gets the underlying value type of `parameter`.
@@ -255,8 +326,8 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to check this.
-    pub fn value_type(&self, parameter: Parameter) -> Result<ValueType> {
-        value_type(self.handle, parameter).map(ValueType::from_raw)
+    pub fn value_type(&self, parameter: impl Into<Parameter>) -> Result<ValueType> {
+        value_type(self.handle, parameter.into()).map(ValueType::from_raw)
     }
 
     /// Gets the enumerated type `parameter`'s value belongs to.
@@ -267,8 +338,8 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to check this.
-    pub fn enumerated_type(&self, parameter: Parameter) -> Result<EnumeratedType> {
-        enumerated_type(self.handle, parameter).map(EnumeratedType::from_raw)
+    pub fn enumerated_type(&self, parameter: impl Into<Parameter>) -> Result<EnumeratedType> {
+        enumerated_type(self.handle, parameter.into()).map(EnumeratedType::from_raw)
     }
 
     /// Gets whether/how `parameter`'s value can currently be accessed.
@@ -276,8 +347,8 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to check this.
-    pub fn value_access(&self, parameter: Parameter) -> Result<ValueAccess> {
-        value_access(self.handle, parameter).map(ValueAccess::from_raw)
+    pub fn value_access(&self, parameter: impl Into<Parameter>) -> Result<ValueAccess> {
+        value_access(self.handle, parameter.into()).map(ValueAccess::from_raw)
     }
 
     /// Gets the kind of constraint that applies to `parameter`'s value.
@@ -285,8 +356,8 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to check this.
-    pub fn constraint_type(&self, parameter: Parameter) -> Result<ConstraintType> {
-        constraint_type(self.handle, parameter).map(ConstraintType::from_raw)
+    pub fn constraint_type(&self, parameter: impl Into<Parameter>) -> Result<ConstraintType> {
+        constraint_type(self.handle, parameter.into()).map(ConstraintType::from_raw)
     }
 
     /// Lists the parameters relevant to this camera.
@@ -318,11 +389,11 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to check this.
-    pub fn does_parameter_exist(&self, parameter: Parameter) -> Result<bool> {
+    pub fn does_parameter_exist(&self, parameter: impl Into<Parameter>) -> Result<bool> {
         let mut exists: sys::pibln = 0;
         picam_call!(sys::Picam_DoesParameterExist(
             self.handle,
-            parameter.to_raw(),
+            parameter.into().to_raw(),
             &mut exists
         ))?;
         Ok(exists != 0)
@@ -383,11 +454,11 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to query this.
-    pub fn status_parameter_purview(&self, parameter: Parameter) -> Result<Vec<i32>> {
+    pub fn status_parameter_purview(&self, parameter: impl Into<Parameter>) -> Result<Vec<i32>> {
         let mut ptr: *const sys::PicamStatusPurview = std::ptr::null();
         picam_call!(sys::Picam_GetStatusParameterPurview(
             self.handle,
-            parameter.to_raw(),
+            parameter.into().to_raw(),
             &mut ptr
         ))?;
 
@@ -416,13 +487,13 @@ impl Camera {
     /// Returns an error if PICam is unable to estimate this.
     pub fn estimate_time_to_status_parameter_value(
         &self,
-        parameter: Parameter,
+        parameter: impl Into<Parameter>,
         value: i32,
     ) -> Result<i32> {
         let mut estimated_time: sys::piint = 0;
         picam_call!(sys::Picam_EstimateTimeToStatusParameterValue(
             self.handle,
-            parameter.to_raw(),
+            parameter.into().to_raw(),
             value,
             &mut estimated_time
         ))?;
@@ -438,35 +509,75 @@ impl Camera {
     /// elapses first, or an error if PICam is unable to wait for this.
     pub fn wait_for_status_parameter_value(
         &self,
-        parameter: Parameter,
+        parameter: impl Into<Parameter>,
         value: i32,
         timeout: i32,
     ) -> Result<()> {
         picam_call!(sys::Picam_WaitForStatusParameterValue(
             self.handle,
-            parameter.to_raw(),
+            parameter.into().to_raw(),
             value,
             timeout
         ))
     }
 
-    /// Reads the current value of `parameter` directly from hardware,
-    /// bypassing PICam's cached/committed value.
+    /// Reads the current value of `parameter`, a handle from
+    /// [`params`](crate::params), directly from hardware, bypassing PICam's
+    /// cached/committed value.
     ///
     /// # Errors
     ///
     /// Returns an error if PICam is unable to read it.
-    pub fn read<T: ReadablePicamValue>(&self, parameter: Parameter) -> Result<T> {
+    pub fn read<T: ReadablePicamValue>(&self, parameter: TypedParameter<T>) -> Result<T> {
+        self.read_untyped(parameter.parameter())
+    }
+
+    /// Reads the current value of `parameter` directly from hardware as a `T`
+    /// the caller chooses.
+    ///
+    /// Prefer [`Camera::read`]. This is for parameters with no handle in
+    /// [`params`](crate::params).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
+    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
+    /// share PICam's integer calls, so either is accepted for integer, on/off
+    /// and enum parameters), or an error if PICam is unable to read
+    /// it.
+    pub fn read_untyped<T: ReadablePicamValue>(&self, parameter: Parameter) -> Result<T> {
         T::read(RawHandle(self.handle), parameter)
     }
 
-    /// Sets `parameter` to `value` and applies it immediately, without
-    /// needing [`Camera::commit_parameters`].
+    /// Sets `parameter`, a handle from [`params`](crate::params), to `value`
+    /// and applies it immediately, without needing
+    /// [`Camera::commit_parameters`].
     ///
     /// # Errors
     ///
     /// Returns an error if PICam is unable to set it.
     pub fn set_online<T: OnlineSettablePicamValue>(
+        &self,
+        parameter: TypedParameter<T>,
+        value: T,
+    ) -> Result<()> {
+        self.set_online_untyped(parameter.parameter(), value)
+    }
+
+    /// Sets `parameter` to a `value` of a type the caller chooses and applies
+    /// it immediately, without needing [`Camera::commit_parameters`].
+    ///
+    /// Prefer [`Camera::set_online`]. This is for parameters with no handle in
+    /// [`params`](crate::params).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
+    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
+    /// share PICam's integer calls, so either is accepted for integer, on/off
+    /// and enum parameters), or an error if PICam is unable to set
+    /// it.
+    pub fn set_online_untyped<T: OnlineSettablePicamValue>(
         &self,
         parameter: Parameter,
         value: T,
@@ -487,13 +598,13 @@ impl Camera {
     /// is unable to query this.
     pub fn collection_constraint(
         &self,
-        parameter: Parameter,
+        parameter: impl Into<Parameter>,
         category: ConstraintCategory,
     ) -> Result<CollectionConstraint> {
         let mut ptr: *const sys::PicamCollectionConstraint = std::ptr::null();
         picam_call!(sys::Picam_GetParameterCollectionConstraint(
             self.handle,
-            parameter.to_raw(),
+            parameter.into().to_raw(),
             category.to_raw(),
             &mut ptr
         ))?;
@@ -522,13 +633,13 @@ impl Camera {
     /// is unable to query this.
     pub fn range_constraint(
         &self,
-        parameter: Parameter,
+        parameter: impl Into<Parameter>,
         category: ConstraintCategory,
     ) -> Result<RangeConstraint> {
         let mut ptr: *const sys::PicamRangeConstraint = std::ptr::null();
         picam_call!(sys::Picam_GetParameterRangeConstraint(
             self.handle,
-            parameter.to_raw(),
+            parameter.into().to_raw(),
             category.to_raw(),
             &mut ptr
         ))?;
@@ -557,13 +668,13 @@ impl Camera {
     /// unable to query this.
     pub fn rois_constraint(
         &self,
-        parameter: Parameter,
+        parameter: impl Into<Parameter>,
         category: ConstraintCategory,
     ) -> Result<RoisConstraint> {
         let mut ptr: *const sys::PicamRoisConstraint = std::ptr::null();
         picam_call!(sys::Picam_GetParameterRoisConstraint(
             self.handle,
-            parameter.to_raw(),
+            parameter.into().to_raw(),
             category.to_raw(),
             &mut ptr
         ))?;
@@ -592,13 +703,13 @@ impl Camera {
     /// unable to query this.
     pub fn pulse_constraint(
         &self,
-        parameter: Parameter,
+        parameter: impl Into<Parameter>,
         category: ConstraintCategory,
     ) -> Result<PulseConstraint> {
         let mut ptr: *const sys::PicamPulseConstraint = std::ptr::null();
         picam_call!(sys::Picam_GetParameterPulseConstraint(
             self.handle,
-            parameter.to_raw(),
+            parameter.into().to_raw(),
             category.to_raw(),
             &mut ptr
         ))?;
@@ -627,13 +738,13 @@ impl Camera {
     /// unable to query this.
     pub fn modulations_constraint(
         &self,
-        parameter: Parameter,
+        parameter: impl Into<Parameter>,
         category: ConstraintCategory,
     ) -> Result<ModulationsConstraint> {
         let mut ptr: *const sys::PicamModulationsConstraint = std::ptr::null();
         picam_call!(sys::Picam_GetParameterModulationsConstraint(
             self.handle,
-            parameter.to_raw(),
+            parameter.into().to_raw(),
             category.to_raw(),
             &mut ptr
         ))?;
