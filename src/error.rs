@@ -203,11 +203,12 @@ pub enum Error {
     /// A string contains an embedded null byte, so it can't be passed to PICam.
     #[error("string contains an embedded null byte")]
     InvalidString,
-    /// This [`Library`](crate::Library) has already connected 64 different
-    /// demo cameras (model and serial number pairs). PICam 5.15 corrupts its
-    /// own memory when one more is connected, so
-    /// [`CameraId::connect_demo`](crate::CameraId::connect_demo) refuses
-    /// instead. Dropping the `Library` and making a new one resets the count.
+    /// This [`Library`](crate::Library) has already tried to connect 64
+    /// different demo cameras (model and serial number pairs), counting
+    /// attempts that failed. PICam 5.15 corrupts its own memory when one more
+    /// is connected, so [`CameraId::connect_demo`](crate::CameraId::connect_demo)
+    /// refuses instead. Dropping the `Library` and making a new one resets the
+    /// count.
     #[error("too many different demo cameras connected with this library")]
     TooManyDemoCameras,
     /// An untyped call such as

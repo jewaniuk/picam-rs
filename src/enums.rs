@@ -4,8 +4,10 @@
 //!
 //! Each one is a parameter value type: it is read and written through
 //! PICam's integer calls, which accept enum parameters (PICam manual 5.4.2.1,
-//! 5.4.2.3, 5.4.2.7 and 5.4.2.12). None is online-settable, since PICam only
-//! sets integer parameters online (5.4.1.20).
+//! 5.4.2.3, 5.4.2.7 and 5.4.2.12). 5.4.2.2 lists no value types for
+//! can-set, but `tests/handles.rs` checks it accepts every enum handle on the
+//! demo cameras. None is online-settable, since PICam only sets integer
+//! parameters online (5.4.1.20).
 
 use crate::convert::define_picam_enum;
 use crate::error::{Error, Result};
@@ -112,9 +114,12 @@ mod tests {
 
     #[test]
     fn masks_keep_unknown_bits() {
-        let orientation = Orientation::from_bits_retain(0x1 | 0x40);
+        // a bit picam 5.15 doesn't define, as a newer runtime might send
+        let unknown = 0x40;
+        let code = Orientation::FLIPPED_HORIZONTALLY.bits() | unknown;
+        let orientation = Orientation::from_bits_retain(code);
         assert!(orientation.contains(Orientation::FLIPPED_HORIZONTALLY));
         assert!(!orientation.contains(Orientation::FLIPPED_VERTICALLY));
-        assert_eq!(orientation.bits(), 0x41);
+        assert_eq!(orientation.bits(), code);
     }
 }

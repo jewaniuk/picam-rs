@@ -56,6 +56,7 @@ bitflags::bitflags! {
     ///
     /// No flags set is PICam's `PicamCcdCharacteristicsMask_None`.
     /// Bits this crate doesn't recognize are kept, not dropped.
+    #[doc(alias = "CcdCharacteristicsMask")]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct CcdCharacteristics: i32 {
         /// PICam's `PicamCcdCharacteristicsMask_BackIlluminated`.
@@ -113,6 +114,7 @@ impl_enum_value!(CoolingFanStatus, sys::PicamCoolingFanStatus, PicamEnumeratedTy
 
 define_picam_enum!(
     /// The values of [`Parameter::EmIccdGainControlMode`](crate::Parameter::EmIccdGainControlMode) (PICam's `PicamEMIccdGainControlMode`).
+    #[doc(alias = "EMIccdGainControlMode")]
     EmIccdGainControlMode,
     sys::PicamEMIccdGainControlMode,
     PicamEnumeratedType_EMIccdGainControlMode,
@@ -129,6 +131,7 @@ bitflags::bitflags! {
     ///
     /// No flags set is PICam's `PicamGateTrackingMask_None`.
     /// Bits this crate doesn't recognize are kept, not dropped.
+    #[doc(alias = "GateTrackingMask")]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct GateTracking: i32 {
         /// PICam's `PicamGateTrackingMask_Delay`.
@@ -212,6 +215,7 @@ bitflags::bitflags! {
     ///
     /// No flags set is PICam's `PicamIntensifierOptionsMask_None`.
     /// Bits this crate doesn't recognize are kept, not dropped.
+    #[doc(alias = "IntensifierOptionsMask")]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct IntensifierOptions: i32 {
         /// PICam's `PicamIntensifierOptionsMask_McpGating`.
@@ -305,6 +309,7 @@ bitflags::bitflags! {
     ///
     /// No flags set is PICam's `PicamModulationTrackingMask_None`.
     /// Bits this crate doesn't recognize are kept, not dropped.
+    #[doc(alias = "ModulationTrackingMask")]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct ModulationTracking: i32 {
         /// PICam's `PicamModulationTrackingMask_Duration`.
@@ -325,6 +330,7 @@ bitflags::bitflags! {
     ///
     /// No flags set is PICam's `PicamOrientationMask_Normal`.
     /// Bits this crate doesn't recognize are kept, not dropped.
+    #[doc(alias = "OrientationMask")]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct Orientation: i32 {
         /// PICam's `PicamOrientationMask_FlippedHorizontally`.
@@ -576,6 +582,7 @@ bitflags::bitflags! {
     ///
     /// No flags set is PICam's `PicamTimeStampsMask_None`.
     /// Bits this crate doesn't recognize are kept, not dropped.
+    #[doc(alias = "TimeStampsMask")]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct TimeStamps: i32 {
         /// PICam's `PicamTimeStampsMask_ExposureStarted`.

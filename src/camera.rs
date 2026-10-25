@@ -192,12 +192,13 @@ impl Camera {
     /// # Errors
     ///
     /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
-    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
-    /// share PICam's integer calls, so either is accepted for integer, on/off
-    /// and enum parameters), [`crate::Error::EnumeratedTypeMismatch`] if `T` is
-    /// an enum other than the one `parameter`'s values belong to, [`crate::Error::ParameterDoesNotExist`]
-    /// if `parameter` doesn't apply to this camera, or an error if PICam is
-    /// unable to read it.
+    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool` share
+    /// PICam's integer calls, so either is accepted for integer, on/off and
+    /// enum parameters) or `T` is an enum and `parameter` isn't an enum
+    /// parameter, [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum
+    /// other than the one `parameter`'s values belong to,
+    /// [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply to
+    /// this camera, or an error if PICam is unable to read it.
     pub fn get_untyped<T: PicamValue>(&self, parameter: Parameter) -> Result<T> {
         T::check_type(RawHandle(self.handle), parameter)?;
         T::get(RawHandle(self.handle), parameter)
@@ -222,12 +223,14 @@ impl Camera {
     /// # Errors
     ///
     /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
-    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
-    /// share PICam's integer calls, so either is accepted for integer, on/off
-    /// and enum parameters), [`crate::Error::EnumeratedTypeMismatch`] if `T` is
-    /// an enum other than the one `parameter`'s values belong to, [`crate::Error::ParameterValueIsReadOnly`]
-    /// if `parameter` can't be set, [`crate::Error::InvalidParameterValue`] if
-    /// `value` is out of range, or an error if PICam is unable to set it.
+    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool` share
+    /// PICam's integer calls, so either is accepted for integer, on/off and
+    /// enum parameters) or `T` is an enum and `parameter` isn't an enum
+    /// parameter, [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum
+    /// other than the one `parameter`'s values belong to,
+    /// [`crate::Error::ParameterValueIsReadOnly`] if `parameter` can't be set,
+    /// [`crate::Error::InvalidParameterValue`] if `value` is out of range, or
+    /// an error if PICam is unable to set it.
     pub fn set_untyped<T: PicamValue>(&self, parameter: Parameter, value: T) -> Result<()> {
         T::check_type(RawHandle(self.handle), parameter)?;
         T::set(RawHandle(self.handle), parameter, value)
@@ -252,11 +255,12 @@ impl Camera {
     /// # Errors
     ///
     /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
-    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
-    /// share PICam's integer calls, so either is accepted for integer, on/off
-    /// and enum parameters), [`crate::Error::EnumeratedTypeMismatch`] if `T` is
-    /// an enum other than the one `parameter`'s values belong to, or an error if PICam is unable to read
-    /// the default value.
+    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool` share
+    /// PICam's integer calls, so either is accepted for integer, on/off and
+    /// enum parameters) or `T` is an enum and `parameter` isn't an enum
+    /// parameter, [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum
+    /// other than the one `parameter`'s values belong to, or an error if PICam
+    /// is unable to read the default value.
     pub fn default_value_untyped<T: PicamValue>(&self, parameter: Parameter) -> Result<T> {
         T::check_type(RawHandle(self.handle), parameter)?;
         T::default_value(RawHandle(self.handle), parameter)
@@ -281,11 +285,12 @@ impl Camera {
     /// # Errors
     ///
     /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
-    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
-    /// share PICam's integer calls, so either is accepted for integer, on/off
-    /// and enum parameters), [`crate::Error::EnumeratedTypeMismatch`] if `T` is
-    /// an enum other than the one `parameter`'s values belong to, or an error if PICam is unable to check
-    /// this.
+    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool` share
+    /// PICam's integer calls, so either is accepted for integer, on/off and
+    /// enum parameters) or `T` is an enum and `parameter` isn't an enum
+    /// parameter, [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum
+    /// other than the one `parameter`'s values belong to, or an error if PICam
+    /// is unable to check this.
     pub fn can_set_untyped<T: PicamValue>(&self, parameter: Parameter, value: T) -> Result<bool> {
         T::check_type(RawHandle(self.handle), parameter)?;
         T::can_set(RawHandle(self.handle), parameter, value)
@@ -549,11 +554,12 @@ impl Camera {
     /// # Errors
     ///
     /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
-    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
-    /// share PICam's integer calls, so either is accepted for integer, on/off
-    /// and enum parameters), [`crate::Error::EnumeratedTypeMismatch`] if `T` is
-    /// an enum other than the one `parameter`'s values belong to, or an error if PICam is unable to read
-    /// it.
+    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool` share
+    /// PICam's integer calls, so either is accepted for integer, on/off and
+    /// enum parameters) or `T` is an enum and `parameter` isn't an enum
+    /// parameter, [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum
+    /// other than the one `parameter`'s values belong to, or an error if PICam
+    /// is unable to read it.
     pub fn read_untyped<T: ReadablePicamValue>(&self, parameter: Parameter) -> Result<T> {
         T::check_type(RawHandle(self.handle), parameter)?;
         T::read(RawHandle(self.handle), parameter)
@@ -583,11 +589,12 @@ impl Camera {
     /// # Errors
     ///
     /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
-    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
-    /// share PICam's integer calls, so either is accepted for integer, on/off
-    /// and enum parameters), [`crate::Error::EnumeratedTypeMismatch`] if `T` is
-    /// an enum other than the one `parameter`'s values belong to, or an error if PICam is unable to set
-    /// it.
+    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool` share
+    /// PICam's integer calls, so either is accepted for integer, on/off and
+    /// enum parameters) or `T` is an enum and `parameter` isn't an enum
+    /// parameter, [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum
+    /// other than the one `parameter`'s values belong to, or an error if PICam
+    /// is unable to set it.
     pub fn set_online_untyped<T: OnlineSettablePicamValue>(
         &self,
         parameter: Parameter,
@@ -935,13 +942,14 @@ impl CameraId {
     /// Returns the new camera's [`CameraId`], pass it to [`Camera::open`] to
     /// actually open it.
     ///
-    /// One `library` connects at most 64 different demo cameras, counting
-    /// each model and serial number pair once. PICam 5.15 corrupts its own
-    /// memory, killing the process, when a 65th different pair is connected
-    /// in one library session, even if the others were disconnected (found
-    /// with demo cameras, not documented), so this refuses instead.
-    /// Reconnecting a pair already used doesn't count again, and dropping the
-    /// `Library` and making a new one starts the count again.
+    /// One `library` tries at most 64 different demo cameras, counting each
+    /// model and serial number pair once. PICam 5.15 corrupts its own memory,
+    /// killing the process, when a 65th different pair is connected in one
+    /// library session, even if the others were disconnected (found with demo
+    /// cameras, not documented), so this refuses instead. Every attempt
+    /// counts, even one that fails, in case a failed attempt uses up one of
+    /// PICam's slots too. Trying a pair already tried doesn't count again, and
+    /// dropping the `Library` and making a new one starts the count again.
     ///
     /// # Errors
     ///

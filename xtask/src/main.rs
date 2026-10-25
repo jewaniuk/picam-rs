@@ -97,7 +97,7 @@ fn progress(root: &Path, list_unwrapped: bool) -> Result<(), String> {
     println!();
 
     // names of the raw functions nothing calls yet
-    let dead_functions = dead_names(&dead_code_messages, &["function"]);
+    let dead_functions = dead_function_names(&dead_code_messages);
     // the safe layer's own source, to see which raw enums it names. unused
     // code can't show this for enums, since a raw struct that an unwrapped
     // function takes keeps the enums in its fields from being reported
@@ -266,16 +266,11 @@ fn names_raw_type(source: &str, name: &str) -> bool {
     })
 }
 
-/// Returns the names of the items of the given kinds (`function`, `enum` and
-/// so on) that `dead_code` warnings are about.
-fn dead_names<'a>(messages: &'a [String], kinds: &[&str]) -> BTreeSet<&'a str> {
+/// Returns the names of the functions that `dead_code` warnings are about.
+fn dead_function_names(messages: &[String]) -> BTreeSet<&str> {
     messages
         .iter()
-        .filter_map(|message| {
-            kinds
-                .iter()
-                .find_map(|kind| message.strip_prefix(kind)?.strip_prefix(" `"))
-        })
+        .filter_map(|message| message.strip_prefix("function `"))
         .filter_map(|rest| rest.split('`').next())
         .collect()
 }
@@ -347,14 +342,12 @@ mod tests {
     }
 
     #[test]
-    fn picks_dead_names_by_kind() {
+    fn picks_dead_function_names() {
         let messages = [
             "function `Picam_A` is never used".to_string(),
             "enum `PicamB` is never used".to_string(),
-            "struct `PicamC` is never constructed".to_string(),
-            "type alias `PicamD` is never used".to_string(),
         ];
-        let functions = dead_names(&messages, &["function"]);
+        let functions = dead_function_names(&messages);
         assert_eq!(functions.into_iter().collect::<Vec<_>>(), ["Picam_A"]);
     }
 }

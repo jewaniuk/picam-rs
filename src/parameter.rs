@@ -358,8 +358,9 @@ use sealed::RawHandle;
 /// A value type PICam can get or set for a parameter.
 ///
 /// This trait is sealed: it is implemented for `i32`, `bool`, `i64`, `f64`,
-/// `Vec<Roi>`, `Vec<Modulation>` and [`Pulse`], and can't be implemented
-/// outside this crate. It is meant to be used as a bound:
+/// `Vec<Roi>`, `Vec<Modulation>`, [`Pulse`] and the value enums of PICam's
+/// enum parameters (such as [`ShutterTimingMode`](crate::ShutterTimingMode)),
+/// and can't be implemented outside this crate. It is meant to be used as a bound:
 ///
 /// ```no_run
 /// use picam_rs::{Camera, PicamValue, Result, TypedParameter};
@@ -474,9 +475,9 @@ impl_parameter_info!(
 /// A value type that can be read directly from hardware, bypassing PICam's
 /// committed-value cache.
 ///
-/// This trait is sealed: it is implemented only for `i32`, `bool` and `f64`,
-/// the value types PICam supports this for, and can't be implemented outside
-/// this crate.
+/// This trait is sealed: it is implemented only for `i32`, `bool`, `f64` and
+/// the value enums of PICam's enum parameters, the value types PICam supports
+/// this for, and can't be implemented outside this crate.
 pub trait ReadablePicamValue: PicamValue + sealed::RawReadablePicamValue {}
 
 macro_rules! impl_readable_value {

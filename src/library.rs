@@ -1,6 +1,7 @@
 //! PICam library lifecycle.
 
 use std::collections::HashSet;
+use std::fmt;
 use std::sync::{Mutex, PoisonError};
 
 use crate::error::{Error, Result, picam_call};
@@ -14,11 +15,10 @@ use crate::sys;
 /// that requirement into something the type system enforces: you can't
 /// obtain a `Camera` (or anything else) without a live `Library`, and
 /// initialization/uninitialization become `new`/`Drop`.
-#[derive(Debug)]
 pub struct Library {
-    /// The demo cameras, as model and serial number, connected so far, see
-    /// `MAX_DEMO_CAMERAS`. Also keeps `Library` from being constructed
-    /// outside this module.
+    /// The demo cameras, as model and serial number, that `connect_demo` has
+    /// tried so far, see `MAX_DEMO_CAMERAS`. Also keeps `Library` from being
+    /// constructed outside this module.
     demo_cameras: Mutex<HashSet<(Model, String)>>,
 }
 
@@ -74,6 +74,20 @@ impl Library {
         }
         demo_cameras.insert(camera);
         Ok(())
+    }
+}
+
+impl fmt::Debug for Library {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // the count is enough, the set itself can hold 64 entries
+        let demo_cameras_tried = self
+            .demo_cameras
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .len();
+        f.debug_struct("Library")
+            .field("demo_cameras_tried", &demo_cameras_tried)
+            .finish()
     }
 }
 

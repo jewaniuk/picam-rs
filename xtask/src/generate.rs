@@ -523,6 +523,7 @@ fn render_value_enums(
             [] => unreachable!("users isn't empty"),
         };
         let type_name = enum_type_name(&value_enum);
+        let type_alias = doc_alias(&value_enum, &type_name);
         let values = parse_enum(headers, &format!("Picam{value_enum}"))?;
         let mut seen: HashMap<String, &str> = HashMap::new();
         out.push('\n');
@@ -541,7 +542,8 @@ fn render_value_enums(
                 "bitflags::bitflags! {{\n    \
                  /// The values of {links} (PICam's `Picam{value_enum}`), a set of flags.\n    \
                  ///\n{empty}    \
-                 /// Bits this crate doesn't recognize are kept, not dropped.\n    \
+                 /// Bits this crate doesn't recognize are kept, not dropped.\n\
+                 {type_alias}    \
                  #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n    \
                  pub struct {type_name}: i32 {{\n"
             ));
@@ -565,7 +567,8 @@ fn render_value_enums(
         } else {
             out.push_str(&format!(
                 "define_picam_enum!(\n    \
-                 /// The values of {links} (PICam's `Picam{value_enum}`).\n    \
+                 /// The values of {links} (PICam's `Picam{value_enum}`).\n\
+                 {type_alias}    \
                  {type_name},\n    \
                  sys::Picam{value_enum},\n    \
                  PicamEnumeratedType_{value_enum},\n"
@@ -968,24 +971,18 @@ mod tests {
         let rendered =
             render_value_enums(ENUM_HEADER, &parameter_enums).expect("enums should render");
         for expected in [
-            "    Colour,
-    sys::PicamColour,
-    PicamEnumeratedType_Colour,
-",
-            "    DeepRed = PicamColour_DeepRed,
-",
-            "    #[doc(alias = \"UVBlue\")]
-    UvBlue = PicamColour_UVBlue,
-",
+            "    /// The values of [`Parameter::Colour`](crate::Parameter::Colour) \
+             (PICam's `PicamColour`).\n",
+            "    Colour,\n    sys::PicamColour,\n    PicamEnumeratedType_Colour,\n",
+            "    /// PICam's `PicamColour_DeepRed`.\n    DeepRed = PicamColour_DeepRed,\n",
+            "    #[doc(alias = \"UVBlue\")]\n    UvBlue = PicamColour_UVBlue,\n",
             "impl_enum_value!(Colour, sys::PicamColour, PicamEnumeratedType_Colour);",
-            "    pub struct Widget: i32 {
-",
-            "    /// No flags set is PICam's `PicamWidgetMask_None`.
-",
-            "        const SHINY = sys::PicamWidgetMask::PicamWidgetMask_Shiny.0;
-",
-            "        const BOUNCY = sys::PicamWidgetMask::PicamWidgetMask_Bouncy.0;
-",
+            "    #[doc(alias = \"WidgetMask\")]\n",
+            "    pub struct Widget: i32 {\n",
+            "    /// No flags set is PICam's `PicamWidgetMask_None`.\n",
+            "        /// PICam's `PicamWidgetMask_Shiny`.\n",
+            "        const SHINY = sys::PicamWidgetMask::PicamWidgetMask_Shiny.0;\n",
+            "        const BOUNCY = sys::PicamWidgetMask::PicamWidgetMask_Bouncy.0;\n",
             "impl_mask_value!(Widget, PicamEnumeratedType_WidgetMask);",
         ] {
             assert!(rendered.contains(expected), "missing `{expected}`");
@@ -993,6 +990,45 @@ mod tests {
         // the zero value isn't a flag, and an enum no parameter uses is left out
         assert!(!rendered.contains("const NONE"));
         assert!(!rendered.contains("Unused"));
+    }
+
+    #[test]
+    fn uses_parameter_enum_overrides() {
+        let parameters = [Enumerator {
+            name: "InternalShutterType".to_string(),
+            value: "PI_V(Enumeration, Collection, 1)".to_string(),
+        }];
+        // `PARAMETER_ENUMS` maps `InternalShutterType` to `ShutterType`, which
+        // its name alone wouldn't find
+        let names = ["ShutterType".to_string()];
+        let found = parameter_enums(&parameters, &names).expect("the override should apply");
+        assert_eq!(
+            found,
+            [("InternalShutterType".to_string(), "ShutterType".to_string())]
+        );
+        // an override naming an enum the headers lack is an error
+        let missing = parameter_enums(&parameters, &["Other".to_string()])
+            .expect_err("an override to a missing enum should fail");
+        assert!(missing.contains("PicamShutterType"), "{missing}");
+    }
+
+    #[test]
+    fn colliding_value_names_are_an_error() {
+        let header = "
+            typedef enum PicamClash { PicamClash_UVBlue = 1, PicamClash_UvBlue = 2 } PicamClash;
+            typedef enum PicamClashMask
+            {
+                PicamClashMask_UVBit = 0x1,
+                PicamClashMask_UvBit = 0x2
+            } PicamClashMask;
+        ";
+        for value_enum in ["Clash", "ClashMask"] {
+            let parameter_enums = [("Clash".to_string(), value_enum.to_string())];
+            assert!(
+                render_value_enums(header, &parameter_enums).is_err(),
+                "{value_enum} should fail on a name collision"
+            );
+        }
     }
 
     #[test]
