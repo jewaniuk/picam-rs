@@ -1,3 +1,9 @@
+//! Generates the raw PICam bindings with bindgen.
+//!
+//! Reads the SDK headers from `PICAM_DIR`, or from the SDK's default install
+//! path when it isn't set, and on Windows links `Picam.lib` from the
+//! `Libraries` directory beside them.
+
 use std::env;
 use std::path::PathBuf;
 
