@@ -96,8 +96,9 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to enumerate cameras.
-    pub fn available_ids() -> Result<Vec<CameraId>> {
+    pub fn available_ids(library: &Library) -> Result<Vec<CameraId>> {
         tracing::debug!("enumerating available cameras");
+        let _ = library; // only taken to prove picam is initialized
         let mut array: *const sys::PicamCameraID = std::ptr::null();
         let mut count: sys::piint = 0;
         picam_call!(sys::Picam_GetAvailableCameraIDs(&mut array, &mut count))?;
@@ -110,8 +111,9 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to enumerate cameras.
-    pub fn unavailable_ids() -> Result<Vec<CameraId>> {
+    pub fn unavailable_ids(library: &Library) -> Result<Vec<CameraId>> {
         tracing::debug!("enumerating unavailable cameras");
+        let _ = library; // only taken to prove picam is initialized
         let mut array: *const sys::PicamCameraID = std::ptr::null();
         let mut count: sys::piint = 0;
         picam_call!(sys::Picam_GetUnavailableCameraIDs(&mut array, &mut count))?;
@@ -151,8 +153,9 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to enumerate demo camera models.
-    pub fn available_demo_models() -> Result<Vec<Model>> {
+    pub fn available_demo_models(library: &Library) -> Result<Vec<Model>> {
         tracing::debug!("enumerating available demo camera models");
+        let _ = library; // only taken to prove picam is initialized
         let mut array: *const sys::PicamModel = std::ptr::null();
         let mut count: sys::piint = 0;
         picam_call!(sys::Picam_GetAvailableDemoCameraModels(
@@ -775,7 +778,8 @@ impl CameraId {
     /// Returns [`crate::error::Error::ValueTooLong`] if this ID's fields
     /// don't fit in PICam's fixed-size buffers, or an error if PICam is unable
     /// to query connection status.
-    pub fn is_connected(&self) -> Result<bool> {
+    pub fn is_connected(&self, library: &Library) -> Result<bool> {
+        let _ = library; // only taken to prove picam is initialized
         let raw = self.to_raw()?;
         let mut connected: sys::pibln = 0;
         picam_call!(sys::Picam_IsCameraIDConnected(&raw, &mut connected))?;
@@ -790,7 +794,8 @@ impl CameraId {
     /// Returns [`crate::error::Error::ValueTooLong`] if this ID's fields
     /// don't fit in PICam's fixed-size buffers, or an error if PICam is
     /// unable to query this.
-    pub fn is_open_elsewhere(&self) -> Result<bool> {
+    pub fn is_open_elsewhere(&self, library: &Library) -> Result<bool> {
+        let _ = library; // only taken to prove picam is initialized
         let raw = self.to_raw()?;
         let mut open_elsewhere: sys::pibln = 0;
         picam_call!(sys::Picam_IsCameraIDOpenElsewhere(
@@ -813,7 +818,8 @@ impl CameraId {
     /// if `model` isn't a valid demo model, or
     /// [`crate::error::Error::DemoAlreadyConnected`] if a demo camera with this
     /// serial number is already connected.
-    pub fn connect_demo(model: Model, serial_number: &str) -> Result<CameraId> {
+    pub fn connect_demo(library: &Library, model: Model, serial_number: &str) -> Result<CameraId> {
+        let _ = library; // only taken to prove picam is initialized
         tracing::debug!("connecting demo camera: {serial_number}");
         let c_serial_number = std::ffi::CString::new(serial_number)
             .map_err(|_| crate::error::Error::InvalidString)?;
@@ -841,7 +847,8 @@ impl CameraId {
     /// Returns [`crate::error::Error::ValueTooLong`] if this ID's fields
     /// don't fit in PICam's fixed-size buffers, or an error if this isn't
     /// a currently connected demo camera.
-    pub fn disconnect_demo(&self) -> Result<()> {
+    pub fn disconnect_demo(&self, library: &Library) -> Result<()> {
+        let _ = library; // only taken to prove picam is initialized
         let raw = self.to_raw()?;
         picam_call!(sys::Picam_DisconnectDemoCamera(&raw))
     }
@@ -854,7 +861,8 @@ impl CameraId {
     /// Returns [`crate::error::Error::ValueTooLong`] if this ID's fields
     /// don't fit in PICam's fixed-size buffers, or an error if PICam is
     /// unable to query this.
-    pub fn is_demo(&self) -> Result<bool> {
+    pub fn is_demo(&self, library: &Library) -> Result<bool> {
+        let _ = library; // only taken to prove picam is initialized
         let raw = self.to_raw()?;
         let mut demo: sys::pibln = 0;
         picam_call!(sys::Picam_IsDemoCamera(&raw, &mut demo))?;
@@ -868,7 +876,8 @@ impl CameraId {
     /// Returns [`crate::error::Error::ValueTooLong`] if this ID's fields
     /// don't fit in PICam's fixed-size buffers, or an error if PICam is
     /// unable to query firmware details.
-    pub fn firmware_details(&self) -> Result<Vec<FirmwareDetail>> {
+    pub fn firmware_details(&self, library: &Library) -> Result<Vec<FirmwareDetail>> {
+        let _ = library; // only taken to prove picam is initialized
         let raw_id = self.to_raw()?;
         let mut array: *const sys::PicamFirmwareDetail = std::ptr::null();
         let mut count: sys::piint = 0;
