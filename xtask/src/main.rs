@@ -68,7 +68,8 @@ fn main() -> ExitCode {
 }
 
 /// Runs `cargo check` on `picam-rs`, then prints `dead_code` warnings by item
-/// kind and how many header functions are wrapped, overall and per header.
+/// kind, how many header functions are wrapped, overall and per header, and
+/// how many header enums are.
 ///
 /// # Errors
 ///
@@ -96,17 +97,19 @@ fn progress(root: &Path, list_unwrapped: bool) -> Result<(), String> {
     println!();
 
     // names of the raw functions nothing calls yet
-    let dead_functions: BTreeSet<&str> = dead_code_messages
-        .iter()
-        .filter_map(|message| message.strip_prefix("function `"))
-        .filter_map(|rest| rest.split('`').next())
-        .collect();
+    let dead_functions = dead_names(&dead_code_messages, &["function"]);
+    // the safe layer's own source, to see which raw enums it names. unused
+    // code can't show this for enums, since a raw struct that an unwrapped
+    // function takes keeps the enums in its fields from being reported
+    let source = rust_source(&root.join("src"))?;
 
     // cross-reference against the real headers, independent of whatever
     // bindgen actually generated
     let include_dir = include_dir(root);
     let mut total = 0;
     let mut total_unwrapped = 0;
+    let mut enums = 0;
+    let mut enums_unwrapped = 0;
     let mut per_header = Vec::new();
     for name in HEADER_NAMES {
         let path = include_dir.join(name);
@@ -120,6 +123,12 @@ fn progress(root: &Path, list_unwrapped: bool) -> Result<(), String> {
             .collect();
         total += functions.len();
         total_unwrapped += unwrapped.len();
+        let header_enums = api_enums(&text);
+        enums += header_enums.len();
+        enums_unwrapped += header_enums
+            .iter()
+            .filter(|name| !names_raw_type(&source, name))
+            .count();
         per_header.push((name, functions.len(), unwrapped));
     }
 
@@ -131,6 +140,9 @@ fn progress(root: &Path, list_unwrapped: bool) -> Result<(), String> {
     for (name, count, unwrapped) in &per_header {
         println!("  {name:<24} {:>3} / {count}", count - unwrapped.len());
     }
+    // an enum counts as wrapped once the safe layer names its raw type
+    println!();
+    println!("enums wrapped: {} / {enums}", enums - enums_unwrapped);
 
     if list_unwrapped {
         for (name, _, unwrapped) in &per_header {
@@ -221,6 +233,69 @@ fn include_dir(root: &Path) -> PathBuf {
     }
 }
 
+/// Reads every `.rs` file under `dir` into one string.
+///
+/// # Errors
+///
+/// Returns an error if a directory or file can't be read.
+fn rust_source(dir: &Path) -> Result<String, String> {
+    let mut source = String::new();
+    let entries =
+        std::fs::read_dir(dir).map_err(|e| format!("could not read '{}': {e}", dir.display()))?;
+    for entry in entries {
+        let path = entry
+            .map_err(|e| format!("could not read '{}': {e}", dir.display()))?
+            .path();
+        if path.is_dir() {
+            source.push_str(&rust_source(&path)?);
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            source.push_str(
+                &std::fs::read_to_string(&path)
+                    .map_err(|e| format!("could not read '{}': {e}", path.display()))?,
+            );
+        }
+    }
+    Ok(source)
+}
+
+/// Whether `source` names the raw type `sys::{name}`, as every wrapper does.
+fn names_raw_type(source: &str, name: &str) -> bool {
+    let path = format!("sys::{name}");
+    source.match_indices(&path).any(|(index, _)| {
+        !source[index + path.len()..].starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_')
+    })
+}
+
+/// Returns the names of the items of the given kinds (`function`, `enum` and
+/// so on) that `dead_code` warnings are about.
+fn dead_names<'a>(messages: &'a [String], kinds: &[&str]) -> BTreeSet<&'a str> {
+    messages
+        .iter()
+        .filter_map(|message| {
+            kinds
+                .iter()
+                .find_map(|kind| message.strip_prefix(kind)?.strip_prefix(" `"))
+        })
+        .filter_map(|rest| rest.split('`').next())
+        .collect()
+}
+
+/// Extracts the name of every enum declared as `typedef enum Name` in a
+/// header's text.
+fn api_enums(header: &str) -> Vec<String> {
+    const MARKER: &str = "typedef enum ";
+    header
+        .match_indices(MARKER)
+        .map(|(index, _)| {
+            header[index + MARKER.len()..]
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .collect::<String>()
+        })
+        .filter(|name| !name.is_empty())
+        .collect()
+}
+
 /// Extracts the name of every function declared as `PICAM_API Name(` in a
 /// header's text.
 fn api_functions(header: &str) -> Vec<String> {
@@ -244,4 +319,42 @@ fn api_functions(header: &str) -> Vec<String> {
         }
     }
     names
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finds_header_enums() {
+        let header = "typedef enum PicamOne { PicamOne_A } PicamOne;
+                      typedef struct PicamTwo { int a; } PicamTwo;
+                      typedef enum PicamThree { PicamThree_B } PicamThree;";
+        assert_eq!(api_enums(header), ["PicamOne", "PicamThree"]);
+    }
+
+    #[test]
+    fn finds_raw_type_names() {
+        let source = "let raw: sys::PicamWidget = sys::PicamWidget(1);
+                      let other = sys::PicamWidgetMask::PicamWidgetMask_Shiny;";
+        assert!(names_raw_type(source, "PicamWidget"));
+        assert!(names_raw_type(source, "PicamWidgetMask"));
+        assert!(!names_raw_type(source, "PicamWid"));
+        assert!(!names_raw_type(
+            "// PicamGadget, not named as a type",
+            "PicamGadget"
+        ));
+    }
+
+    #[test]
+    fn picks_dead_names_by_kind() {
+        let messages = [
+            "function `Picam_A` is never used".to_string(),
+            "enum `PicamB` is never used".to_string(),
+            "struct `PicamC` is never constructed".to_string(),
+            "type alias `PicamD` is never used".to_string(),
+        ];
+        let functions = dead_names(&messages, &["function"]);
+        assert_eq!(functions.into_iter().collect::<Vec<_>>(), ["Picam_A"]);
+    }
 }
