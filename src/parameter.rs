@@ -1002,3 +1002,17 @@ impl sealed::RawOnlineSettablePicamValue for Pulse {
 }
 
 impl OnlineSettablePicamValue for Pulse {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::convert::assert_round_trips;
+
+    #[test]
+    fn parameter_enums_round_trip() {
+        assert_round_trips!(ComputerInterface, sys::PicamComputerInterface, 5);
+        assert_round_trips!(ValueType, sys::PicamValueType, 8);
+        assert_round_trips!(ValueAccess, sys::PicamValueAccess, 3);
+        assert_round_trips!(EnumeratedType, sys::PicamEnumeratedType, 57);
+    }
+}

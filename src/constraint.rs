@@ -320,3 +320,61 @@ impl ModulationsConstraint {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::convert::assert_round_trips;
+
+    #[test]
+    fn constraint_enums_round_trip() {
+        assert_round_trips!(ConstraintType, sys::PicamConstraintType, 6);
+        assert_round_trips!(ConstraintScope, sys::PicamConstraintScope, 2);
+        assert_round_trips!(ConstraintCategory, sys::PicamConstraintCategory, 3);
+        assert_round_trips!(ConstraintSeverity, sys::PicamConstraintSeverity, 2);
+    }
+
+    #[test]
+    fn rois_constraint_rules_match_picam() {
+        let rules = [
+            (
+                sys::PicamRoisConstraintRulesMask::PicamRoisConstraintRulesMask_XBinningAlignment,
+                RoisConstraintRules::X_BINNING_ALIGNMENT,
+            ),
+            (
+                sys::PicamRoisConstraintRulesMask::PicamRoisConstraintRulesMask_YBinningAlignment,
+                RoisConstraintRules::Y_BINNING_ALIGNMENT,
+            ),
+            (
+                sys::PicamRoisConstraintRulesMask::PicamRoisConstraintRulesMask_HorizontalSymmetry,
+                RoisConstraintRules::HORIZONTAL_SYMMETRY,
+            ),
+            (
+                sys::PicamRoisConstraintRulesMask::PicamRoisConstraintRulesMask_VerticalSymmetry,
+                RoisConstraintRules::VERTICAL_SYMMETRY,
+            ),
+            (
+                sys::PicamRoisConstraintRulesMask::PicamRoisConstraintRulesMask_SymmetryBoundsBinning,
+                RoisConstraintRules::SYMMETRY_BOUNDS_BINNING,
+            ),
+            (
+                sys::PicamRoisConstraintRulesMask::PicamRoisConstraintRulesMask_UniformBinning,
+                RoisConstraintRules::UNIFORM_BINNING,
+            ),
+        ];
+        for (raw, flag) in rules {
+            assert_eq!(RoisConstraintRules::from_raw(raw), flag);
+        }
+
+        let none = sys::PicamRoisConstraintRulesMask::PicamRoisConstraintRulesMask_None;
+        assert!(RoisConstraintRules::from_raw(none).is_empty());
+    }
+
+    #[test]
+    fn rois_constraint_rules_keep_unknown_bits() {
+        // 0x40 isn't a rule in sdk 5.15, so it must survive as an unnamed bit
+        let rules = RoisConstraintRules::from_raw(sys::PicamRoisConstraintRulesMask(0x41));
+        assert!(rules.contains(RoisConstraintRules::X_BINNING_ALIGNMENT));
+        assert_eq!(rules.bits(), 0x41);
+    }
+}

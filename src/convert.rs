@@ -39,6 +39,25 @@ macro_rules! define_picam_enum {
 }
 pub(crate) use define_picam_enum;
 
+/// Checks that every raw value in a range survives a round trip through
+/// a wrapper, and that exactly `known` of them map to a named variant.
+#[cfg(test)]
+macro_rules! assert_round_trips {
+    ($enum_name:ident, $raw_ty:path, $known:expr) => {
+        let mut named = 0;
+        for code in -10..1000 {
+            let value = $enum_name::from_raw($raw_ty(code));
+            assert_eq!(value.to_raw().0, code, "{value:?} should keep {code}");
+            if !matches!(value, $enum_name::Unknown(_)) {
+                named += 1;
+            }
+        }
+        assert_eq!(named, $known, "every value in picam.h should be named");
+    };
+}
+#[cfg(test)]
+pub(crate) use assert_round_trips;
+
 /// Converts a fixed-size, nul-terminated C character array into an owned,
 /// lossily-converted `String`.
 pub(crate) fn c_char_array_to_string(chars: &[sys::pichar]) -> String {
