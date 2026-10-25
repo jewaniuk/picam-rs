@@ -100,9 +100,9 @@ impl RoisConstraintRules {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CollectionConstraint {
     /// Whether the constraint is fixed or depends on other parameters' values.
-    pub scope: sys::PicamConstraintScope,
+    pub scope: ConstraintScope,
     /// Whether a value that breaks the constraint is an error or only a warning.
-    pub severity: sys::PicamConstraintSeverity,
+    pub severity: ConstraintSeverity,
     /// The values the parameter may take.
     pub values: Vec<sys::piflt>,
 }
@@ -110,8 +110,8 @@ pub struct CollectionConstraint {
 impl CollectionConstraint {
     pub(crate) fn from_raw(raw: &sys::PicamCollectionConstraint) -> Self {
         Self {
-            scope: raw.scope,
-            severity: raw.severity,
+            scope: ConstraintScope::from_raw(raw.scope),
+            severity: ConstraintSeverity::from_raw(raw.severity),
             // SAFETY: PICam guarantees `values_array` has `values_count`
             // valid, contiguous entries whenever this struct is valid
             values: unsafe { collect_raw_array(raw.values_array, raw.values_count, |&v| v) },
@@ -126,9 +126,9 @@ impl CollectionConstraint {
 #[derive(Debug, Clone, PartialEq)]
 pub struct RangeConstraint {
     /// Whether the constraint is fixed or depends on other parameters' values.
-    pub scope: sys::PicamConstraintScope,
+    pub scope: ConstraintScope,
     /// Whether a value that breaks the constraint is an error or only a warning.
-    pub severity: sys::PicamConstraintSeverity,
+    pub severity: ConstraintSeverity,
     /// `true` when no valid values exist, in which case only `scope` and `severity` mean anything.
     pub empty_set: bool,
     /// The smallest value in the range. `outlying_values` may hold a smaller valid value.
@@ -147,8 +147,8 @@ pub struct RangeConstraint {
 impl RangeConstraint {
     pub(crate) fn from_raw(raw: &sys::PicamRangeConstraint) -> Self {
         Self {
-            scope: raw.scope,
-            severity: raw.severity,
+            scope: ConstraintScope::from_raw(raw.scope),
+            severity: ConstraintSeverity::from_raw(raw.severity),
             empty_set: raw.empty_set != 0,
             minimum: raw.minimum,
             maximum: raw.maximum,
@@ -176,14 +176,14 @@ impl RangeConstraint {
 #[derive(Debug, Clone, PartialEq)]
 pub struct RoisConstraint {
     /// Whether the constraint is fixed or depends on other parameters' values.
-    pub scope: sys::PicamConstraintScope,
+    pub scope: ConstraintScope,
     /// Whether a value that breaks the constraint is an error or only a warning.
-    pub severity: sys::PicamConstraintSeverity,
+    pub severity: ConstraintSeverity,
     /// `true` when no valid regions of interest exist, in which case only `scope` and `severity`
     /// mean anything.
     pub empty_set: bool,
     /// Extra rules the set of regions must follow, such as symmetry or uniform binning.
-    pub rules: sys::PicamRoisConstraintRulesMask,
+    pub rules: RoisConstraintRules,
     /// The largest number of regions allowed.
     pub maximum_roi_count: sys::piint,
     /// The constraint on [`crate::Roi::x`].
@@ -207,10 +207,10 @@ pub struct RoisConstraint {
 impl RoisConstraint {
     pub(crate) fn from_raw(raw: &sys::PicamRoisConstraint) -> Self {
         Self {
-            scope: raw.scope,
-            severity: raw.severity,
+            scope: ConstraintScope::from_raw(raw.scope),
+            severity: ConstraintSeverity::from_raw(raw.severity),
             empty_set: raw.empty_set != 0,
-            rules: raw.rules,
+            rules: RoisConstraintRules::from_raw(raw.rules),
             maximum_roi_count: raw.maximum_roi_count,
             // `x_constraint`/`width_constraint`/etc. are embedded structs,
             // not pointers - no separate allocation to worry about, just
@@ -250,9 +250,9 @@ impl RoisConstraint {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PulseConstraint {
     /// Whether the constraint is fixed or depends on other parameters' values.
-    pub scope: sys::PicamConstraintScope,
+    pub scope: ConstraintScope,
     /// Whether a value that breaks the constraint is an error or only a warning.
-    pub severity: sys::PicamConstraintSeverity,
+    pub severity: ConstraintSeverity,
     /// `true` when no valid pulses exist, in which case only `scope` and `severity` mean anything.
     pub empty_set: bool,
     /// The constraint on [`crate::Pulse::delay`].
@@ -268,8 +268,8 @@ pub struct PulseConstraint {
 impl PulseConstraint {
     pub(crate) fn from_raw(raw: &sys::PicamPulseConstraint) -> Self {
         Self {
-            scope: raw.scope,
-            severity: raw.severity,
+            scope: ConstraintScope::from_raw(raw.scope),
+            severity: ConstraintSeverity::from_raw(raw.severity),
             empty_set: raw.empty_set != 0,
             delay_constraint: RangeConstraint::from_raw(&raw.delay_constraint),
             width_constraint: RangeConstraint::from_raw(&raw.width_constraint),
@@ -286,9 +286,9 @@ impl PulseConstraint {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModulationsConstraint {
     /// Whether the constraint is fixed or depends on other parameters' values.
-    pub scope: sys::PicamConstraintScope,
+    pub scope: ConstraintScope,
     /// Whether a value that breaks the constraint is an error or only a warning.
-    pub severity: sys::PicamConstraintSeverity,
+    pub severity: ConstraintSeverity,
     /// `true` when no valid modulation sequence points exist, in which case only `scope` and
     /// `severity` mean anything.
     pub empty_set: bool,
@@ -307,8 +307,8 @@ pub struct ModulationsConstraint {
 impl ModulationsConstraint {
     pub(crate) fn from_raw(raw: &sys::PicamModulationsConstraint) -> Self {
         Self {
-            scope: raw.scope,
-            severity: raw.severity,
+            scope: ConstraintScope::from_raw(raw.scope),
+            severity: ConstraintSeverity::from_raw(raw.severity),
             empty_set: raw.empty_set != 0,
             maximum_modulation_count: raw.maximum_modulation_count,
             duration_constraint: RangeConstraint::from_raw(&raw.duration_constraint),

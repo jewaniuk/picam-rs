@@ -3,7 +3,8 @@
 use std::sync::Arc;
 
 use crate::constraint::{
-    CollectionConstraint, ModulationsConstraint, PulseConstraint, RangeConstraint, RoisConstraint,
+    CollectionConstraint, ConstraintCategory, ConstraintType, ModulationsConstraint,
+    PulseConstraint, RangeConstraint, RoisConstraint,
 };
 use crate::convert::{
     FirmwareDetail, c_char_array_to_string, collect_raw_array, string_to_c_char_array,
@@ -12,8 +13,9 @@ use crate::error::{Result, picam_call};
 use crate::library::Library;
 use crate::parameter::sealed::RawHandle;
 use crate::parameter::{
-    OnlineSettablePicamValue, Parameter, PicamValue, ReadablePicamValue, can_read, can_set_online,
-    can_wait_for_status, constraint_type, enumerated_type, is_relevant, value_access, value_type,
+    ComputerInterface, EnumeratedType, OnlineSettablePicamValue, Parameter, PicamValue,
+    ReadablePicamValue, ValueAccess, ValueType, can_read, can_set_online, can_wait_for_status,
+    constraint_type, enumerated_type, is_relevant, value_access, value_type,
 };
 use crate::sys;
 
@@ -249,8 +251,8 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to check this.
-    pub fn value_type(&self, parameter: Parameter) -> Result<sys::PicamValueType> {
-        value_type(self.handle, parameter)
+    pub fn value_type(&self, parameter: Parameter) -> Result<ValueType> {
+        value_type(self.handle, parameter).map(ValueType::from_raw)
     }
 
     /// Gets the enumerated type `parameter`'s value belongs to, if any.
@@ -258,8 +260,8 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to check this.
-    pub fn enumerated_type(&self, parameter: Parameter) -> Result<sys::PicamEnumeratedType> {
-        enumerated_type(self.handle, parameter)
+    pub fn enumerated_type(&self, parameter: Parameter) -> Result<EnumeratedType> {
+        enumerated_type(self.handle, parameter).map(EnumeratedType::from_raw)
     }
 
     /// Gets whether/how `parameter`'s value can currently be accessed.
@@ -267,8 +269,8 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to check this.
-    pub fn value_access(&self, parameter: Parameter) -> Result<sys::PicamValueAccess> {
-        value_access(self.handle, parameter)
+    pub fn value_access(&self, parameter: Parameter) -> Result<ValueAccess> {
+        value_access(self.handle, parameter).map(ValueAccess::from_raw)
     }
 
     /// Gets the kind of constraint that applies to `parameter`'s value.
@@ -276,8 +278,8 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to check this.
-    pub fn constraint_type(&self, parameter: Parameter) -> Result<sys::PicamConstraintType> {
-        constraint_type(self.handle, parameter)
+    pub fn constraint_type(&self, parameter: Parameter) -> Result<ConstraintType> {
+        constraint_type(self.handle, parameter).map(ConstraintType::from_raw)
     }
 
     /// Lists the parameters relevant to this camera.
@@ -479,13 +481,13 @@ impl Camera {
     pub fn collection_constraint(
         &self,
         parameter: Parameter,
-        category: sys::PicamConstraintCategory,
+        category: ConstraintCategory,
     ) -> Result<CollectionConstraint> {
         let mut ptr: *const sys::PicamCollectionConstraint = std::ptr::null();
         picam_call!(sys::Picam_GetParameterCollectionConstraint(
             self.handle,
             parameter.to_raw(),
-            category,
+            category.to_raw(),
             &mut ptr
         ))?;
 
@@ -514,13 +516,13 @@ impl Camera {
     pub fn range_constraint(
         &self,
         parameter: Parameter,
-        category: sys::PicamConstraintCategory,
+        category: ConstraintCategory,
     ) -> Result<RangeConstraint> {
         let mut ptr: *const sys::PicamRangeConstraint = std::ptr::null();
         picam_call!(sys::Picam_GetParameterRangeConstraint(
             self.handle,
             parameter.to_raw(),
-            category,
+            category.to_raw(),
             &mut ptr
         ))?;
 
@@ -549,13 +551,13 @@ impl Camera {
     pub fn rois_constraint(
         &self,
         parameter: Parameter,
-        category: sys::PicamConstraintCategory,
+        category: ConstraintCategory,
     ) -> Result<RoisConstraint> {
         let mut ptr: *const sys::PicamRoisConstraint = std::ptr::null();
         picam_call!(sys::Picam_GetParameterRoisConstraint(
             self.handle,
             parameter.to_raw(),
-            category,
+            category.to_raw(),
             &mut ptr
         ))?;
 
@@ -584,13 +586,13 @@ impl Camera {
     pub fn pulse_constraint(
         &self,
         parameter: Parameter,
-        category: sys::PicamConstraintCategory,
+        category: ConstraintCategory,
     ) -> Result<PulseConstraint> {
         let mut ptr: *const sys::PicamPulseConstraint = std::ptr::null();
         picam_call!(sys::Picam_GetParameterPulseConstraint(
             self.handle,
             parameter.to_raw(),
-            category,
+            category.to_raw(),
             &mut ptr
         ))?;
 
@@ -619,13 +621,13 @@ impl Camera {
     pub fn modulations_constraint(
         &self,
         parameter: Parameter,
-        category: sys::PicamConstraintCategory,
+        category: ConstraintCategory,
     ) -> Result<ModulationsConstraint> {
         let mut ptr: *const sys::PicamModulationsConstraint = std::ptr::null();
         picam_call!(sys::Picam_GetParameterModulationsConstraint(
             self.handle,
             parameter.to_raw(),
-            category,
+            category.to_raw(),
             &mut ptr
         ))?;
 
@@ -726,7 +728,7 @@ pub struct CameraId {
     /// The camera model.
     pub model: sys::PicamModel,
     /// How the camera connects to the computer.
-    pub computer_interface: sys::PicamComputerInterface,
+    pub computer_interface: ComputerInterface,
     /// The name of the camera's sensor.
     pub sensor_name: String,
     /// The camera's serial number. PICam appends `:Demo` to a demo camera's
@@ -739,7 +741,7 @@ impl CameraId {
     fn from_raw(raw: &sys::PicamCameraID) -> Self {
         Self {
             model: raw.model,
-            computer_interface: raw.computer_interface,
+            computer_interface: ComputerInterface::from_raw(raw.computer_interface),
             sensor_name: c_char_array_to_string(&raw.sensor_name),
             serial_number: c_char_array_to_string(&raw.serial_number),
         }
@@ -756,7 +758,7 @@ impl CameraId {
     fn to_raw(&self) -> Result<sys::PicamCameraID> {
         Ok(sys::PicamCameraID {
             model: self.model,
-            computer_interface: self.computer_interface,
+            computer_interface: self.computer_interface.to_raw(),
             sensor_name: string_to_c_char_array(&self.sensor_name)?,
             serial_number: string_to_c_char_array(&self.serial_number)?,
         })
