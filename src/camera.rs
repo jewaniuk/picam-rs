@@ -18,6 +18,7 @@ use crate::parameter::{
 use crate::sys;
 
 /// An open connection to a PICam camera.
+#[derive(Debug)]
 pub struct Camera {
     handle: sys::PicamHandle,
     // keeps the library alive for as long as any `Camera` exists, and lets
@@ -722,9 +723,13 @@ fn handle_id(handle: sys::PicamHandle) -> Result<CameraId> {
 /// Identifies a specific camera, whether or not it is currently open.
 #[derive(Debug, Clone)]
 pub struct CameraId {
+    /// The camera model.
     pub model: sys::PicamModel,
+    /// How the camera connects to the computer.
     pub computer_interface: sys::PicamComputerInterface,
+    /// The name of the camera's sensor.
     pub sensor_name: String,
+    /// The camera's serial number. PICam appends `:Demo` to a demo camera's serial number.
     pub serial_number: String,
 }
 

@@ -27,10 +27,15 @@ define_picam_enum!(
 
 /// A collection-style constraint: a parameter's value must be one of a
 /// fixed set of values.
+///
+/// Field meanings follow PICam manual 5.3.2.1.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CollectionConstraint {
+    /// Whether the constraint is fixed or depends on other parameters' values.
     pub scope: sys::PicamConstraintScope,
+    /// Whether a value that breaks the constraint is an error or only a warning.
     pub severity: sys::PicamConstraintSeverity,
+    /// The values the parameter may take.
     pub values: Vec<sys::piflt>,
 }
 
@@ -48,15 +53,26 @@ impl CollectionConstraint {
 
 /// A range-style constraint: a parameter's value must fall within a
 /// min/max range (in increments of some step), excluding certain values.
+///
+/// Field meanings follow PICam manual 5.3.2.2.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RangeConstraint {
+    /// Whether the constraint is fixed or depends on other parameters' values.
     pub scope: sys::PicamConstraintScope,
+    /// Whether a value that breaks the constraint is an error or only a warning.
     pub severity: sys::PicamConstraintSeverity,
+    /// `true` when no valid values exist, in which case only `scope` and `severity` mean anything.
     pub empty_set: bool,
+    /// The smallest value in the range. `outlying_values` may hold a smaller valid value.
     pub minimum: sys::piflt,
+    /// The largest value in the range. `outlying_values` may hold a larger valid value.
     pub maximum: sys::piflt,
+    /// The step between consecutive values in the range.
     pub increment: sys::piflt,
+    /// Values strictly between `minimum` and `maximum` that are not valid. Empty when every value
+    /// in the range is valid.
     pub excluded_values: Vec<sys::piflt>,
+    /// Valid values that lie outside the range. Empty when there are none.
     pub outlying_values: Vec<sys::piflt>,
 }
 
@@ -87,18 +103,34 @@ impl RangeConstraint {
 
 /// A constraint on the regions of interest ("ROIs") that can be configured
 /// for a parameter.
+///
+/// Field meanings follow PICam manual 5.3.1.1.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RoisConstraint {
+    /// Whether the constraint is fixed or depends on other parameters' values.
     pub scope: sys::PicamConstraintScope,
+    /// Whether a value that breaks the constraint is an error or only a warning.
     pub severity: sys::PicamConstraintSeverity,
+    /// `true` when no valid regions of interest exist, in which case only `scope` and `severity`
+    /// mean anything.
     pub empty_set: bool,
+    /// Extra rules the set of regions must follow, such as symmetry or uniform binning.
     pub rules: sys::PicamRoisConstraintRulesMask,
+    /// The largest number of regions allowed.
     pub maximum_roi_count: sys::piint,
+    /// The constraint on [`crate::Roi::x`].
     pub x_constraint: RangeConstraint,
+    /// The constraint on [`crate::Roi::width`].
     pub width_constraint: RangeConstraint,
+    /// The allowed values of [`crate::Roi::x_binning`], or empty when there is no limit beyond the
+    /// binning dividing evenly into the width.
     pub x_binning_limits: Vec<sys::piint>,
+    /// The constraint on [`crate::Roi::y`].
     pub y_constraint: RangeConstraint,
+    /// The constraint on [`crate::Roi::height`].
     pub height_constraint: RangeConstraint,
+    /// The allowed values of [`crate::Roi::y_binning`], or empty when there is no limit beyond the
+    /// binning dividing evenly into the height.
     pub y_binning_limits: Vec<sys::piint>,
 }
 
@@ -143,14 +175,23 @@ impl RoisConstraint {
 
 /// A constraint on the pulse (delay/width) that can be configured for a
 /// parameter.
+///
+/// Field meanings follow PICam manual 5.3.1.2.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PulseConstraint {
+    /// Whether the constraint is fixed or depends on other parameters' values.
     pub scope: sys::PicamConstraintScope,
+    /// Whether a value that breaks the constraint is an error or only a warning.
     pub severity: sys::PicamConstraintSeverity,
+    /// `true` when no valid pulses exist, in which case only `scope` and `severity` mean anything.
     pub empty_set: bool,
+    /// The constraint on [`crate::Pulse::delay`].
     pub delay_constraint: RangeConstraint,
+    /// The constraint on [`crate::Pulse::width`].
     pub width_constraint: RangeConstraint,
+    /// The smallest allowed sum of the pulse's delay and width.
     pub minimum_duration: sys::piflt,
+    /// The largest allowed sum of the pulse's delay and width.
     pub maximum_duration: sys::piflt,
 }
 
@@ -170,15 +211,26 @@ impl PulseConstraint {
 
 /// A constraint on the custom intensifier modulation sequence that can be
 /// configured for a parameter.
+///
+/// Field meanings follow PICam manual 5.3.1.3.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModulationsConstraint {
+    /// Whether the constraint is fixed or depends on other parameters' values.
     pub scope: sys::PicamConstraintScope,
+    /// Whether a value that breaks the constraint is an error or only a warning.
     pub severity: sys::PicamConstraintSeverity,
+    /// `true` when no valid modulation sequence points exist, in which case only `scope` and
+    /// `severity` mean anything.
     pub empty_set: bool,
+    /// The largest number of points allowed in the sequence.
     pub maximum_modulation_count: sys::piint,
+    /// The constraint on [`crate::Modulation::duration`].
     pub duration_constraint: RangeConstraint,
+    /// The constraint on [`crate::Modulation::frequency`].
     pub frequency_constraint: RangeConstraint,
+    /// The constraint on [`crate::Modulation::phase`].
     pub phase_constraint: RangeConstraint,
+    /// The constraint on [`crate::Modulation::output_signal_frequency`].
     pub output_signal_frequency_constraint: RangeConstraint,
 }
 

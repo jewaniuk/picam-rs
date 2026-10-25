@@ -37,7 +37,10 @@ macro_rules! define_parameters {
         /// gain, and so on).
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub enum Parameter{
-            $($name,)*
+            $(
+                #[doc = concat!("PICam's `", stringify!($raw), "` parameter.")]
+                $name,
+            )*
             /// A parameter this crate doesn't recognize, most likely
             /// because the installed PICam runtime is newer than the
             /// SDK version these bindings were generated against.
@@ -489,13 +492,21 @@ impl_online_settable_scalar!(sys::piint, Picam_SetParameterIntegerValueOnline);
 impl_online_settable_scalar!(sys::piflt, Picam_SetParameterFloatingPointValueOnline);
 
 /// A single region of interest.
+///
+/// Field meanings and units follow PICam manual 5.2.1.1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Roi {
+    /// The left-most column, counting from zero.
     pub x: sys::piint,
+    /// The number of columns.
     pub width: sys::piint,
+    /// How many adjacent columns are summed into one.
     pub x_binning: sys::piint,
+    /// The top-most row, counting from zero.
     pub y: sys::piint,
+    /// The number of rows.
     pub height: sys::piint,
+    /// How many adjacent rows are summed into one.
     pub y_binning: sys::piint,
 }
 
@@ -612,11 +623,17 @@ impl sealed::RawPicamValue for Vec<Roi> {
 impl PicamValue for Vec<Roi> {}
 
 /// A single step in a custom intensifier modulation sequence.
+///
+/// Field meanings and units follow PICam manual 5.2.1.4.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Modulation {
+    /// How long the intensifier modulates for, in ms.
     pub duration: sys::piflt,
+    /// The intensifier modulation frequency, in MHz.
     pub frequency: sys::piflt,
+    /// The intensifier's phase relative to the modulation output signal, in degrees.
     pub phase: sys::piflt,
+    /// The frequency of the RF output signal, in MHz.
     pub output_signal_frequency: sys::piflt,
 }
 
@@ -739,9 +756,13 @@ impl sealed::RawPicamValue for Vec<Modulation> {
 impl PicamValue for Vec<Modulation> {}
 
 /// A single pulse's delay and width.
+///
+/// Field meanings and units follow PICam manual 5.2.1.3.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Pulse {
+    /// The delay before the gate pulse starts, in ns.
     pub delay: sys::piflt,
+    /// The width of the gate pulse, in ns.
     pub width: sys::piflt,
 }
 
