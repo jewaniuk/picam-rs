@@ -304,25 +304,59 @@ fn pi_v_types(value: &str) -> Result<(&str, &str), String> {
     }
 }
 
-/// Renders the `define_parameters!` list, documenting each parameter's value
-/// and constraint type from its `PI_V(...)` definition.
+/// The Rust type a parameter of PICam value type `value_type` is used as
+/// (PICam manual 5.1.1.42).
 ///
 /// # Errors
 ///
-/// Returns an error if a parameter isn't defined with `PI_V(...)`.
+/// Returns an error for a value type this table doesn't know.
+fn rust_value_type(value_type: &str) -> Result<&'static str, String> {
+    match value_type {
+        "Integer" => Ok("i32"),
+        "Boolean" => Ok("bool"),
+        // enums get their own types in the next stage 2 chunk
+        "Enumeration" => Ok("i32"),
+        "LargeInteger" => Ok("i64"),
+        "FloatingPoint" => Ok("f64"),
+        "Rois" => Ok("Vec<Roi>"),
+        "Pulse" => Ok("Pulse"),
+        "Modulations" => Ok("Vec<Modulation>"),
+        other => Err(format!(
+            "no Rust type for value type `{other}`, add one in xtask/src/generate.rs"
+        )),
+    }
+}
+
+/// Renders the `define_parameters!` list, documenting each parameter's value
+/// and constraint type from its `PI_V(...)` definition, and naming its typed
+/// handle and that handle's Rust type.
+///
+/// # Errors
+///
+/// Returns an error if a parameter isn't defined with `PI_V(...)`, has a
+/// value type with no Rust type, or two handles would get the same name.
 fn render_parameters(enumerators: &[Enumerator]) -> Result<String, String> {
+    let mut seen: HashMap<String, &str> = HashMap::new();
     let mut out = format!("{GENERATED_NOTICE}\n\ndefine_parameters! {{\n");
     for enumerator in enumerators {
         let name = &enumerator.name;
         let variant = rust_name(name, &PARAMETER_RENAMES);
         let alias = doc_alias(name, &variant);
+        let handle = screaming_snake_case(&variant);
+        if let Some(other) = seen.insert(handle.clone(), name) {
+            return Err(format!(
+                "parameters `{other}` and `{name}` would both have a handle named `{handle}`, \
+                 add a rename in xtask/src/generate.rs"
+            ));
+        }
         let (value_type, constraint_type) = pi_v_types(&enumerator.value)?;
+        let rust_type = rust_value_type(value_type)?;
         out.push_str(&format!(
             "    /// PICam's `PicamParameter_{name}` parameter.\n    \
              ///\n    \
              /// Value type [`ValueType::{value_type}`](crate::ValueType::{value_type}), \
              constraint type [`ConstraintType::{constraint_type}`](crate::ConstraintType::{constraint_type}).\n\
-             {alias}    {variant} = PicamParameter_{name},\n"
+             {alias}    {variant} = PicamParameter_{name}, {handle}: {rust_type}, {value_type};\n"
         ));
     }
     out.push_str("}\n");
@@ -603,6 +637,55 @@ mod tests {
             "    #[doc(alias = \"EMIccdGain\")]\n    EmIccdGain = PicamParameter_EMIccdGain,"
         ));
         assert!(!rendered.contains("alias = \"ExposureTime\""));
+    }
+
+    #[test]
+    fn parameters_get_typed_handles() {
+        let enumerators = [
+            ("EMIccdGain", "PI_V(Integer, Range, 1)"),
+            ("ExposureTime", "PI_V(FloatingPoint, Range, 2)"),
+            ("OutputSignal2", "PI_V(Enumeration, Collection, 3)"),
+            ("Rois", "PI_V(Rois, Rois, 4)"),
+        ]
+        .map(|(name, value)| Enumerator {
+            name: name.to_string(),
+            value: value.to_string(),
+        });
+        let rendered = render_parameters(&enumerators).expect("parameters should render");
+        for entry in [
+            "EmIccdGain = PicamParameter_EMIccdGain, EM_ICCD_GAIN: i32, Integer;",
+            "ExposureTime = PicamParameter_ExposureTime, EXPOSURE_TIME: f64, FloatingPoint;",
+            "OutputSignal2 = PicamParameter_OutputSignal2, OUTPUT_SIGNAL_2: i32, Enumeration;",
+            "Rois = PicamParameter_Rois, ROIS: Vec<Roi>, Rois;",
+        ] {
+            assert!(rendered.contains(entry), "missing `{entry}`");
+        }
+    }
+
+    #[test]
+    fn maps_value_types_to_rust_types() {
+        for (value_type, rust_type) in [
+            ("Integer", "i32"),
+            ("Boolean", "bool"),
+            ("Enumeration", "i32"),
+            ("LargeInteger", "i64"),
+            ("FloatingPoint", "f64"),
+            ("Rois", "Vec<Roi>"),
+            ("Pulse", "Pulse"),
+            ("Modulations", "Vec<Modulation>"),
+        ] {
+            assert_eq!(rust_value_type(value_type), Ok(rust_type));
+        }
+        assert!(rust_value_type("Quaternion").is_err());
+    }
+
+    #[test]
+    fn colliding_handle_names_are_an_error() {
+        let enumerators = ["ExposureTime", "Exposure_Time"].map(|name| Enumerator {
+            name: name.to_string(),
+            value: "PI_V(FloatingPoint, Range, 1)".to_string(),
+        });
+        assert!(render_parameters(&enumerators).is_err());
     }
 
     #[test]

@@ -45,5 +45,5 @@ pub use library::Library;
 pub use model::Model;
 pub use parameter::{
     ComputerInterface, EnumeratedType, Modulation, OnlineSettablePicamValue, Parameter, PicamValue,
-    Pulse, ReadablePicamValue, Roi, ValueAccess, ValueType,
+    Pulse, ReadablePicamValue, Roi, TypedParameter, ValueAccess, ValueType, params,
 };

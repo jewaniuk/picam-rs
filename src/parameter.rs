@@ -1,5 +1,9 @@
 //! PICam parameter identifiers and value access.
 
+use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::marker::PhantomData;
+
 use crate::convert::{collect_raw_array, define_picam_enum, enumeration_string};
 use crate::error::{Result, picam_call};
 use crate::library::Library;
@@ -29,7 +33,7 @@ define_picam_enum!(
     PicamEnumeratedType_ValueType,
     /// A whole number, used as `i32`.
     Integer = PicamValueType_Integer,
-    /// A true/false value, used as `i32` (zero is false).
+    /// A true/false value, used as `bool`.
     Boolean = PicamValueType_Boolean,
     /// One value of a PICam enum, used as `i32`. [`crate::Camera::enumerated_type`]
     /// says which enum.
@@ -59,8 +63,14 @@ define_picam_enum!(
 );
 include!("generated/enumerated_types.rs");
 
+/// Defines `Parameter` and the typed handles in `params`. Each entry gives
+/// the variant, its raw name, its handle's name and value type, and PICam's
+/// value type (unused here, but tests compare it with PICam's).
 macro_rules! define_parameters {
-    ($($(#[$meta:meta])* $name:ident = $raw:ident),* $(,)?) => {
+    ($(
+        $(#[$meta:meta])*
+        $name:ident = $raw:ident, $handle:ident: $ty:ty, $value_type:ident;
+    )*) => {
         /// Identifies a specific camera parameter (exposure time, ROI,
         /// gain, and so on).
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -100,10 +110,119 @@ macro_rules! define_parameters {
                 )
             }
         }
+
+        /// A typed handle for every parameter in the PICam SDK this crate was
+        /// generated from (5.15), to pass to [`Camera::get`](crate::Camera::get)
+        /// and the other value methods.
+        ///
+        /// Each handle's value type comes from the parameter's definition in
+        /// PICam's header, so a wrong type doesn't compile. A parameter with no
+        /// handle here, such as one a newer PICam runtime added, can still be
+        /// used through [`Camera::get_untyped`](crate::Camera::get_untyped) and
+        /// the other `_untyped` methods.
+        pub mod params {
+            use super::{Modulation, Parameter, Pulse, Roi, TypedParameter};
+
+            $(
+                #[doc = concat!(
+                    "[`Parameter::", stringify!($name), "`](crate::Parameter::",
+                    stringify!($name), "), whose value is a `", stringify!($ty), "`."
+                )]
+                pub const $handle: TypedParameter<$ty> = TypedParameter::new(Parameter::$name);
+            )*
+        }
     };
 }
 
 include!("generated/parameters.rs");
+
+/// A parameter together with the Rust type of its value, so the compiler
+/// checks the type when getting or setting it. Every parameter has one in
+/// [`params`], and none can be made any other way.
+///
+/// ```no_run
+/// use picam_rs::{Camera, Result, params};
+///
+/// fn exposure_time(camera: &Camera) -> Result<f64> {
+///     camera.get(params::EXPOSURE_TIME)
+/// }
+/// ```
+///
+/// A value of the wrong type doesn't compile:
+///
+/// ```compile_fail
+/// use picam_rs::{Camera, Result, params};
+///
+/// fn exposure_time(camera: &Camera) -> Result<i32> {
+///     camera.get(params::EXPOSURE_TIME)
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use picam_rs::{Camera, Result, params};
+///
+/// fn set_exposure_time(camera: &Camera) -> Result<()> {
+///     camera.set(params::EXPOSURE_TIME, 5_i32)
+/// }
+/// ```
+pub struct TypedParameter<T> {
+    parameter: Parameter,
+    value: PhantomData<fn() -> T>,
+}
+
+impl<T> TypedParameter<T> {
+    /// Makes a handle. Only the generated constants in `params` call this, so
+    /// every handle's type matches its parameter.
+    const fn new(parameter: Parameter) -> Self {
+        TypedParameter {
+            parameter,
+            value: PhantomData,
+        }
+    }
+
+    /// Returns the untyped parameter this handle refers to.
+    pub const fn parameter(self) -> Parameter {
+        self.parameter
+    }
+}
+
+impl<T> From<TypedParameter<T>> for Parameter {
+    fn from(handle: TypedParameter<T>) -> Self {
+        handle.parameter
+    }
+}
+
+// written by hand rather than derived, since deriving would require `T` to
+// implement each trait too, and `Vec<Roi>` isn't `Copy`
+impl<T> Clone for TypedParameter<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for TypedParameter<T> {}
+
+impl<T> fmt::Debug for TypedParameter<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("TypedParameter")
+            .field(&self.parameter)
+            .finish()
+    }
+}
+
+impl<T> PartialEq for TypedParameter<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.parameter == other.parameter
+    }
+}
+
+impl<T> Eq for TypedParameter<T> {}
+
+impl<T> Hash for TypedParameter<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.parameter.hash(state);
+    }
+}
 
 /// The crate-private halves of the value traits, which seal them.
 ///

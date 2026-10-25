@@ -4,690 +4,690 @@ define_parameters! {
     /// PICam's `PicamParameter_ExposureTime` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    ExposureTime = PicamParameter_ExposureTime,
+    ExposureTime = PicamParameter_ExposureTime, EXPOSURE_TIME: f64, FloatingPoint;
     /// PICam's `PicamParameter_ExposureTimeResult` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    ExposureTimeResult = PicamParameter_ExposureTimeResult,
+    ExposureTimeResult = PicamParameter_ExposureTimeResult, EXPOSURE_TIME_RESULT: f64, FloatingPoint;
     /// PICam's `PicamParameter_ShutterTimingMode` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    ShutterTimingMode = PicamParameter_ShutterTimingMode,
+    ShutterTimingMode = PicamParameter_ShutterTimingMode, SHUTTER_TIMING_MODE: i32, Enumeration;
     /// PICam's `PicamParameter_ShutterOpeningDelay` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    ShutterOpeningDelay = PicamParameter_ShutterOpeningDelay,
+    ShutterOpeningDelay = PicamParameter_ShutterOpeningDelay, SHUTTER_OPENING_DELAY: f64, FloatingPoint;
     /// PICam's `PicamParameter_ShutterClosingDelay` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    ShutterClosingDelay = PicamParameter_ShutterClosingDelay,
+    ShutterClosingDelay = PicamParameter_ShutterClosingDelay, SHUTTER_CLOSING_DELAY: f64, FloatingPoint;
     /// PICam's `PicamParameter_ShutterDelayResolution` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    ShutterDelayResolution = PicamParameter_ShutterDelayResolution,
+    ShutterDelayResolution = PicamParameter_ShutterDelayResolution, SHUTTER_DELAY_RESOLUTION: f64, FloatingPoint;
     /// PICam's `PicamParameter_InternalShutterType` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    InternalShutterType = PicamParameter_InternalShutterType,
+    InternalShutterType = PicamParameter_InternalShutterType, INTERNAL_SHUTTER_TYPE: i32, Enumeration;
     /// PICam's `PicamParameter_InternalShutterStatus` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    InternalShutterStatus = PicamParameter_InternalShutterStatus,
+    InternalShutterStatus = PicamParameter_InternalShutterStatus, INTERNAL_SHUTTER_STATUS: i32, Enumeration;
     /// PICam's `PicamParameter_ExternalShutterType` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    ExternalShutterType = PicamParameter_ExternalShutterType,
+    ExternalShutterType = PicamParameter_ExternalShutterType, EXTERNAL_SHUTTER_TYPE: i32, Enumeration;
     /// PICam's `PicamParameter_ExternalShutterStatus` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    ExternalShutterStatus = PicamParameter_ExternalShutterStatus,
+    ExternalShutterStatus = PicamParameter_ExternalShutterStatus, EXTERNAL_SHUTTER_STATUS: i32, Enumeration;
     /// PICam's `PicamParameter_ActiveShutter` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    ActiveShutter = PicamParameter_ActiveShutter,
+    ActiveShutter = PicamParameter_ActiveShutter, ACTIVE_SHUTTER: i32, Enumeration;
     /// PICam's `PicamParameter_InactiveShutterTimingModeResult` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    InactiveShutterTimingModeResult = PicamParameter_InactiveShutterTimingModeResult,
+    InactiveShutterTimingModeResult = PicamParameter_InactiveShutterTimingModeResult, INACTIVE_SHUTTER_TIMING_MODE_RESULT: i32, Enumeration;
     /// PICam's `PicamParameter_GatingMode` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    GatingMode = PicamParameter_GatingMode,
+    GatingMode = PicamParameter_GatingMode, GATING_MODE: i32, Enumeration;
     /// PICam's `PicamParameter_RepetitiveGate` parameter.
     ///
     /// Value type [`ValueType::Pulse`](crate::ValueType::Pulse), constraint type [`ConstraintType::Pulse`](crate::ConstraintType::Pulse).
-    RepetitiveGate = PicamParameter_RepetitiveGate,
+    RepetitiveGate = PicamParameter_RepetitiveGate, REPETITIVE_GATE: Pulse, Pulse;
     /// PICam's `PicamParameter_SequentialStartingGate` parameter.
     ///
     /// Value type [`ValueType::Pulse`](crate::ValueType::Pulse), constraint type [`ConstraintType::Pulse`](crate::ConstraintType::Pulse).
-    SequentialStartingGate = PicamParameter_SequentialStartingGate,
+    SequentialStartingGate = PicamParameter_SequentialStartingGate, SEQUENTIAL_STARTING_GATE: Pulse, Pulse;
     /// PICam's `PicamParameter_SequentialEndingGate` parameter.
     ///
     /// Value type [`ValueType::Pulse`](crate::ValueType::Pulse), constraint type [`ConstraintType::Pulse`](crate::ConstraintType::Pulse).
-    SequentialEndingGate = PicamParameter_SequentialEndingGate,
+    SequentialEndingGate = PicamParameter_SequentialEndingGate, SEQUENTIAL_ENDING_GATE: Pulse, Pulse;
     /// PICam's `PicamParameter_SequentialGateStepCount` parameter.
     ///
     /// Value type [`ValueType::LargeInteger`](crate::ValueType::LargeInteger), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    SequentialGateStepCount = PicamParameter_SequentialGateStepCount,
+    SequentialGateStepCount = PicamParameter_SequentialGateStepCount, SEQUENTIAL_GATE_STEP_COUNT: i64, LargeInteger;
     /// PICam's `PicamParameter_SequentialGateStepIterations` parameter.
     ///
     /// Value type [`ValueType::LargeInteger`](crate::ValueType::LargeInteger), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    SequentialGateStepIterations = PicamParameter_SequentialGateStepIterations,
+    SequentialGateStepIterations = PicamParameter_SequentialGateStepIterations, SEQUENTIAL_GATE_STEP_ITERATIONS: i64, LargeInteger;
     /// PICam's `PicamParameter_DifStartingGate` parameter.
     ///
     /// Value type [`ValueType::Pulse`](crate::ValueType::Pulse), constraint type [`ConstraintType::Pulse`](crate::ConstraintType::Pulse).
-    DifStartingGate = PicamParameter_DifStartingGate,
+    DifStartingGate = PicamParameter_DifStartingGate, DIF_STARTING_GATE: Pulse, Pulse;
     /// PICam's `PicamParameter_DifEndingGate` parameter.
     ///
     /// Value type [`ValueType::Pulse`](crate::ValueType::Pulse), constraint type [`ConstraintType::Pulse`](crate::ConstraintType::Pulse).
-    DifEndingGate = PicamParameter_DifEndingGate,
+    DifEndingGate = PicamParameter_DifEndingGate, DIF_ENDING_GATE: Pulse, Pulse;
     /// PICam's `PicamParameter_EnableIntensifier` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    EnableIntensifier = PicamParameter_EnableIntensifier,
+    EnableIntensifier = PicamParameter_EnableIntensifier, ENABLE_INTENSIFIER: bool, Boolean;
     /// PICam's `PicamParameter_IntensifierStatus` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    IntensifierStatus = PicamParameter_IntensifierStatus,
+    IntensifierStatus = PicamParameter_IntensifierStatus, INTENSIFIER_STATUS: i32, Enumeration;
     /// PICam's `PicamParameter_IntensifierGain` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    IntensifierGain = PicamParameter_IntensifierGain,
+    IntensifierGain = PicamParameter_IntensifierGain, INTENSIFIER_GAIN: i32, Integer;
     /// PICam's `PicamParameter_EMIccdGainControlMode` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
     #[doc(alias = "EMIccdGainControlMode")]
-    EmIccdGainControlMode = PicamParameter_EMIccdGainControlMode,
+    EmIccdGainControlMode = PicamParameter_EMIccdGainControlMode, EM_ICCD_GAIN_CONTROL_MODE: i32, Enumeration;
     /// PICam's `PicamParameter_EMIccdGain` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
     #[doc(alias = "EMIccdGain")]
-    EmIccdGain = PicamParameter_EMIccdGain,
+    EmIccdGain = PicamParameter_EMIccdGain, EM_ICCD_GAIN: i32, Integer;
     /// PICam's `PicamParameter_PhosphorDecayDelay` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    PhosphorDecayDelay = PicamParameter_PhosphorDecayDelay,
+    PhosphorDecayDelay = PicamParameter_PhosphorDecayDelay, PHOSPHOR_DECAY_DELAY: f64, FloatingPoint;
     /// PICam's `PicamParameter_PhosphorDecayDelayResolution` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    PhosphorDecayDelayResolution = PicamParameter_PhosphorDecayDelayResolution,
+    PhosphorDecayDelayResolution = PicamParameter_PhosphorDecayDelayResolution, PHOSPHOR_DECAY_DELAY_RESOLUTION: f64, FloatingPoint;
     /// PICam's `PicamParameter_BracketGating` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    BracketGating = PicamParameter_BracketGating,
+    BracketGating = PicamParameter_BracketGating, BRACKET_GATING: bool, Boolean;
     /// PICam's `PicamParameter_IntensifierOptions` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    IntensifierOptions = PicamParameter_IntensifierOptions,
+    IntensifierOptions = PicamParameter_IntensifierOptions, INTENSIFIER_OPTIONS: i32, Enumeration;
     /// PICam's `PicamParameter_EnableModulation` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    EnableModulation = PicamParameter_EnableModulation,
+    EnableModulation = PicamParameter_EnableModulation, ENABLE_MODULATION: bool, Boolean;
     /// PICam's `PicamParameter_ModulationDuration` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    ModulationDuration = PicamParameter_ModulationDuration,
+    ModulationDuration = PicamParameter_ModulationDuration, MODULATION_DURATION: f64, FloatingPoint;
     /// PICam's `PicamParameter_ModulationFrequency` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    ModulationFrequency = PicamParameter_ModulationFrequency,
+    ModulationFrequency = PicamParameter_ModulationFrequency, MODULATION_FREQUENCY: f64, FloatingPoint;
     /// PICam's `PicamParameter_RepetitiveModulationPhase` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    RepetitiveModulationPhase = PicamParameter_RepetitiveModulationPhase,
+    RepetitiveModulationPhase = PicamParameter_RepetitiveModulationPhase, REPETITIVE_MODULATION_PHASE: f64, FloatingPoint;
     /// PICam's `PicamParameter_SequentialStartingModulationPhase` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    SequentialStartingModulationPhase = PicamParameter_SequentialStartingModulationPhase,
+    SequentialStartingModulationPhase = PicamParameter_SequentialStartingModulationPhase, SEQUENTIAL_STARTING_MODULATION_PHASE: f64, FloatingPoint;
     /// PICam's `PicamParameter_SequentialEndingModulationPhase` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    SequentialEndingModulationPhase = PicamParameter_SequentialEndingModulationPhase,
+    SequentialEndingModulationPhase = PicamParameter_SequentialEndingModulationPhase, SEQUENTIAL_ENDING_MODULATION_PHASE: f64, FloatingPoint;
     /// PICam's `PicamParameter_CustomModulationSequence` parameter.
     ///
     /// Value type [`ValueType::Modulations`](crate::ValueType::Modulations), constraint type [`ConstraintType::Modulations`](crate::ConstraintType::Modulations).
-    CustomModulationSequence = PicamParameter_CustomModulationSequence,
+    CustomModulationSequence = PicamParameter_CustomModulationSequence, CUSTOM_MODULATION_SEQUENCE: Vec<Modulation>, Modulations;
     /// PICam's `PicamParameter_PhotocathodeSensitivity` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    PhotocathodeSensitivity = PicamParameter_PhotocathodeSensitivity,
+    PhotocathodeSensitivity = PicamParameter_PhotocathodeSensitivity, PHOTOCATHODE_SENSITIVITY: i32, Enumeration;
     /// PICam's `PicamParameter_GatingSpeed` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    GatingSpeed = PicamParameter_GatingSpeed,
+    GatingSpeed = PicamParameter_GatingSpeed, GATING_SPEED: i32, Enumeration;
     /// PICam's `PicamParameter_PhosphorType` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    PhosphorType = PicamParameter_PhosphorType,
+    PhosphorType = PicamParameter_PhosphorType, PHOSPHOR_TYPE: i32, Enumeration;
     /// PICam's `PicamParameter_IntensifierDiameter` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    IntensifierDiameter = PicamParameter_IntensifierDiameter,
+    IntensifierDiameter = PicamParameter_IntensifierDiameter, INTENSIFIER_DIAMETER: f64, FloatingPoint;
     /// PICam's `PicamParameter_AdcSpeed` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    AdcSpeed = PicamParameter_AdcSpeed,
+    AdcSpeed = PicamParameter_AdcSpeed, ADC_SPEED: f64, FloatingPoint;
     /// PICam's `PicamParameter_AdcBitDepth` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    AdcBitDepth = PicamParameter_AdcBitDepth,
+    AdcBitDepth = PicamParameter_AdcBitDepth, ADC_BIT_DEPTH: i32, Integer;
     /// PICam's `PicamParameter_AdcAnalogGain` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    AdcAnalogGain = PicamParameter_AdcAnalogGain,
+    AdcAnalogGain = PicamParameter_AdcAnalogGain, ADC_ANALOG_GAIN: i32, Enumeration;
     /// PICam's `PicamParameter_AdcQuality` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    AdcQuality = PicamParameter_AdcQuality,
+    AdcQuality = PicamParameter_AdcQuality, ADC_QUALITY: i32, Enumeration;
     /// PICam's `PicamParameter_AdcEMGain` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
     #[doc(alias = "AdcEMGain")]
-    AdcEmGain = PicamParameter_AdcEMGain,
+    AdcEmGain = PicamParameter_AdcEMGain, ADC_EM_GAIN: i32, Integer;
     /// PICam's `PicamParameter_CorrectPixelBias` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    CorrectPixelBias = PicamParameter_CorrectPixelBias,
+    CorrectPixelBias = PicamParameter_CorrectPixelBias, CORRECT_PIXEL_BIAS: bool, Boolean;
     /// PICam's `PicamParameter_TriggerSource` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    TriggerSource = PicamParameter_TriggerSource,
+    TriggerSource = PicamParameter_TriggerSource, TRIGGER_SOURCE: i32, Enumeration;
     /// PICam's `PicamParameter_TriggerResponse` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    TriggerResponse = PicamParameter_TriggerResponse,
+    TriggerResponse = PicamParameter_TriggerResponse, TRIGGER_RESPONSE: i32, Enumeration;
     /// PICam's `PicamParameter_TriggerDetermination` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    TriggerDetermination = PicamParameter_TriggerDetermination,
+    TriggerDetermination = PicamParameter_TriggerDetermination, TRIGGER_DETERMINATION: i32, Enumeration;
     /// PICam's `PicamParameter_TriggerFrequency` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    TriggerFrequency = PicamParameter_TriggerFrequency,
+    TriggerFrequency = PicamParameter_TriggerFrequency, TRIGGER_FREQUENCY: f64, FloatingPoint;
     /// PICam's `PicamParameter_TriggerTermination` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    TriggerTermination = PicamParameter_TriggerTermination,
+    TriggerTermination = PicamParameter_TriggerTermination, TRIGGER_TERMINATION: i32, Enumeration;
     /// PICam's `PicamParameter_TriggerCoupling` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    TriggerCoupling = PicamParameter_TriggerCoupling,
+    TriggerCoupling = PicamParameter_TriggerCoupling, TRIGGER_COUPLING: i32, Enumeration;
     /// PICam's `PicamParameter_TriggerThreshold` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    TriggerThreshold = PicamParameter_TriggerThreshold,
+    TriggerThreshold = PicamParameter_TriggerThreshold, TRIGGER_THRESHOLD: f64, FloatingPoint;
     /// PICam's `PicamParameter_TriggerDelay` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    TriggerDelay = PicamParameter_TriggerDelay,
+    TriggerDelay = PicamParameter_TriggerDelay, TRIGGER_DELAY: f64, FloatingPoint;
     /// PICam's `PicamParameter_OutputSignal` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    OutputSignal = PicamParameter_OutputSignal,
+    OutputSignal = PicamParameter_OutputSignal, OUTPUT_SIGNAL: i32, Enumeration;
     /// PICam's `PicamParameter_InvertOutputSignal` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    InvertOutputSignal = PicamParameter_InvertOutputSignal,
+    InvertOutputSignal = PicamParameter_InvertOutputSignal, INVERT_OUTPUT_SIGNAL: bool, Boolean;
     /// PICam's `PicamParameter_OutputSignal2` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    OutputSignal2 = PicamParameter_OutputSignal2,
+    OutputSignal2 = PicamParameter_OutputSignal2, OUTPUT_SIGNAL_2: i32, Enumeration;
     /// PICam's `PicamParameter_InvertOutputSignal2` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    InvertOutputSignal2 = PicamParameter_InvertOutputSignal2,
+    InvertOutputSignal2 = PicamParameter_InvertOutputSignal2, INVERT_OUTPUT_SIGNAL_2: bool, Boolean;
     /// PICam's `PicamParameter_EnableAuxOutput` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    EnableAuxOutput = PicamParameter_EnableAuxOutput,
+    EnableAuxOutput = PicamParameter_EnableAuxOutput, ENABLE_AUX_OUTPUT: bool, Boolean;
     /// PICam's `PicamParameter_AuxOutput` parameter.
     ///
     /// Value type [`ValueType::Pulse`](crate::ValueType::Pulse), constraint type [`ConstraintType::Pulse`](crate::ConstraintType::Pulse).
-    AuxOutput = PicamParameter_AuxOutput,
+    AuxOutput = PicamParameter_AuxOutput, AUX_OUTPUT: Pulse, Pulse;
     /// PICam's `PicamParameter_EnableSyncMaster` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    EnableSyncMaster = PicamParameter_EnableSyncMaster,
+    EnableSyncMaster = PicamParameter_EnableSyncMaster, ENABLE_SYNC_MASTER: bool, Boolean;
     /// PICam's `PicamParameter_SyncMaster2Delay` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    SyncMaster2Delay = PicamParameter_SyncMaster2Delay,
+    SyncMaster2Delay = PicamParameter_SyncMaster2Delay, SYNC_MASTER_2_DELAY: f64, FloatingPoint;
     /// PICam's `PicamParameter_EnableModulationOutputSignal` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    EnableModulationOutputSignal = PicamParameter_EnableModulationOutputSignal,
+    EnableModulationOutputSignal = PicamParameter_EnableModulationOutputSignal, ENABLE_MODULATION_OUTPUT_SIGNAL: bool, Boolean;
     /// PICam's `PicamParameter_ModulationOutputSignalFrequency` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    ModulationOutputSignalFrequency = PicamParameter_ModulationOutputSignalFrequency,
+    ModulationOutputSignalFrequency = PicamParameter_ModulationOutputSignalFrequency, MODULATION_OUTPUT_SIGNAL_FREQUENCY: f64, FloatingPoint;
     /// PICam's `PicamParameter_ModulationOutputSignalAmplitude` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    ModulationOutputSignalAmplitude = PicamParameter_ModulationOutputSignalAmplitude,
+    ModulationOutputSignalAmplitude = PicamParameter_ModulationOutputSignalAmplitude, MODULATION_OUTPUT_SIGNAL_AMPLITUDE: f64, FloatingPoint;
     /// PICam's `PicamParameter_AnticipateTrigger` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    AnticipateTrigger = PicamParameter_AnticipateTrigger,
+    AnticipateTrigger = PicamParameter_AnticipateTrigger, ANTICIPATE_TRIGGER: bool, Boolean;
     /// PICam's `PicamParameter_DelayFromPreTrigger` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    DelayFromPreTrigger = PicamParameter_DelayFromPreTrigger,
+    DelayFromPreTrigger = PicamParameter_DelayFromPreTrigger, DELAY_FROM_PRE_TRIGGER: f64, FloatingPoint;
     /// PICam's `PicamParameter_ReadoutControlMode` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    ReadoutControlMode = PicamParameter_ReadoutControlMode,
+    ReadoutControlMode = PicamParameter_ReadoutControlMode, READOUT_CONTROL_MODE: i32, Enumeration;
     /// PICam's `PicamParameter_ReadoutTimeCalculation` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    ReadoutTimeCalculation = PicamParameter_ReadoutTimeCalculation,
+    ReadoutTimeCalculation = PicamParameter_ReadoutTimeCalculation, READOUT_TIME_CALCULATION: f64, FloatingPoint;
     /// PICam's `PicamParameter_ReadoutPortCount` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    ReadoutPortCount = PicamParameter_ReadoutPortCount,
+    ReadoutPortCount = PicamParameter_ReadoutPortCount, READOUT_PORT_COUNT: i32, Integer;
     /// PICam's `PicamParameter_ReadoutOrientation` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    ReadoutOrientation = PicamParameter_ReadoutOrientation,
+    ReadoutOrientation = PicamParameter_ReadoutOrientation, READOUT_ORIENTATION: i32, Enumeration;
     /// PICam's `PicamParameter_KineticsWindowHeight` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    KineticsWindowHeight = PicamParameter_KineticsWindowHeight,
+    KineticsWindowHeight = PicamParameter_KineticsWindowHeight, KINETICS_WINDOW_HEIGHT: i32, Integer;
     /// PICam's `PicamParameter_SeNsRWindowHeight` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
     #[doc(alias = "SeNsRWindowHeight")]
-    SensrWindowHeight = PicamParameter_SeNsRWindowHeight,
+    SensrWindowHeight = PicamParameter_SeNsRWindowHeight, SENSR_WINDOW_HEIGHT: i32, Integer;
     /// PICam's `PicamParameter_VerticalShiftRate` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    VerticalShiftRate = PicamParameter_VerticalShiftRate,
+    VerticalShiftRate = PicamParameter_VerticalShiftRate, VERTICAL_SHIFT_RATE: f64, FloatingPoint;
     /// PICam's `PicamParameter_RowTimeResult` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    RowTimeResult = PicamParameter_RowTimeResult,
+    RowTimeResult = PicamParameter_RowTimeResult, ROW_TIME_RESULT: f64, FloatingPoint;
     /// PICam's `PicamParameter_Accumulations` parameter.
     ///
     /// Value type [`ValueType::LargeInteger`](crate::ValueType::LargeInteger), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    Accumulations = PicamParameter_Accumulations,
+    Accumulations = PicamParameter_Accumulations, ACCUMULATIONS: i64, LargeInteger;
     /// PICam's `PicamParameter_EnableNondestructiveReadout` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    EnableNondestructiveReadout = PicamParameter_EnableNondestructiveReadout,
+    EnableNondestructiveReadout = PicamParameter_EnableNondestructiveReadout, ENABLE_NONDESTRUCTIVE_READOUT: bool, Boolean;
     /// PICam's `PicamParameter_NondestructiveReadoutPeriod` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    NondestructiveReadoutPeriod = PicamParameter_NondestructiveReadoutPeriod,
+    NondestructiveReadoutPeriod = PicamParameter_NondestructiveReadoutPeriod, NONDESTRUCTIVE_READOUT_PERIOD: f64, FloatingPoint;
     /// PICam's `PicamParameter_Rois` parameter.
     ///
     /// Value type [`ValueType::Rois`](crate::ValueType::Rois), constraint type [`ConstraintType::Rois`](crate::ConstraintType::Rois).
-    Rois = PicamParameter_Rois,
+    Rois = PicamParameter_Rois, ROIS: Vec<Roi>, Rois;
     /// PICam's `PicamParameter_NormalizeOrientation` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    NormalizeOrientation = PicamParameter_NormalizeOrientation,
+    NormalizeOrientation = PicamParameter_NormalizeOrientation, NORMALIZE_ORIENTATION: bool, Boolean;
     /// PICam's `PicamParameter_DisableDataFormatting` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    DisableDataFormatting = PicamParameter_DisableDataFormatting,
+    DisableDataFormatting = PicamParameter_DisableDataFormatting, DISABLE_DATA_FORMATTING: bool, Boolean;
     /// PICam's `PicamParameter_ReadoutCount` parameter.
     ///
     /// Value type [`ValueType::LargeInteger`](crate::ValueType::LargeInteger), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    ReadoutCount = PicamParameter_ReadoutCount,
+    ReadoutCount = PicamParameter_ReadoutCount, READOUT_COUNT: i64, LargeInteger;
     /// PICam's `PicamParameter_ExactReadoutCountMaximum` parameter.
     ///
     /// Value type [`ValueType::LargeInteger`](crate::ValueType::LargeInteger), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    ExactReadoutCountMaximum = PicamParameter_ExactReadoutCountMaximum,
+    ExactReadoutCountMaximum = PicamParameter_ExactReadoutCountMaximum, EXACT_READOUT_COUNT_MAXIMUM: i64, LargeInteger;
     /// PICam's `PicamParameter_PixelFormat` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    PixelFormat = PicamParameter_PixelFormat,
+    PixelFormat = PicamParameter_PixelFormat, PIXEL_FORMAT: i32, Enumeration;
     /// PICam's `PicamParameter_FrameSize` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    FrameSize = PicamParameter_FrameSize,
+    FrameSize = PicamParameter_FrameSize, FRAME_SIZE: i32, Integer;
     /// PICam's `PicamParameter_FrameStride` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    FrameStride = PicamParameter_FrameStride,
+    FrameStride = PicamParameter_FrameStride, FRAME_STRIDE: i32, Integer;
     /// PICam's `PicamParameter_FramesPerReadout` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    FramesPerReadout = PicamParameter_FramesPerReadout,
+    FramesPerReadout = PicamParameter_FramesPerReadout, FRAMES_PER_READOUT: i32, Integer;
     /// PICam's `PicamParameter_ReadoutStride` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    ReadoutStride = PicamParameter_ReadoutStride,
+    ReadoutStride = PicamParameter_ReadoutStride, READOUT_STRIDE: i32, Integer;
     /// PICam's `PicamParameter_PixelBitDepth` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    PixelBitDepth = PicamParameter_PixelBitDepth,
+    PixelBitDepth = PicamParameter_PixelBitDepth, PIXEL_BIT_DEPTH: i32, Integer;
     /// PICam's `PicamParameter_ReadoutRateCalculation` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    ReadoutRateCalculation = PicamParameter_ReadoutRateCalculation,
+    ReadoutRateCalculation = PicamParameter_ReadoutRateCalculation, READOUT_RATE_CALCULATION: f64, FloatingPoint;
     /// PICam's `PicamParameter_OnlineReadoutRateCalculation` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    OnlineReadoutRateCalculation = PicamParameter_OnlineReadoutRateCalculation,
+    OnlineReadoutRateCalculation = PicamParameter_OnlineReadoutRateCalculation, ONLINE_READOUT_RATE_CALCULATION: f64, FloatingPoint;
     /// PICam's `PicamParameter_FrameRateCalculation` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    FrameRateCalculation = PicamParameter_FrameRateCalculation,
+    FrameRateCalculation = PicamParameter_FrameRateCalculation, FRAME_RATE_CALCULATION: f64, FloatingPoint;
     /// PICam's `PicamParameter_Orientation` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    Orientation = PicamParameter_Orientation,
+    Orientation = PicamParameter_Orientation, ORIENTATION: i32, Enumeration;
     /// PICam's `PicamParameter_TimeStamps` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    TimeStamps = PicamParameter_TimeStamps,
+    TimeStamps = PicamParameter_TimeStamps, TIME_STAMPS: i32, Enumeration;
     /// PICam's `PicamParameter_TimeStampResolution` parameter.
     ///
     /// Value type [`ValueType::LargeInteger`](crate::ValueType::LargeInteger), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    TimeStampResolution = PicamParameter_TimeStampResolution,
+    TimeStampResolution = PicamParameter_TimeStampResolution, TIME_STAMP_RESOLUTION: i64, LargeInteger;
     /// PICam's `PicamParameter_TimeStampBitDepth` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    TimeStampBitDepth = PicamParameter_TimeStampBitDepth,
+    TimeStampBitDepth = PicamParameter_TimeStampBitDepth, TIME_STAMP_BIT_DEPTH: i32, Integer;
     /// PICam's `PicamParameter_TrackFrames` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    TrackFrames = PicamParameter_TrackFrames,
+    TrackFrames = PicamParameter_TrackFrames, TRACK_FRAMES: bool, Boolean;
     /// PICam's `PicamParameter_FrameTrackingBitDepth` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    FrameTrackingBitDepth = PicamParameter_FrameTrackingBitDepth,
+    FrameTrackingBitDepth = PicamParameter_FrameTrackingBitDepth, FRAME_TRACKING_BIT_DEPTH: i32, Integer;
     /// PICam's `PicamParameter_GateTracking` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    GateTracking = PicamParameter_GateTracking,
+    GateTracking = PicamParameter_GateTracking, GATE_TRACKING: i32, Enumeration;
     /// PICam's `PicamParameter_GateTrackingBitDepth` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    GateTrackingBitDepth = PicamParameter_GateTrackingBitDepth,
+    GateTrackingBitDepth = PicamParameter_GateTrackingBitDepth, GATE_TRACKING_BIT_DEPTH: i32, Integer;
     /// PICam's `PicamParameter_ModulationTracking` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    ModulationTracking = PicamParameter_ModulationTracking,
+    ModulationTracking = PicamParameter_ModulationTracking, MODULATION_TRACKING: i32, Enumeration;
     /// PICam's `PicamParameter_ModulationTrackingBitDepth` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    ModulationTrackingBitDepth = PicamParameter_ModulationTrackingBitDepth,
+    ModulationTrackingBitDepth = PicamParameter_ModulationTrackingBitDepth, MODULATION_TRACKING_BIT_DEPTH: i32, Integer;
     /// PICam's `PicamParameter_PhotonDetectionMode` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    PhotonDetectionMode = PicamParameter_PhotonDetectionMode,
+    PhotonDetectionMode = PicamParameter_PhotonDetectionMode, PHOTON_DETECTION_MODE: i32, Enumeration;
     /// PICam's `PicamParameter_PhotonDetectionThreshold` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    PhotonDetectionThreshold = PicamParameter_PhotonDetectionThreshold,
+    PhotonDetectionThreshold = PicamParameter_PhotonDetectionThreshold, PHOTON_DETECTION_THRESHOLD: f64, FloatingPoint;
     /// PICam's `PicamParameter_CorrectForDarkCurrent` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    CorrectForDarkCurrent = PicamParameter_CorrectForDarkCurrent,
+    CorrectForDarkCurrent = PicamParameter_CorrectForDarkCurrent, CORRECT_FOR_DARK_CURRENT: bool, Boolean;
     /// PICam's `PicamParameter_Despeckle` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    Despeckle = PicamParameter_Despeckle,
+    Despeckle = PicamParameter_Despeckle, DESPECKLE: bool, Boolean;
     /// PICam's `PicamParameter_SensorType` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    SensorType = PicamParameter_SensorType,
+    SensorType = PicamParameter_SensorType, SENSOR_TYPE: i32, Enumeration;
     /// PICam's `PicamParameter_CcdCharacteristics` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    CcdCharacteristics = PicamParameter_CcdCharacteristics,
+    CcdCharacteristics = PicamParameter_CcdCharacteristics, CCD_CHARACTERISTICS: i32, Enumeration;
     /// PICam's `PicamParameter_SensorActiveWidth` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    SensorActiveWidth = PicamParameter_SensorActiveWidth,
+    SensorActiveWidth = PicamParameter_SensorActiveWidth, SENSOR_ACTIVE_WIDTH: i32, Integer;
     /// PICam's `PicamParameter_SensorActiveHeight` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    SensorActiveHeight = PicamParameter_SensorActiveHeight,
+    SensorActiveHeight = PicamParameter_SensorActiveHeight, SENSOR_ACTIVE_HEIGHT: i32, Integer;
     /// PICam's `PicamParameter_SensorActiveExtendedHeight` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    SensorActiveExtendedHeight = PicamParameter_SensorActiveExtendedHeight,
+    SensorActiveExtendedHeight = PicamParameter_SensorActiveExtendedHeight, SENSOR_ACTIVE_EXTENDED_HEIGHT: i32, Integer;
     /// PICam's `PicamParameter_SensorActiveLeftMargin` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    SensorActiveLeftMargin = PicamParameter_SensorActiveLeftMargin,
+    SensorActiveLeftMargin = PicamParameter_SensorActiveLeftMargin, SENSOR_ACTIVE_LEFT_MARGIN: i32, Integer;
     /// PICam's `PicamParameter_SensorActiveTopMargin` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    SensorActiveTopMargin = PicamParameter_SensorActiveTopMargin,
+    SensorActiveTopMargin = PicamParameter_SensorActiveTopMargin, SENSOR_ACTIVE_TOP_MARGIN: i32, Integer;
     /// PICam's `PicamParameter_SensorActiveRightMargin` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    SensorActiveRightMargin = PicamParameter_SensorActiveRightMargin,
+    SensorActiveRightMargin = PicamParameter_SensorActiveRightMargin, SENSOR_ACTIVE_RIGHT_MARGIN: i32, Integer;
     /// PICam's `PicamParameter_SensorActiveBottomMargin` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    SensorActiveBottomMargin = PicamParameter_SensorActiveBottomMargin,
+    SensorActiveBottomMargin = PicamParameter_SensorActiveBottomMargin, SENSOR_ACTIVE_BOTTOM_MARGIN: i32, Integer;
     /// PICam's `PicamParameter_SensorMaskedHeight` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    SensorMaskedHeight = PicamParameter_SensorMaskedHeight,
+    SensorMaskedHeight = PicamParameter_SensorMaskedHeight, SENSOR_MASKED_HEIGHT: i32, Integer;
     /// PICam's `PicamParameter_SensorMaskedTopMargin` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    SensorMaskedTopMargin = PicamParameter_SensorMaskedTopMargin,
+    SensorMaskedTopMargin = PicamParameter_SensorMaskedTopMargin, SENSOR_MASKED_TOP_MARGIN: i32, Integer;
     /// PICam's `PicamParameter_SensorMaskedBottomMargin` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    SensorMaskedBottomMargin = PicamParameter_SensorMaskedBottomMargin,
+    SensorMaskedBottomMargin = PicamParameter_SensorMaskedBottomMargin, SENSOR_MASKED_BOTTOM_MARGIN: i32, Integer;
     /// PICam's `PicamParameter_SensorSecondaryMaskedHeight` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    SensorSecondaryMaskedHeight = PicamParameter_SensorSecondaryMaskedHeight,
+    SensorSecondaryMaskedHeight = PicamParameter_SensorSecondaryMaskedHeight, SENSOR_SECONDARY_MASKED_HEIGHT: i32, Integer;
     /// PICam's `PicamParameter_SensorSecondaryActiveHeight` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    SensorSecondaryActiveHeight = PicamParameter_SensorSecondaryActiveHeight,
+    SensorSecondaryActiveHeight = PicamParameter_SensorSecondaryActiveHeight, SENSOR_SECONDARY_ACTIVE_HEIGHT: i32, Integer;
     /// PICam's `PicamParameter_PixelWidth` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    PixelWidth = PicamParameter_PixelWidth,
+    PixelWidth = PicamParameter_PixelWidth, PIXEL_WIDTH: f64, FloatingPoint;
     /// PICam's `PicamParameter_PixelHeight` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    PixelHeight = PicamParameter_PixelHeight,
+    PixelHeight = PicamParameter_PixelHeight, PIXEL_HEIGHT: f64, FloatingPoint;
     /// PICam's `PicamParameter_PixelGapWidth` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    PixelGapWidth = PicamParameter_PixelGapWidth,
+    PixelGapWidth = PicamParameter_PixelGapWidth, PIXEL_GAP_WIDTH: f64, FloatingPoint;
     /// PICam's `PicamParameter_PixelGapHeight` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    PixelGapHeight = PicamParameter_PixelGapHeight,
+    PixelGapHeight = PicamParameter_PixelGapHeight, PIXEL_GAP_HEIGHT: f64, FloatingPoint;
     /// PICam's `PicamParameter_ApplicableStarDefectMapID` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
     #[doc(alias = "ApplicableStarDefectMapID")]
-    ApplicableStarDefectMapId = PicamParameter_ApplicableStarDefectMapID,
+    ApplicableStarDefectMapId = PicamParameter_ApplicableStarDefectMapID, APPLICABLE_STAR_DEFECT_MAP_ID: i32, Integer;
     /// PICam's `PicamParameter_ActiveWidth` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    ActiveWidth = PicamParameter_ActiveWidth,
+    ActiveWidth = PicamParameter_ActiveWidth, ACTIVE_WIDTH: i32, Integer;
     /// PICam's `PicamParameter_ActiveHeight` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    ActiveHeight = PicamParameter_ActiveHeight,
+    ActiveHeight = PicamParameter_ActiveHeight, ACTIVE_HEIGHT: i32, Integer;
     /// PICam's `PicamParameter_ActiveExtendedHeight` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    ActiveExtendedHeight = PicamParameter_ActiveExtendedHeight,
+    ActiveExtendedHeight = PicamParameter_ActiveExtendedHeight, ACTIVE_EXTENDED_HEIGHT: i32, Integer;
     /// PICam's `PicamParameter_ActiveLeftMargin` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    ActiveLeftMargin = PicamParameter_ActiveLeftMargin,
+    ActiveLeftMargin = PicamParameter_ActiveLeftMargin, ACTIVE_LEFT_MARGIN: i32, Integer;
     /// PICam's `PicamParameter_ActiveTopMargin` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    ActiveTopMargin = PicamParameter_ActiveTopMargin,
+    ActiveTopMargin = PicamParameter_ActiveTopMargin, ACTIVE_TOP_MARGIN: i32, Integer;
     /// PICam's `PicamParameter_ActiveRightMargin` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    ActiveRightMargin = PicamParameter_ActiveRightMargin,
+    ActiveRightMargin = PicamParameter_ActiveRightMargin, ACTIVE_RIGHT_MARGIN: i32, Integer;
     /// PICam's `PicamParameter_ActiveBottomMargin` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    ActiveBottomMargin = PicamParameter_ActiveBottomMargin,
+    ActiveBottomMargin = PicamParameter_ActiveBottomMargin, ACTIVE_BOTTOM_MARGIN: i32, Integer;
     /// PICam's `PicamParameter_MaskedHeight` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    MaskedHeight = PicamParameter_MaskedHeight,
+    MaskedHeight = PicamParameter_MaskedHeight, MASKED_HEIGHT: i32, Integer;
     /// PICam's `PicamParameter_MaskedTopMargin` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    MaskedTopMargin = PicamParameter_MaskedTopMargin,
+    MaskedTopMargin = PicamParameter_MaskedTopMargin, MASKED_TOP_MARGIN: i32, Integer;
     /// PICam's `PicamParameter_MaskedBottomMargin` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    MaskedBottomMargin = PicamParameter_MaskedBottomMargin,
+    MaskedBottomMargin = PicamParameter_MaskedBottomMargin, MASKED_BOTTOM_MARGIN: i32, Integer;
     /// PICam's `PicamParameter_SecondaryMaskedHeight` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    SecondaryMaskedHeight = PicamParameter_SecondaryMaskedHeight,
+    SecondaryMaskedHeight = PicamParameter_SecondaryMaskedHeight, SECONDARY_MASKED_HEIGHT: i32, Integer;
     /// PICam's `PicamParameter_SecondaryActiveHeight` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    SecondaryActiveHeight = PicamParameter_SecondaryActiveHeight,
+    SecondaryActiveHeight = PicamParameter_SecondaryActiveHeight, SECONDARY_ACTIVE_HEIGHT: i32, Integer;
     /// PICam's `PicamParameter_CleanSectionFinalHeight` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    CleanSectionFinalHeight = PicamParameter_CleanSectionFinalHeight,
+    CleanSectionFinalHeight = PicamParameter_CleanSectionFinalHeight, CLEAN_SECTION_FINAL_HEIGHT: i32, Integer;
     /// PICam's `PicamParameter_CleanSectionFinalHeightCount` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    CleanSectionFinalHeightCount = PicamParameter_CleanSectionFinalHeightCount,
+    CleanSectionFinalHeightCount = PicamParameter_CleanSectionFinalHeightCount, CLEAN_SECTION_FINAL_HEIGHT_COUNT: i32, Integer;
     /// PICam's `PicamParameter_CleanSerialRegister` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    CleanSerialRegister = PicamParameter_CleanSerialRegister,
+    CleanSerialRegister = PicamParameter_CleanSerialRegister, CLEAN_SERIAL_REGISTER: bool, Boolean;
     /// PICam's `PicamParameter_CleanCycleCount` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    CleanCycleCount = PicamParameter_CleanCycleCount,
+    CleanCycleCount = PicamParameter_CleanCycleCount, CLEAN_CYCLE_COUNT: i32, Integer;
     /// PICam's `PicamParameter_CleanCycleHeight` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    CleanCycleHeight = PicamParameter_CleanCycleHeight,
+    CleanCycleHeight = PicamParameter_CleanCycleHeight, CLEAN_CYCLE_HEIGHT: i32, Integer;
     /// PICam's `PicamParameter_CleanBeforeExposure` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    CleanBeforeExposure = PicamParameter_CleanBeforeExposure,
+    CleanBeforeExposure = PicamParameter_CleanBeforeExposure, CLEAN_BEFORE_EXPOSURE: bool, Boolean;
     /// PICam's `PicamParameter_CleanUntilTrigger` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    CleanUntilTrigger = PicamParameter_CleanUntilTrigger,
+    CleanUntilTrigger = PicamParameter_CleanUntilTrigger, CLEAN_UNTIL_TRIGGER: bool, Boolean;
     /// PICam's `PicamParameter_StopCleaningOnPreTrigger` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    StopCleaningOnPreTrigger = PicamParameter_StopCleaningOnPreTrigger,
+    StopCleaningOnPreTrigger = PicamParameter_StopCleaningOnPreTrigger, STOP_CLEANING_ON_PRE_TRIGGER: bool, Boolean;
     /// PICam's `PicamParameter_SensorTemperatureSetPoint` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    SensorTemperatureSetPoint = PicamParameter_SensorTemperatureSetPoint,
+    SensorTemperatureSetPoint = PicamParameter_SensorTemperatureSetPoint, SENSOR_TEMPERATURE_SET_POINT: f64, FloatingPoint;
     /// PICam's `PicamParameter_SensorTemperatureReading` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    SensorTemperatureReading = PicamParameter_SensorTemperatureReading,
+    SensorTemperatureReading = PicamParameter_SensorTemperatureReading, SENSOR_TEMPERATURE_READING: f64, FloatingPoint;
     /// PICam's `PicamParameter_SensorTemperatureStatus` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    SensorTemperatureStatus = PicamParameter_SensorTemperatureStatus,
+    SensorTemperatureStatus = PicamParameter_SensorTemperatureStatus, SENSOR_TEMPERATURE_STATUS: i32, Enumeration;
     /// PICam's `PicamParameter_DisableCoolingFan` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    DisableCoolingFan = PicamParameter_DisableCoolingFan,
+    DisableCoolingFan = PicamParameter_DisableCoolingFan, DISABLE_COOLING_FAN: bool, Boolean;
     /// PICam's `PicamParameter_CoolingFanStatus` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    CoolingFanStatus = PicamParameter_CoolingFanStatus,
+    CoolingFanStatus = PicamParameter_CoolingFanStatus, COOLING_FAN_STATUS: i32, Enumeration;
     /// PICam's `PicamParameter_EnableSensorWindowHeater` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    EnableSensorWindowHeater = PicamParameter_EnableSensorWindowHeater,
+    EnableSensorWindowHeater = PicamParameter_EnableSensorWindowHeater, ENABLE_SENSOR_WINDOW_HEATER: bool, Boolean;
     /// PICam's `PicamParameter_VacuumStatus` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    VacuumStatus = PicamParameter_VacuumStatus,
+    VacuumStatus = PicamParameter_VacuumStatus, VACUUM_STATUS: i32, Enumeration;
     /// PICam's `PicamParameter_CenterWavelengthSetPoint` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    CenterWavelengthSetPoint = PicamParameter_CenterWavelengthSetPoint,
+    CenterWavelengthSetPoint = PicamParameter_CenterWavelengthSetPoint, CENTER_WAVELENGTH_SET_POINT: f64, FloatingPoint;
     /// PICam's `PicamParameter_CenterWavelengthReading` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    CenterWavelengthReading = PicamParameter_CenterWavelengthReading,
+    CenterWavelengthReading = PicamParameter_CenterWavelengthReading, CENTER_WAVELENGTH_READING: f64, FloatingPoint;
     /// PICam's `PicamParameter_CenterWavelengthStatus` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    CenterWavelengthStatus = PicamParameter_CenterWavelengthStatus,
+    CenterWavelengthStatus = PicamParameter_CenterWavelengthStatus, CENTER_WAVELENGTH_STATUS: i32, Enumeration;
     /// PICam's `PicamParameter_GratingType` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    GratingType = PicamParameter_GratingType,
+    GratingType = PicamParameter_GratingType, GRATING_TYPE: i32, Enumeration;
     /// PICam's `PicamParameter_GratingCoating` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    GratingCoating = PicamParameter_GratingCoating,
+    GratingCoating = PicamParameter_GratingCoating, GRATING_COATING: i32, Enumeration;
     /// PICam's `PicamParameter_GratingGrooveDensity` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    GratingGrooveDensity = PicamParameter_GratingGrooveDensity,
+    GratingGrooveDensity = PicamParameter_GratingGrooveDensity, GRATING_GROOVE_DENSITY: f64, FloatingPoint;
     /// PICam's `PicamParameter_GratingBlazingWavelength` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    GratingBlazingWavelength = PicamParameter_GratingBlazingWavelength,
+    GratingBlazingWavelength = PicamParameter_GratingBlazingWavelength, GRATING_BLAZING_WAVELENGTH: f64, FloatingPoint;
     /// PICam's `PicamParameter_FocalLength` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    FocalLength = PicamParameter_FocalLength,
+    FocalLength = PicamParameter_FocalLength, FOCAL_LENGTH: f64, FloatingPoint;
     /// PICam's `PicamParameter_InclusionAngle` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    InclusionAngle = PicamParameter_InclusionAngle,
+    InclusionAngle = PicamParameter_InclusionAngle, INCLUSION_ANGLE: f64, FloatingPoint;
     /// PICam's `PicamParameter_SensorAngle` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    SensorAngle = PicamParameter_SensorAngle,
+    SensorAngle = PicamParameter_SensorAngle, SENSOR_ANGLE: f64, FloatingPoint;
     /// PICam's `PicamParameter_LaserOutputMode` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    LaserOutputMode = PicamParameter_LaserOutputMode,
+    LaserOutputMode = PicamParameter_LaserOutputMode, LASER_OUTPUT_MODE: i32, Enumeration;
     /// PICam's `PicamParameter_LaserPower` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    LaserPower = PicamParameter_LaserPower,
+    LaserPower = PicamParameter_LaserPower, LASER_POWER: f64, FloatingPoint;
     /// PICam's `PicamParameter_LaserWavelength` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    LaserWavelength = PicamParameter_LaserWavelength,
+    LaserWavelength = PicamParameter_LaserWavelength, LASER_WAVELENGTH: f64, FloatingPoint;
     /// PICam's `PicamParameter_LaserStatus` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    LaserStatus = PicamParameter_LaserStatus,
+    LaserStatus = PicamParameter_LaserStatus, LASER_STATUS: i32, Enumeration;
     /// PICam's `PicamParameter_InputTriggerStatus` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    InputTriggerStatus = PicamParameter_InputTriggerStatus,
+    InputTriggerStatus = PicamParameter_InputTriggerStatus, INPUT_TRIGGER_STATUS: i32, Enumeration;
     /// PICam's `PicamParameter_LightSource` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    LightSource = PicamParameter_LightSource,
+    LightSource = PicamParameter_LightSource, LIGHT_SOURCE: i32, Enumeration;
     /// PICam's `PicamParameter_LightSourceStatus` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    LightSourceStatus = PicamParameter_LightSourceStatus,
+    LightSourceStatus = PicamParameter_LightSourceStatus, LIGHT_SOURCE_STATUS: i32, Enumeration;
     /// PICam's `PicamParameter_Age` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    Age = PicamParameter_Age,
+    Age = PicamParameter_Age, AGE: f64, FloatingPoint;
     /// PICam's `PicamParameter_LifeExpectancy` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    LifeExpectancy = PicamParameter_LifeExpectancy,
+    LifeExpectancy = PicamParameter_LifeExpectancy, LIFE_EXPECTANCY: f64, FloatingPoint;
 }
