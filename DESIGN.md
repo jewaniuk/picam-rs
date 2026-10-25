@@ -221,8 +221,8 @@ Decided with the maintainer on 2026-10-25. Two chunks, after stage 1, because th
 
 ### 3. Remaining `picam.h` (8 functions)
 
-- quick wins: `Picam_GetVersion`, `Picam_IsLibraryInitialized`, `Picam_DestroyCalibrations`
-- acquisition: `Picam_Acquire`, `Picam_StartAcquisition`, `Picam_StopAcquisition`, `Picam_IsAcquisitionRunning`, `Picam_WaitForAcquisitionUpdate`. This is the most important remaining piece and needs careful design: who owns the frame buffers, and how data is copied out.
+- [ ] quick wins: `Picam_GetVersion`, `Picam_IsLibraryInitialized`. `Picam_DestroyCalibrations` moved to stage 5: it frees only the array `PicamAccessory_GetLightSourceReference` allocates (manual 4.3.3.4 and 7.4.6.1), so it is wrapped with that call
+- [ ] acquisition: `Picam_Acquire`, `Picam_StartAcquisition`, `Picam_StopAcquisition`, `Picam_IsAcquisitionRunning`, `Picam_WaitForAcquisitionUpdate`. This is the most important remaining piece and needs careful design: who owns the frame buffers, and how data is copied out. An agent may write it, but only after the longer design discussion in `CLAUDE.md`, with the actual code shown and approved first (decided with the maintainer on 2026-10-25).
 
 ### 4. `picam_advanced.h` (76 functions)
 
@@ -230,7 +230,7 @@ Callback registration (`Register*`/`Unregister*` pairs), parameter validation, c
 
 ### 5. `picam_accessory.h` (18), `picam_em_calibration.h` (11), `picam_special.h` (2)
 
-These largely mirror patterns already in `camera.rs`.
+These largely mirror patterns already in `camera.rs`. `Picam_DestroyCalibrations` from `picam.h` is wrapped here too, together with `PicamAccessory_GetLightSourceReference`, whose array it frees.
 
 ### 6. Finishing
 
@@ -240,5 +240,5 @@ These largely mirror patterns already in `camera.rs`.
 
 ## Open questions
 
-- **Acquisition API design:** blocking versus non-blocking, buffer ownership, and how frames are handed to the user.
+- **Acquisition API design:** blocking versus non-blocking, buffer ownership, and how frames are handed to the user. To be settled in the acquisition design discussion (see `CLAUDE.md`).
 - **Callback design** for `picam_advanced.h`.
