@@ -13,6 +13,10 @@ Most of these are already on lab computers that build `adam`.
 - [ ] **Git for Windows:** `git --version` works.
 - [ ] **Claude Code:** `claude --version` works.
 - [ ] **PICam SDK:** `C:\Program Files\Princeton Instruments\PICam\Includes\picam.h` exists. In **Settings > Apps > Installed apps**, check the PICam version. The bindings were generated against **5.15.11.2503**. Note the version if it differs, since behaviour may too.
+- [ ] **eBUS on `PATH`:** PICam delay-loads Pleora eBUS (the GigE camera libraries) when it initializes, and its installer doesn't put eBUS on `PATH`. LightField copes on its own, but our tests don't.
+  - Check whether `C:\Program Files\Common Files\Pleora\eBUS SDK` exists. If it does, add it to your **user** `PATH`: Start menu, "Edit environment variables for your account", **Path**, **Edit…**, **New**. Use this dialog rather than `setx`, which can truncate a long `PATH`.
+  - Open a new terminal afterwards. If you use Windows Terminal, close the whole app, since it keeps the environment it started with.
+  - **Check:** `which PvBase64.dll` prints the eBUS path.
 - [ ] **Sleep turned off:** in **Settings > System > Power**, set "when plugged in, put my device to sleep after" to **Never**. If the computer sleeps, the agent stops and Remote Control drops.
 
 ## 2. GitHub CLI and cargo-public-api
@@ -73,14 +77,19 @@ Create it in a **private browser window** on the lab computer, signed into your 
 Do this by hand, before any agent touches the repo, so you know the baseline.
 
 - [ ] `cargo build -p picam-rs`
-- [ ] **Re-initialization, first:** `cargo test -p picam-rs --test library`. The important one is `reinitializes_after_drop`.
+- [ ] **Re-initialization, first:** `cargo test -p picam-rs --test library`. The important one is `reinitialize_after_drop`. It passed on the first lab computer (2026-10-24), but confirm it on each new machine and SDK version.
   - If it **fails**, PICam can't be initialized twice in one process. Stop here: the test helper has to switch to the fallback described in `DESIGN.md`'s Testing section before any agent writes tests.
-- [ ] **Demo camera:** `cargo test -p picam-rs --test camera`. The serial number format `SMOKE0001` was a guess. If PICam rejects it, note the error.
+- [ ] **Demo camera:** `cargo test -p picam-rs --test camera`.
 - [ ] `cargo run -p xtask -- progress` reports 82 / 199.
 - [ ] `cargo run -p xtask -- gate` **fails at clippy**. That's expected: stage 1 of the roadmap is what makes it pass.
-- [ ] `cargo public-api --package picam-rs` prints the public API. If the `--package` flag is wrong, find the right form with `cargo public-api --help` and fix the command in `CLAUDE.md`.
+- [ ] `cargo public-api --package picam-rs` prints the public API.
 
-If a test fails with exit code `0xc0000135` (`STATUS_DLL_NOT_FOUND`), Windows can't find `Picam.dll`. Add the SDK's `Runtime` folder (next to `Includes`) to `PATH` and open a new terminal.
+If a test crashes rather than failing normally, the exit code says which DLL problem it is:
+
+- **`0xc0000135`** (`STATUS_DLL_NOT_FOUND`), before any test runs: Windows can't find `Picam.dll` or one of the DLLs it loads at startup. The PICam installer normally puts `C:\Program Files\Common Files\Princeton Instruments\Picam\Runtime` on `PATH`; check that it's there.
+- **`0xc06d007e`** (delay-load module not found), right after `running N tests`: PICam loaded, but a DLL it loads later, during `Picam_InitializeLibrary`, is missing. Usually this means eBUS isn't on `PATH` (see part 1).
+  - To find which DLL it is, open the "x64 Native Tools Command Prompt for VS" and run `dumpbin /dependents` on `Pida.dll` and `Pidi.dll` in the PICam `Runtime` folder. Look under "delay load dependencies", then search for each listed DLL with `where /r "C:\Program Files" NAME.dll`.
+  - Teledyne DALSA Sapera (`SapClassBasic86.dll`, `CorApi.dll`) is also listed there, but PICam runs fine without it on computers with no Camera Link frame grabber.
 
 ## 6. Reference material
 

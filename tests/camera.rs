@@ -31,12 +31,15 @@ fn demo_camera_round_trip() {
             .is_connected()
             .expect("connection status should be queried")
     );
-    assert_eq!(
-        camera
-            .id()
-            .expect("camera id should be queried")
-            .serial_number,
-        SERIAL_NUMBER
+
+    // picam appends ":Demo" to demo serial numbers (seen with sdk 5.15) so
+    // compare against the id it returned rather than the number we asked for
+    let opened_id = camera.id().expect("camera id should be queried");
+    assert_eq!(opened_id.serial_number, id.serial_number);
+    assert!(
+        opened_id.serial_number.starts_with(SERIAL_NUMBER),
+        "serial number should start with {SERIAL_NUMBER}, got {}",
+        opened_id.serial_number
     );
 
     // every camera reports its sensor size, whatever the model
