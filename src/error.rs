@@ -1,5 +1,6 @@
 //! Error types for `picam-rs`
 
+use crate::parameter::EnumeratedType;
 use crate::sys;
 
 /// Result type used throughout `picam-rs`.
@@ -202,6 +203,26 @@ pub enum Error {
     /// A string contains an embedded null byte, so it can't be passed to PICam.
     #[error("string contains an embedded null byte")]
     InvalidString,
+    /// This [`Library`](crate::Library) has already tried to connect 64
+    /// different demo cameras (model and serial number pairs), counting
+    /// attempts that failed. PICam 5.15 corrupts its own memory when one more
+    /// is connected, so [`CameraId::connect_demo`](crate::CameraId::connect_demo)
+    /// refuses instead. Dropping the `Library` and making a new one resets the
+    /// count.
+    #[error("too many different demo cameras connected with this library")]
+    TooManyDemoCameras,
+    /// An untyped call such as
+    /// [`Camera::get_untyped`](crate::Camera::get_untyped) asked for an enum
+    /// parameter's value as a different enum from the one PICam says its
+    /// values belong to. PICam reads every enum through the same integer
+    /// call, so it can't catch this itself.
+    #[error("the parameter's values are {found:?}, not {expected:?}")]
+    EnumeratedTypeMismatch {
+        /// The enum the call asked for.
+        expected: EnumeratedType,
+        /// The enum PICam says the parameter's values belong to.
+        found: EnumeratedType,
+    },
 }
 
 impl Error {

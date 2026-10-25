@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use picam_rs::{
     Camera, CameraId, ConstraintCategory, ConstraintScope, ConstraintSeverity, ConstraintType,
-    Library, Parameter, Roi, ValueAccess, ValueType, params,
+    Library, Parameter, Roi, ShutterTimingMode, ValueAccess, ValueType, params,
 };
 
 /// Connects a demo camera of the first model PICam offers.
@@ -256,6 +256,60 @@ fn bool_values_through_camera() {
             .expect("on/off parameter should be read back"),
         !current,
         "{handle:?} should have flipped"
+    );
+
+    drop(camera);
+    id.disconnect_demo(&test_library.library)
+        .expect("demo camera should disconnect");
+}
+
+/// Changes an enum parameter, commits it and reads it back, which goes
+/// through an enum's get, can-set and set.
+#[test]
+fn enum_values_through_camera() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "PARAM0005";
+
+    let test_library = common::library();
+    let id = connect_demo(&test_library.library, SERIAL_NUMBER);
+    let camera =
+        Camera::open(&id, Arc::clone(&test_library.library)).expect("demo camera should open");
+
+    let current = camera
+        .get(params::SHUTTER_TIMING_MODE)
+        .expect("shutter timing mode should be read");
+    // which modes a demo camera accepts isn't documented, so take the first
+    // other one it does
+    let other = [
+        ShutterTimingMode::Normal,
+        ShutterTimingMode::AlwaysClosed,
+        ShutterTimingMode::AlwaysOpen,
+        ShutterTimingMode::OpenBeforeTrigger,
+    ]
+    .into_iter()
+    .filter(|&mode| mode != current)
+    .find(|&mode| {
+        camera
+            .can_set(params::SHUTTER_TIMING_MODE, mode)
+            .unwrap_or(false)
+    })
+    .expect("the demo camera should accept another shutter timing mode");
+
+    camera
+        .set(params::SHUTTER_TIMING_MODE, other)
+        .expect("shutter timing mode should be set");
+    let failed = camera
+        .commit_parameters()
+        .expect("parameters should be committed");
+    assert!(
+        failed.is_empty(),
+        "no parameters should fail, got {failed:?}"
+    );
+    assert_eq!(
+        camera
+            .get(params::SHUTTER_TIMING_MODE)
+            .expect("shutter timing mode should be read back"),
+        other
     );
 
     drop(camera);

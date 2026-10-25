@@ -5,7 +5,7 @@ mod common;
 
 use std::sync::Arc;
 
-use picam_rs::{Camera, CameraId, params};
+use picam_rs::{Camera, CameraId, Error, params};
 
 /// Connects, opens, queries, closes and disconnects a demo camera, as a
 /// smoke test of the whole chain from `Library` through to a parameter read.
@@ -75,5 +75,44 @@ fn demo_camera_round_trip() {
 
     drop(camera);
     id.disconnect_demo(&test_library.library)
+        .expect("demo camera should disconnect");
+}
+
+/// Connects 64 different demo cameras, then checks a 65th is refused with
+/// `Error::TooManyDemoCameras` rather than reaching PICam, which corrupts its
+/// heap at that point (seen with SDK 5.15), and that a demo camera already
+/// used still connects. A demo camera counts once per model and serial
+/// number pair, so the 65th here reuses a model with a new serial number,
+/// which crashed the process before the limit was added.
+#[test]
+fn demo_camera_limit() {
+    const CAMERAS_ALLOWED: usize = 64;
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let models = Camera::available_demo_models(library).expect("demo models should be listed");
+    assert!(
+        models.len() >= CAMERAS_ALLOWED,
+        "this test needs {CAMERAS_ALLOWED} demo models, PICam offers {}",
+        models.len()
+    );
+
+    for (index, &model) in models.iter().take(CAMERAS_ALLOWED).enumerate() {
+        // each demo camera gets its own serial number so they never collide
+        let id = CameraId::connect_demo(library, model, &format!("LIMIT{index:04}"))
+            .unwrap_or_else(|e| panic!("demo {model:?} should connect: {e}"));
+        id.disconnect_demo(library)
+            .unwrap_or_else(|e| panic!("demo {model:?} should disconnect: {e}"));
+    }
+
+    let result = CameraId::connect_demo(library, models[0], "LIMIT9999");
+    assert!(
+        matches!(result, Err(Error::TooManyDemoCameras)),
+        "a 65th different demo camera should be refused, got {result:?}"
+    );
+
+    let id = CameraId::connect_demo(library, models[0], "LIMIT0000")
+        .expect("a demo camera already used should still connect");
+    id.disconnect_demo(library)
         .expect("demo camera should disconnect");
 }

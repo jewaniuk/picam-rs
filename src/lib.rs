@@ -28,6 +28,7 @@
 mod camera;
 mod constraint;
 mod convert;
+mod enums;
 mod error;
 mod library;
 mod model;
@@ -40,6 +41,7 @@ pub use constraint::{
     ModulationsConstraint, PulseConstraint, RangeConstraint, RoisConstraint, RoisConstraintRules,
 };
 pub use convert::FirmwareDetail;
+pub use enums::*;
 pub use error::{Error, Result};
 pub use library::Library;
 pub use model::Model;

@@ -13,7 +13,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use picam_rs::{
-    Camera, CameraId, Error, Library, Parameter, PicamValue, TypedParameter, ValueType, params,
+    AdcQuality, Camera, CameraId, EnumeratedType, Error, Library, Parameter, PicamValue,
+    ShutterTimingMode, TypedParameter, ValueType, params,
 };
 
 /// What checking the handles found, across every demo model.
@@ -32,6 +33,7 @@ fn check<T: PicamValue>(
     camera: &Camera,
     handle: TypedParameter<T>,
     value_type: ValueType,
+    enumerated: Option<EnumeratedType>,
     findings: &mut Findings,
 ) {
     let parameter = handle.parameter();
@@ -52,6 +54,16 @@ fn check<T: PicamValue>(
         other => findings.problems.push(format!(
             "{parameter:?}: value type {other:?}, header says {value_type:?}"
         )),
+    }
+
+    // for an enum parameter, the enum its handle uses must be PICam's
+    if let Some(expected) = enumerated {
+        match camera.enumerated_type(handle) {
+            Ok(actual) if actual == expected => {}
+            other => findings.problems.push(format!(
+                "{parameter:?}: enumerated type {other:?}, handle uses {expected:?}"
+            )),
+        }
     }
 
     let current = camera.get(handle);
@@ -78,11 +90,17 @@ fn check<T: PicamValue>(
 macro_rules! define_parameters {
     ($(
         $(#[$meta:meta])*
-        $name:ident = $raw:ident, $handle:ident: $ty:ty, $value_type:ident;
+        $name:ident = $raw:ident, $handle:ident: $ty:ty, $value_type:ident $(($enumerated:ident))?;
     )*) => {
         /// Checks every handle on `camera`.
         fn check_all(camera: &Camera, findings: &mut Findings) {
-            $(check(camera, params::$handle, ValueType::$value_type, findings);)*
+            $(check(
+                camera,
+                params::$handle,
+                ValueType::$value_type,
+                None $(.or(Some(EnumeratedType::$enumerated)))?,
+                findings,
+            );)*
         }
 
         /// Every parameter with a handle, in header order.
@@ -94,11 +112,10 @@ macro_rules! define_parameters {
 
 include!("../src/generated/parameters.rs");
 
-/// How many demo models to connect per library. With SDK 5.15, connecting a
-/// 65th distinct demo model in one library session corrupts PICam's heap and
-/// kills the process, inside `Picam_ConnectDemoCamera` itself (reproduced with
-/// raw calls, see `DESIGN.md`'s open questions), so the models are checked in
-/// batches, each with a fresh library.
+/// How many demo models to connect per library. One library connects at most
+/// 64 different demo cameras (model and serial number pairs), because PICam
+/// 5.15 corrupts its heap on the 65th, so `connect_demo` refuses it. The
+/// models are checked in batches, each with a fresh library.
 const MODELS_PER_LIBRARY: usize = 32;
 
 /// Connects each demo model in turn and checks every handle on it.
@@ -180,6 +197,62 @@ fn wrong_value_type_is_reported() {
     assert!(
         matches!(result, Err(Error::ParameterHasInvalidValueType)),
         "reading an integer parameter as f64 should be rejected, got {result:?}"
+    );
+
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Shows that an untyped call naming the wrong enum is refused with
+/// `Error::EnumeratedTypeMismatch`, which PICam can't catch itself since it
+/// reads every enum through the same integer call, and that the right enum
+/// works.
+#[test]
+fn untyped_enum_is_checked() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "HANDLEENUM";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let models = Camera::available_demo_models(library).expect("demo models should be listed");
+    let model = *models
+        .first()
+        .expect("PICam should offer at least one demo model");
+    let id =
+        CameraId::connect_demo(library, model, SERIAL_NUMBER).expect("demo camera should connect");
+    let camera = Camera::open(&id, Arc::clone(library)).expect("demo camera should open");
+    assert!(
+        camera
+            .does_parameter_exist(Parameter::ShutterTimingMode)
+            .expect("existence should be checked"),
+        "the first demo model should have a shutter timing mode"
+    );
+
+    let wrong = camera.get_untyped::<AdcQuality>(Parameter::ShutterTimingMode);
+    assert!(
+        matches!(
+            wrong,
+            Err(Error::EnumeratedTypeMismatch {
+                expected: EnumeratedType::AdcQuality,
+                found: EnumeratedType::ShutterTimingMode,
+            })
+        ),
+        "reading a shutter timing mode as an adc quality should be refused, got {wrong:?}"
+    );
+    // an integer parameter has no enum, and picam's enumerated type query
+    // refuses it (seen with sdk 5.15, PICam manual 5.4.3.6 only says enum
+    // parameters are valid there). its integer call would have accepted it,
+    // so this is the check that catches it
+    let not_enum = camera.get_untyped::<AdcQuality>(Parameter::SensorActiveWidth);
+    assert!(
+        matches!(not_enum, Err(Error::ParameterHasInvalidValueType)),
+        "reading an integer parameter as an enum should be refused, got {not_enum:?}"
+    );
+    let right = camera.get_untyped::<ShutterTimingMode>(Parameter::ShutterTimingMode);
+    assert!(
+        right.is_ok(),
+        "reading a shutter timing mode as one should work, got {right:?}"
     );
 
     drop(camera);

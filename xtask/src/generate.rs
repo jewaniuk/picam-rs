@@ -41,6 +41,20 @@ const ENUMERATED_TYPE_RENAMES: [(&str, &str); 1] = [("EnumeratedType", "Enumerat
 /// such as product names with their own capitalization.
 const PARAMETER_RENAMES: [(&str, &str); 1] = [("SeNsRWindowHeight", "SensrWindowHeight")];
 
+/// Enum parameters whose enum can't be found from the parameter's own name,
+/// as PICam's names for the parameter and its enum. `tests/handles.rs` checks
+/// the ones a demo camera has against PICam.
+const PARAMETER_ENUMS: [(&str, &str); 7] = [
+    ("InternalShutterType", "ShutterType"),
+    ("ExternalShutterType", "ShutterType"),
+    ("InternalShutterStatus", "ShutterStatus"),
+    ("ExternalShutterStatus", "ShutterStatus"),
+    ("ReadoutOrientation", "OrientationMask"),
+    // no demo camera has these two, PICam manual 5.1.1.23 names their enums
+    ("InactiveShutterTimingModeResult", "ShutterTimingMode"),
+    ("InputTriggerStatus", "TriggerStatus"),
+];
+
 /// Models whose whole PICam name converts badly to a constant name.
 const MODEL_NAME_OVERRIDES: [(&str, &str); 1] = [("RetigaE7", "RETIGA_E7")];
 
@@ -154,10 +168,16 @@ fn read_headers(root: &Path) -> Result<String, String> {
 /// Returns an error if a header enum is missing or malformed, or two models
 /// would get the same constant name.
 fn render_all(headers: &str) -> Result<Vec<(&'static str, String)>, String> {
+    let parameters = parse_enum(headers, "PicamParameter")?;
+    let parameter_enums = parameter_enums(&parameters, &enum_names(headers))?;
     Ok(vec![
         (
             "src/generated/parameters.rs",
-            render_parameters(&parse_enum(headers, "PicamParameter")?)?,
+            render_parameters(&parameters, &parameter_enums)?,
+        ),
+        (
+            "src/generated/enums.rs",
+            render_value_enums(headers, &parameter_enums)?,
         ),
         (
             "src/generated/enumerated_types.rs",
@@ -314,8 +334,6 @@ fn rust_value_type(value_type: &str) -> Result<&'static str, String> {
     match value_type {
         "Integer" => Ok("i32"),
         "Boolean" => Ok("bool"),
-        // enums get their own types in the next stage 2 chunk
-        "Enumeration" => Ok("i32"),
         "LargeInteger" => Ok("i64"),
         "FloatingPoint" => Ok("f64"),
         "Rois" => Ok("Vec<Roi>"),
@@ -329,13 +347,23 @@ fn rust_value_type(value_type: &str) -> Result<&'static str, String> {
 
 /// Renders the `define_parameters!` list, documenting each parameter's value
 /// and constraint type from its `PI_V(...)` definition, and naming its typed
-/// handle and that handle's Rust type.
+/// handle and that handle's Rust type. An enum parameter's type is its enum,
+/// from `parameter_enums`, and its entry also names the enum's
+/// `EnumeratedType` variant.
 ///
 /// # Errors
 ///
 /// Returns an error if a parameter isn't defined with `PI_V(...)`, has a
-/// value type with no Rust type, or two handles would get the same name.
-fn render_parameters(enumerators: &[Enumerator]) -> Result<String, String> {
+/// value type with no Rust type, is an enum parameter missing from
+/// `parameter_enums`, or two handles would get the same name.
+fn render_parameters(
+    enumerators: &[Enumerator],
+    parameter_enums: &[(String, String)],
+) -> Result<String, String> {
+    let enum_of: HashMap<&str, &str> = parameter_enums
+        .iter()
+        .map(|(parameter, value_enum)| (parameter.as_str(), value_enum.as_str()))
+        .collect();
     let mut seen: HashMap<String, &str> = HashMap::new();
     let mut out = format!("{GENERATED_NOTICE}\n\ndefine_parameters! {{\n");
     for enumerator in enumerators {
@@ -350,16 +378,222 @@ fn render_parameters(enumerators: &[Enumerator]) -> Result<String, String> {
             ));
         }
         let (value_type, constraint_type) = pi_v_types(&enumerator.value)?;
-        let rust_type = rust_value_type(value_type)?;
+        let (rust_type, enumerated) = if value_type == "Enumeration" {
+            let value_enum = enum_of
+                .get(name.as_str())
+                .ok_or_else(|| format!("no enum found for enum parameter `{name}`"))?;
+            (
+                enum_type_name(value_enum),
+                format!("({})", rust_name(value_enum, &ENUMERATED_TYPE_RENAMES)),
+            )
+        } else {
+            (rust_value_type(value_type)?.to_string(), String::new())
+        };
         out.push_str(&format!(
             "    /// PICam's `PicamParameter_{name}` parameter.\n    \
              ///\n    \
              /// Value type [`ValueType::{value_type}`](crate::ValueType::{value_type}), \
              constraint type [`ConstraintType::{constraint_type}`](crate::ConstraintType::{constraint_type}).\n\
-             {alias}    {variant} = PicamParameter_{name}, {handle}: {rust_type}, {value_type};\n"
+             {alias}    {variant} = PicamParameter_{name}, {handle}: {rust_type}, {value_type}{enumerated};\n"
         ));
     }
     out.push_str("}\n");
+    Ok(out)
+}
+
+/// Lists the name of every enum the headers declare, without the `Picam`
+/// prefix, in header order.
+fn enum_names(headers: &str) -> Vec<String> {
+    const MARKER: &str = "typedef enum Picam";
+    headers
+        .match_indices(MARKER)
+        .map(|(index, _)| {
+            headers[index + MARKER.len()..]
+                .chars()
+                .take_while(|&c| is_identifier_char(c))
+                .collect::<String>()
+        })
+        .filter(|name| !name.is_empty())
+        .collect()
+}
+
+/// Finds the enum each `Enumeration` parameter's values belong to, in
+/// parameter order: `PARAMETER_ENUMS` first, then an enum named like the
+/// parameter, with `Mask` added, or with a trailing number dropped.
+///
+/// # Errors
+///
+/// Returns an error if a parameter isn't defined with `PI_V(...)`, or an
+/// enum parameter matches no enum.
+fn parameter_enums(
+    parameters: &[Enumerator],
+    enum_names: &[String],
+) -> Result<Vec<(String, String)>, String> {
+    let exists = |name: &str| enum_names.iter().any(|known| known == name);
+    let mut found = Vec::new();
+    for parameter in parameters {
+        let (value_type, _) = pi_v_types(&parameter.value)?;
+        if value_type != "Enumeration" {
+            continue;
+        }
+        let name = parameter.name.as_str();
+        let unnumbered = name.trim_end_matches(|c: char| c.is_ascii_digit());
+        let value_enum = PARAMETER_ENUMS
+            .iter()
+            .find(|(from, _)| *from == name)
+            .map(|(_, to)| (*to).to_string())
+            .or_else(|| {
+                [
+                    name.to_string(),
+                    format!("{name}Mask"),
+                    unnumbered.to_string(),
+                    format!("{unnumbered}Mask"),
+                ]
+                .into_iter()
+                .find(|candidate| exists(candidate))
+            })
+            .ok_or_else(|| {
+                format!(
+                    "no enum found for enum parameter `{name}`, add it to \
+                     PARAMETER_ENUMS in xtask/src/generate.rs"
+                )
+            })?;
+        if !exists(&value_enum) {
+            return Err(format!(
+                "PARAMETER_ENUMS names `Picam{value_enum}`, which isn't in the headers"
+            ));
+        }
+        found.push((name.to_string(), value_enum));
+    }
+    Ok(found)
+}
+
+/// The Rust type name for a PICam value enum: `type_case`, without a bitmask
+/// enum's `Mask` suffix (`OrientationMask` -> `Orientation`), as for
+/// `RoisConstraintRules`.
+fn enum_type_name(value_enum: &str) -> String {
+    type_case(value_enum.strip_suffix("Mask").unwrap_or(value_enum))
+}
+
+/// Whether a C enum value is zero, such as `0x000`.
+fn is_zero(value: &str) -> bool {
+    let value = value.trim();
+    let parsed = match value
+        .strip_prefix("0x")
+        .or_else(|| value.strip_prefix("0X"))
+    {
+        Some(hex) => i64::from_str_radix(hex, 16),
+        None => value.parse::<i64>(),
+    };
+    parsed == Ok(0)
+}
+
+/// Renders every value enum that `parameter_enums` uses, in header order: a
+/// `define_picam_enum!` for each single-value enum and a `bitflags!` for
+/// each bitmask, each followed by the macro that makes it a parameter value.
+///
+/// # Errors
+///
+/// Returns an error if an enum can't be parsed, or two of its values would
+/// get the same Rust name.
+fn render_value_enums(
+    headers: &str,
+    parameter_enums: &[(String, String)],
+) -> Result<String, String> {
+    let mut out = format!("{GENERATED_NOTICE}\n");
+    for value_enum in enum_names(headers) {
+        let users: Vec<&str> = parameter_enums
+            .iter()
+            .filter(|(_, used)| *used == value_enum)
+            .map(|(parameter, _)| parameter.as_str())
+            .collect();
+        if users.is_empty() {
+            continue;
+        }
+        let links: Vec<String> = users
+            .iter()
+            .map(|parameter| {
+                let variant = rust_name(parameter, &PARAMETER_RENAMES);
+                format!("[`Parameter::{variant}`](crate::Parameter::{variant})")
+            })
+            .collect();
+        let links = match links.as_slice() {
+            [one] => one.clone(),
+            [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+            [] => unreachable!("users isn't empty"),
+        };
+        let type_name = enum_type_name(&value_enum);
+        let type_alias = doc_alias(&value_enum, &type_name);
+        let values = parse_enum(headers, &format!("Picam{value_enum}"))?;
+        let mut seen: HashMap<String, &str> = HashMap::new();
+        out.push('\n');
+        if value_enum.ends_with("Mask") {
+            let zeros: Vec<String> = values
+                .iter()
+                .filter(|value| is_zero(&value.value))
+                .map(|value| format!("`Picam{value_enum}_{}`", value.name))
+                .collect();
+            let empty = if zeros.is_empty() {
+                String::new()
+            } else {
+                format!("    /// No flags set is PICam's {}.\n", zeros.join(" or "))
+            };
+            out.push_str(&format!(
+                "bitflags::bitflags! {{\n    \
+                 /// The values of {links} (PICam's `Picam{value_enum}`), a set of flags.\n    \
+                 ///\n{empty}    \
+                 /// Bits this crate doesn't recognize are kept, not dropped.\n\
+                 {type_alias}    \
+                 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]\n    \
+                 pub struct {type_name}: i32 {{\n"
+            ));
+            for value in values.iter().filter(|value| !is_zero(&value.value)) {
+                let flag = screaming_snake_case(&type_case(&value.name));
+                if let Some(other) = seen.insert(flag.clone(), &value.name) {
+                    return Err(format!(
+                        "`{other}` and `{}` in `Picam{value_enum}` would both be `{flag}`",
+                        value.name
+                    ));
+                }
+                out.push_str(&format!(
+                    "        /// PICam's `Picam{value_enum}_{name}`.\n        \
+                     const {flag} = sys::Picam{value_enum}::Picam{value_enum}_{name}.0;\n",
+                    name = value.name
+                ));
+            }
+            out.push_str(&format!(
+                "    }}\n}}\n\nimpl_mask_value!({type_name}, PicamEnumeratedType_{value_enum});\n"
+            ));
+        } else {
+            out.push_str(&format!(
+                "define_picam_enum!(\n    \
+                 /// The values of {links} (PICam's `Picam{value_enum}`).\n\
+                 {type_alias}    \
+                 {type_name},\n    \
+                 sys::Picam{value_enum},\n    \
+                 PicamEnumeratedType_{value_enum},\n"
+            ));
+            for value in &values {
+                let variant = type_case(&value.name);
+                if let Some(other) = seen.insert(variant.clone(), &value.name) {
+                    return Err(format!(
+                        "`{other}` and `{}` in `Picam{value_enum}` would both be `{variant}`",
+                        value.name
+                    ));
+                }
+                let alias = doc_alias(&value.name, &variant);
+                out.push_str(&format!(
+                    "    /// PICam's `Picam{value_enum}_{name}`.\n{alias}    \
+                     {variant} = Picam{value_enum}_{name},\n",
+                    name = value.name
+                ));
+            }
+            out.push_str(&format!(
+                ");\n\nimpl_enum_value!({type_name}, sys::Picam{value_enum}, \
+                 PicamEnumeratedType_{value_enum});\n"
+            ));
+        }
+    }
     Ok(out)
 }
 
@@ -632,7 +866,7 @@ mod tests {
             name: name.to_string(),
             value: value.to_string(),
         });
-        let rendered = render_parameters(&enumerators).expect("parameters should render");
+        let rendered = render_parameters(&enumerators, &[]).expect("parameters should render");
         assert!(rendered.contains(
             "    #[doc(alias = \"EMIccdGain\")]\n    EmIccdGain = PicamParameter_EMIccdGain,"
         ));
@@ -651,11 +885,13 @@ mod tests {
             name: name.to_string(),
             value: value.to_string(),
         });
-        let rendered = render_parameters(&enumerators).expect("parameters should render");
+        let parameter_enums = [("OutputSignal2".to_string(), "OutputSignal".to_string())];
+        let rendered =
+            render_parameters(&enumerators, &parameter_enums).expect("parameters should render");
         for entry in [
             "EmIccdGain = PicamParameter_EMIccdGain, EM_ICCD_GAIN: i32, Integer;",
             "ExposureTime = PicamParameter_ExposureTime, EXPOSURE_TIME: f64, FloatingPoint;",
-            "OutputSignal2 = PicamParameter_OutputSignal2, OUTPUT_SIGNAL_2: i32, Enumeration;",
+            "OutputSignal2 = PicamParameter_OutputSignal2, OUTPUT_SIGNAL_2: OutputSignal, Enumeration(OutputSignal);",
             "Rois = PicamParameter_Rois, ROIS: Vec<Roi>, Rois;",
         ] {
             assert!(rendered.contains(entry), "missing `{entry}`");
@@ -667,7 +903,6 @@ mod tests {
         for (value_type, rust_type) in [
             ("Integer", "i32"),
             ("Boolean", "bool"),
-            ("Enumeration", "i32"),
             ("LargeInteger", "i64"),
             ("FloatingPoint", "f64"),
             ("Rois", "Vec<Roi>"),
@@ -677,6 +912,132 @@ mod tests {
             assert_eq!(rust_value_type(value_type), Ok(rust_type));
         }
         assert!(rust_value_type("Quaternion").is_err());
+        // enum parameters take their type from `parameter_enums` instead
+        assert!(rust_value_type("Enumeration").is_err());
+    }
+
+    const ENUM_HEADER: &str = "
+        typedef enum PicamColour { PicamColour_DeepRed = 1, PicamColour_UVBlue = 2 } PicamColour;
+        typedef enum PicamWidgetMask
+        {
+            PicamWidgetMask_None   = 0x000,
+            PicamWidgetMask_Shiny  = 0x001,
+            PicamWidgetMask_Bouncy = 0x002
+        } PicamWidgetMask;
+        typedef enum PicamUnused { PicamUnused_Nothing = 1 } PicamUnused;
+    ";
+
+    #[test]
+    fn finds_each_enum_parameters_enum() {
+        let names = enum_names(ENUM_HEADER);
+        assert_eq!(names, ["Colour", "WidgetMask", "Unused"]);
+        let parameters = [
+            ("Colour", "PI_V(Enumeration, Collection, 1)"),
+            ("Colour2", "PI_V(Enumeration, Collection, 2)"),
+            ("Widget", "PI_V(Enumeration, Collection, 3)"),
+            ("ExposureTime", "PI_V(FloatingPoint, Range, 4)"),
+        ]
+        .map(|(name, value)| Enumerator {
+            name: name.to_string(),
+            value: value.to_string(),
+        });
+        let found = parameter_enums(&parameters, &names).expect("every enum should be found");
+        let found: Vec<(&str, &str)> = found
+            .iter()
+            .map(|(parameter, value_enum)| (parameter.as_str(), value_enum.as_str()))
+            .collect();
+        assert_eq!(
+            found,
+            [
+                ("Colour", "Colour"),
+                ("Colour2", "Colour"),
+                ("Widget", "WidgetMask"),
+            ]
+        );
+
+        let unmatched = [Enumerator {
+            name: "Mystery".to_string(),
+            value: "PI_V(Enumeration, Collection, 5)".to_string(),
+        }];
+        assert!(parameter_enums(&unmatched, &names).is_err());
+    }
+
+    #[test]
+    fn renders_value_enums_and_masks() {
+        let parameter_enums = [
+            ("Colour".to_string(), "Colour".to_string()),
+            ("Widget".to_string(), "WidgetMask".to_string()),
+        ];
+        let rendered =
+            render_value_enums(ENUM_HEADER, &parameter_enums).expect("enums should render");
+        for expected in [
+            "    /// The values of [`Parameter::Colour`](crate::Parameter::Colour) \
+             (PICam's `PicamColour`).\n",
+            "    Colour,\n    sys::PicamColour,\n    PicamEnumeratedType_Colour,\n",
+            "    /// PICam's `PicamColour_DeepRed`.\n    DeepRed = PicamColour_DeepRed,\n",
+            "    #[doc(alias = \"UVBlue\")]\n    UvBlue = PicamColour_UVBlue,\n",
+            "impl_enum_value!(Colour, sys::PicamColour, PicamEnumeratedType_Colour);",
+            "    #[doc(alias = \"WidgetMask\")]\n",
+            "    pub struct Widget: i32 {\n",
+            "    /// No flags set is PICam's `PicamWidgetMask_None`.\n",
+            "        /// PICam's `PicamWidgetMask_Shiny`.\n",
+            "        const SHINY = sys::PicamWidgetMask::PicamWidgetMask_Shiny.0;\n",
+            "        const BOUNCY = sys::PicamWidgetMask::PicamWidgetMask_Bouncy.0;\n",
+            "impl_mask_value!(Widget, PicamEnumeratedType_WidgetMask);",
+        ] {
+            assert!(rendered.contains(expected), "missing `{expected}`");
+        }
+        // the zero value isn't a flag, and an enum no parameter uses is left out
+        assert!(!rendered.contains("const NONE"));
+        assert!(!rendered.contains("Unused"));
+    }
+
+    #[test]
+    fn uses_parameter_enum_overrides() {
+        let parameters = [Enumerator {
+            name: "InternalShutterType".to_string(),
+            value: "PI_V(Enumeration, Collection, 1)".to_string(),
+        }];
+        // `PARAMETER_ENUMS` maps `InternalShutterType` to `ShutterType`, which
+        // its name alone wouldn't find
+        let names = ["ShutterType".to_string()];
+        let found = parameter_enums(&parameters, &names).expect("the override should apply");
+        assert_eq!(
+            found,
+            [("InternalShutterType".to_string(), "ShutterType".to_string())]
+        );
+        // an override naming an enum the headers lack is an error
+        let missing = parameter_enums(&parameters, &["Other".to_string()])
+            .expect_err("an override to a missing enum should fail");
+        assert!(missing.contains("PicamShutterType"), "{missing}");
+    }
+
+    #[test]
+    fn colliding_value_names_are_an_error() {
+        let header = "
+            typedef enum PicamClash { PicamClash_UVBlue = 1, PicamClash_UvBlue = 2 } PicamClash;
+            typedef enum PicamClashMask
+            {
+                PicamClashMask_UVBit = 0x1,
+                PicamClashMask_UvBit = 0x2
+            } PicamClashMask;
+        ";
+        for value_enum in ["Clash", "ClashMask"] {
+            let parameter_enums = [("Clash".to_string(), value_enum.to_string())];
+            let error = render_value_enums(header, &parameter_enums)
+                .expect_err("a name collision should fail");
+            assert!(error.contains("would both be"), "{value_enum}: {error}");
+        }
+    }
+
+    #[test]
+    fn recognizes_zero_values() {
+        for zero in ["0", "0x0", "0x000"] {
+            assert!(is_zero(zero), "{zero} is zero");
+        }
+        for nonzero in ["1", "0x001", "1 << 2"] {
+            assert!(!is_zero(nonzero), "{nonzero} isn't zero");
+        }
     }
 
     #[test]
@@ -685,7 +1046,7 @@ mod tests {
             name: name.to_string(),
             value: "PI_V(FloatingPoint, Range, 1)".to_string(),
         });
-        assert!(render_parameters(&enumerators).is_err());
+        assert!(render_parameters(&enumerators, &[]).is_err());
     }
 
     #[test]

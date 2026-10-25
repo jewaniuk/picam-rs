@@ -76,7 +76,46 @@ fn main() {
         .newtype_enum("^PicamConstraintScope") // same exception, same reason
         .newtype_enum("^PicamConstraintSeverity") // same exception, same reason
         .newtype_enum("^PicamConstraintCategory") // same exception, same reason
+        .newtype_enum("^PicamActiveShutter$") // a hardware value enum, same reason
+        .newtype_enum("^PicamAdcAnalogGain$") // a hardware value enum, same reason
+        .newtype_enum("^PicamAdcQuality$") // a hardware value enum, same reason
+        .newtype_enum("^PicamCenterWavelengthStatus$") // a hardware value enum, same reason
+        .newtype_enum("^PicamCoolingFanStatus$") // a hardware value enum, same reason
+        .newtype_enum("^PicamEMIccdGainControlMode$") // a hardware value enum, same reason
+        .newtype_enum("^PicamGatingMode$") // a hardware value enum, same reason
+        .newtype_enum("^PicamGatingSpeed$") // a hardware value enum, same reason
+        .newtype_enum("^PicamGratingCoating$") // a hardware value enum, same reason
+        .newtype_enum("^PicamGratingType$") // a hardware value enum, same reason
+        .newtype_enum("^PicamIntensifierStatus$") // a hardware value enum, same reason
+        .newtype_enum("^PicamLaserOutputMode$") // a hardware value enum, same reason
+        .newtype_enum("^PicamLaserStatus$") // a hardware value enum, same reason
+        .newtype_enum("^PicamLightSource$") // a hardware value enum, same reason
+        .newtype_enum("^PicamLightSourceStatus$") // a hardware value enum, same reason
+        .newtype_enum("^PicamOutputSignal$") // a hardware value enum, same reason
+        .newtype_enum("^PicamPhosphorType$") // a hardware value enum, same reason
+        .newtype_enum("^PicamPhotocathodeSensitivity$") // a hardware value enum, same reason
+        .newtype_enum("^PicamPhotonDetectionMode$") // a hardware value enum, same reason
+        .newtype_enum("^PicamPixelFormat$") // a hardware value enum, same reason
+        .newtype_enum("^PicamReadoutControlMode$") // a hardware value enum, same reason
+        .newtype_enum("^PicamSensorTemperatureStatus$") // a hardware value enum, same reason
+        .newtype_enum("^PicamSensorType$") // a hardware value enum, same reason
+        .newtype_enum("^PicamShutterStatus$") // a hardware value enum, same reason
+        .newtype_enum("^PicamShutterTimingMode$") // a hardware value enum, same reason
+        .newtype_enum("^PicamShutterType$") // a hardware value enum, same reason
+        .newtype_enum("^PicamTriggerCoupling$") // a hardware value enum, same reason
+        .newtype_enum("^PicamTriggerDetermination$") // a hardware value enum, same reason
+        .newtype_enum("^PicamTriggerResponse$") // a hardware value enum, same reason
+        .newtype_enum("^PicamTriggerSource$") // a hardware value enum, same reason
+        .newtype_enum("^PicamTriggerStatus$") // a hardware value enum, same reason
+        .newtype_enum("^PicamTriggerTermination$") // a hardware value enum, same reason
+        .newtype_enum("^PicamVacuumStatus$") // a hardware value enum, same reason
         .bitfield_enum("^PicamRoisConstraintRulesMask$")
+        .bitfield_enum("^PicamCcdCharacteristicsMask$")
+        .bitfield_enum("^PicamGateTrackingMask$")
+        .bitfield_enum("^PicamIntensifierOptionsMask$")
+        .bitfield_enum("^PicamModulationTrackingMask$")
+        .bitfield_enum("^PicamOrientationMask$")
+        .bitfield_enum("^PicamTimeStampsMask$")
         .allowlist_function("Picam.*")
         .allowlist_type("Picam.*")
         .allowlist_type("^pi[a-z0-9]+$");
