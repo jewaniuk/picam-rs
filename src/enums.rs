@@ -98,3 +98,23 @@ macro_rules! impl_mask_value {
 }
 
 include!("generated/enums.rs");
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::convert::assert_round_trips;
+
+    #[test]
+    fn generated_enums_round_trip() {
+        assert_round_trips!(AdcQuality, sys::PicamAdcQuality, 6);
+        assert_round_trips!(ShutterTimingMode, sys::PicamShutterTimingMode, 4);
+    }
+
+    #[test]
+    fn masks_keep_unknown_bits() {
+        let orientation = Orientation::from_bits_retain(0x1 | 0x40);
+        assert!(orientation.contains(Orientation::FLIPPED_HORIZONTALLY));
+        assert!(!orientation.contains(Orientation::FLIPPED_VERTICALLY));
+        assert_eq!(orientation.bits(), 0x41);
+    }
+}
