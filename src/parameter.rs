@@ -1,13 +1,15 @@
 //! PICam parameter identifiers and value access.
 
-use crate::convert::{collect_raw_array, define_picam_enum};
+use crate::convert::{collect_raw_array, define_picam_enum, enumeration_string};
 use crate::error::{Result, picam_call};
+use crate::library::Library;
 use crate::sys;
 
 define_picam_enum!(
     /// How a camera connects to the computer (PICam manual 4.1).
     ComputerInterface,
     sys::PicamComputerInterface,
+    PicamEnumeratedType_ComputerInterface,
     /// USB 2.0.
     Usb2 = PicamComputerInterface_Usb2,
     /// USB 3.0.
@@ -24,6 +26,7 @@ define_picam_enum!(
     /// to get and set it (PICam manual 5.1.1.42).
     ValueType,
     sys::PicamValueType,
+    PicamEnumeratedType_ValueType,
     /// A whole number, used as `i32`.
     Integer = PicamValueType_Integer,
     /// A true/false value, used as `i32` (zero is false).
@@ -46,6 +49,7 @@ define_picam_enum!(
     /// How a parameter's value may be accessed (PICam manual 5.1.2.1).
     ValueAccess,
     sys::PicamValueAccess,
+    PicamEnumeratedType_ValueAccess,
     /// The value can only be read.
     ReadOnly = PicamValueAccess_ReadOnly,
     /// The value can be read and written, but only one value is allowed.
@@ -53,137 +57,15 @@ define_picam_enum!(
     /// The value can be read and written.
     ReadWrite = PicamValueAccess_ReadWrite,
 );
-define_picam_enum!(
-    /// Identifies one of PICam's enums, for example the one a parameter's
-    /// value belongs to (PICam manual 3.1).
-    EnumeratedType,
-    sys::PicamEnumeratedType,
-    /// PICam's `PicamError` enum.
-    Error = PicamEnumeratedType_Error,
-    /// PICam's `PicamEnumeratedType` enum.
-    Enumerated = PicamEnumeratedType_EnumeratedType,
-    /// PICam's `PicamModel` enum.
-    Model = PicamEnumeratedType_Model,
-    /// PICam's `PicamComputerInterface` enum.
-    ComputerInterface = PicamEnumeratedType_ComputerInterface,
-    /// PICam's `PicamDiscoveryAction` enum.
-    DiscoveryAction = PicamEnumeratedType_DiscoveryAction,
-    /// PICam's `PicamHandleType` enum.
-    HandleType = PicamEnumeratedType_HandleType,
-    /// PICam's `PicamValueType` enum.
-    ValueType = PicamEnumeratedType_ValueType,
-    /// PICam's `PicamConstraintType` enum.
-    ConstraintType = PicamEnumeratedType_ConstraintType,
-    /// PICam's `PicamParameter` enum.
-    Parameter = PicamEnumeratedType_Parameter,
-    /// PICam's `PicamActiveShutter` enum.
-    ActiveShutter = PicamEnumeratedType_ActiveShutter,
-    /// PICam's `PicamAdcAnalogGain` enum.
-    AdcAnalogGain = PicamEnumeratedType_AdcAnalogGain,
-    /// PICam's `PicamAdcQuality` enum.
-    AdcQuality = PicamEnumeratedType_AdcQuality,
-    /// PICam's `PicamCcdCharacteristicsMask` enum.
-    CcdCharacteristicsMask = PicamEnumeratedType_CcdCharacteristicsMask,
-    /// PICam's `PicamCenterWavelengthStatus` enum.
-    CenterWavelengthStatus = PicamEnumeratedType_CenterWavelengthStatus,
-    /// PICam's `PicamCoolingFanStatus` enum.
-    CoolingFanStatus = PicamEnumeratedType_CoolingFanStatus,
-    /// PICam's `PicamEMIccdGainControlMode` enum.
-    EMIccdGainControlMode = PicamEnumeratedType_EMIccdGainControlMode,
-    /// PICam's `PicamGateTrackingMask` enum.
-    GateTrackingMask = PicamEnumeratedType_GateTrackingMask,
-    /// PICam's `PicamGatingMode` enum.
-    GatingMode = PicamEnumeratedType_GatingMode,
-    /// PICam's `PicamGatingSpeed` enum.
-    GatingSpeed = PicamEnumeratedType_GatingSpeed,
-    /// PICam's `PicamGratingCoating` enum.
-    GratingCoating = PicamEnumeratedType_GratingCoating,
-    /// PICam's `PicamGratingType` enum.
-    GratingType = PicamEnumeratedType_GratingType,
-    /// PICam's `PicamIntensifierOptionsMask` enum.
-    IntensifierOptionsMask = PicamEnumeratedType_IntensifierOptionsMask,
-    /// PICam's `PicamIntensifierStatus` enum.
-    IntensifierStatus = PicamEnumeratedType_IntensifierStatus,
-    /// PICam's `PicamLaserOutputMode` enum.
-    LaserOutputMode = PicamEnumeratedType_LaserOutputMode,
-    /// PICam's `PicamLaserStatus` enum.
-    LaserStatus = PicamEnumeratedType_LaserStatus,
-    /// PICam's `PicamLightSource` enum.
-    LightSource = PicamEnumeratedType_LightSource,
-    /// PICam's `PicamLightSourceStatus` enum.
-    LightSourceStatus = PicamEnumeratedType_LightSourceStatus,
-    /// PICam's `PicamModulationTrackingMask` enum.
-    ModulationTrackingMask = PicamEnumeratedType_ModulationTrackingMask,
-    /// PICam's `PicamOrientationMask` enum.
-    OrientationMask = PicamEnumeratedType_OrientationMask,
-    /// PICam's `PicamOutputSignal` enum.
-    OutputSignal = PicamEnumeratedType_OutputSignal,
-    /// PICam's `PicamPhosphorType` enum.
-    PhosphorType = PicamEnumeratedType_PhosphorType,
-    /// PICam's `PicamPhotocathodeSensitivity` enum.
-    PhotocathodeSensitivity = PicamEnumeratedType_PhotocathodeSensitivity,
-    /// PICam's `PicamPhotonDetectionMode` enum.
-    PhotonDetectionMode = PicamEnumeratedType_PhotonDetectionMode,
-    /// PICam's `PicamPixelFormat` enum.
-    PixelFormat = PicamEnumeratedType_PixelFormat,
-    /// PICam's `PicamReadoutControlMode` enum.
-    ReadoutControlMode = PicamEnumeratedType_ReadoutControlMode,
-    /// PICam's `PicamSensorTemperatureStatus` enum.
-    SensorTemperatureStatus = PicamEnumeratedType_SensorTemperatureStatus,
-    /// PICam's `PicamSensorType` enum.
-    SensorType = PicamEnumeratedType_SensorType,
-    /// PICam's `PicamShutterStatus` enum.
-    ShutterStatus = PicamEnumeratedType_ShutterStatus,
-    /// PICam's `PicamShutterTimingMode` enum.
-    ShutterTimingMode = PicamEnumeratedType_ShutterTimingMode,
-    /// PICam's `PicamShutterType` enum.
-    ShutterType = PicamEnumeratedType_ShutterType,
-    /// PICam's `PicamTimeStampsMask` enum.
-    TimeStampsMask = PicamEnumeratedType_TimeStampsMask,
-    /// PICam's `PicamTriggerCoupling` enum.
-    TriggerCoupling = PicamEnumeratedType_TriggerCoupling,
-    /// PICam's `PicamTriggerDetermination` enum.
-    TriggerDetermination = PicamEnumeratedType_TriggerDetermination,
-    /// PICam's `PicamTriggerResponse` enum.
-    TriggerResponse = PicamEnumeratedType_TriggerResponse,
-    /// PICam's `PicamTriggerSource` enum.
-    TriggerSource = PicamEnumeratedType_TriggerSource,
-    /// PICam's `PicamTriggerStatus` enum.
-    TriggerStatus = PicamEnumeratedType_TriggerStatus,
-    /// PICam's `PicamTriggerTermination` enum.
-    TriggerTermination = PicamEnumeratedType_TriggerTermination,
-    /// PICam's `PicamVacuumStatus` enum.
-    VacuumStatus = PicamEnumeratedType_VacuumStatus,
-    /// PICam's `PicamValueAccess` enum.
-    ValueAccess = PicamEnumeratedType_ValueAccess,
-    /// PICam's `PicamDynamicsMask` enum.
-    DynamicsMask = PicamEnumeratedType_DynamicsMask,
-    /// PICam's `PicamConstraintScope` enum.
-    ConstraintScope = PicamEnumeratedType_ConstraintScope,
-    /// PICam's `PicamConstraintSeverity` enum.
-    ConstraintSeverity = PicamEnumeratedType_ConstraintSeverity,
-    /// PICam's `PicamConstraintCategory` enum.
-    ConstraintCategory = PicamEnumeratedType_ConstraintCategory,
-    /// PICam's `PicamRoisConstraintRulesMask` enum.
-    RoisConstraintRulesMask = PicamEnumeratedType_RoisConstraintRulesMask,
-    /// PICam's `PicamAcquisitionErrorsMask` enum.
-    AcquisitionErrorsMask = PicamEnumeratedType_AcquisitionErrorsMask,
-    /// PICam's `PicamAcquisitionState` enum.
-    AcquisitionState = PicamEnumeratedType_AcquisitionState,
-    /// PICam's `PicamAcquisitionStateErrorsMask` enum.
-    AcquisitionStateErrorsMask = PicamEnumeratedType_AcquisitionStateErrorsMask,
-);
+include!("generated/enumerated_types.rs");
 
 macro_rules! define_parameters {
-    ($($name:ident = $raw:ident),*$(,)?) => {
+    ($($(#[$meta:meta])* $name:ident = $raw:ident),* $(,)?) => {
         /// Identifies a specific camera parameter (exposure time, ROI,
         /// gain, and so on).
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub enum Parameter{
-            $(
-                #[doc = concat!("PICam's `", stringify!($raw), "` parameter.")]
-                $name,
-            )*
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub enum Parameter {
+            $($(#[$meta])* $name,)*
             /// A parameter this crate doesn't recognize, most likely
             /// because the installed PICam runtime is newer than the
             /// SDK version these bindings were generated against.
@@ -204,183 +86,24 @@ macro_rules! define_parameters {
                     Parameter::Unknown(code) => sys::PicamParameter(code),
                 }
             }
+
+            /// Gets PICam's name for this parameter.
+            ///
+            /// # Errors
+            ///
+            /// Returns an error if PICam is unable to name this parameter.
+            pub fn name(self, library: &Library) -> Result<String> {
+                enumeration_string(
+                    library,
+                    sys::PicamEnumeratedType::PicamEnumeratedType_Parameter,
+                    self.to_raw().0,
+                )
+            }
         }
     };
 }
 
-define_parameters! {
-    ExposureTime = PicamParameter_ExposureTime,
-    ExposureTimeResult = PicamParameter_ExposureTimeResult,
-    ShutterTimingMode = PicamParameter_ShutterTimingMode,
-    ShutterOpeningDelay = PicamParameter_ShutterOpeningDelay,
-    ShutterClosingDelay = PicamParameter_ShutterClosingDelay,
-    ShutterDelayResolution = PicamParameter_ShutterDelayResolution,
-    InternalShutterType = PicamParameter_InternalShutterType,
-    InternalShutterStatus = PicamParameter_InternalShutterStatus,
-    ExternalShutterType = PicamParameter_ExternalShutterType,
-    ExternalShutterStatus = PicamParameter_ExternalShutterStatus,
-    ActiveShutter = PicamParameter_ActiveShutter,
-    InactiveShutterTimingModeResult = PicamParameter_InactiveShutterTimingModeResult,
-    GatingMode = PicamParameter_GatingMode,
-    RepetitiveGate = PicamParameter_RepetitiveGate,
-    SequentialStartingGate = PicamParameter_SequentialStartingGate,
-    SequentialEndingGate = PicamParameter_SequentialEndingGate,
-    SequentialGateStepCount = PicamParameter_SequentialGateStepCount,
-    SequentialGateStepIterations = PicamParameter_SequentialGateStepIterations,
-    DifStartingGate = PicamParameter_DifStartingGate,
-    DifEndingGate = PicamParameter_DifEndingGate,
-    EnableIntensifier = PicamParameter_EnableIntensifier,
-    IntensifierStatus = PicamParameter_IntensifierStatus,
-    IntensifierGain = PicamParameter_IntensifierGain,
-    EMIccdGainControlMode = PicamParameter_EMIccdGainControlMode,
-    EMIccdGain = PicamParameter_EMIccdGain,
-    PhosphorDecayDelay = PicamParameter_PhosphorDecayDelay,
-    PhosphorDecayDelayResolution = PicamParameter_PhosphorDecayDelayResolution,
-    BracketGating = PicamParameter_BracketGating,
-    IntensifierOptions = PicamParameter_IntensifierOptions,
-    EnableModulation = PicamParameter_EnableModulation,
-    ModulationDuration = PicamParameter_ModulationDuration,
-    ModulationFrequency = PicamParameter_ModulationFrequency,
-    RepetitiveModulationPhase = PicamParameter_RepetitiveModulationPhase,
-    SequentialStartingModulationPhase = PicamParameter_SequentialStartingModulationPhase,
-    SequentialEndingModulationPhase = PicamParameter_SequentialEndingModulationPhase,
-    CustomModulationSequence = PicamParameter_CustomModulationSequence,
-    PhotocathodeSensitivity = PicamParameter_PhotocathodeSensitivity,
-    GatingSpeed = PicamParameter_GatingSpeed,
-    PhosphorType = PicamParameter_PhosphorType,
-    IntensifierDiameter = PicamParameter_IntensifierDiameter,
-    AdcSpeed = PicamParameter_AdcSpeed,
-    AdcBitDepth = PicamParameter_AdcBitDepth,
-    AdcAnalogGain = PicamParameter_AdcAnalogGain,
-    AdcQuality = PicamParameter_AdcQuality,
-    AdcEMGain = PicamParameter_AdcEMGain,
-    CorrectPixelBias = PicamParameter_CorrectPixelBias,
-    TriggerSource = PicamParameter_TriggerSource,
-    TriggerResponse = PicamParameter_TriggerResponse,
-    TriggerDetermination = PicamParameter_TriggerDetermination,
-    TriggerFrequency = PicamParameter_TriggerFrequency,
-    TriggerTermination = PicamParameter_TriggerTermination,
-    TriggerCoupling = PicamParameter_TriggerCoupling,
-    TriggerThreshold = PicamParameter_TriggerThreshold,
-    TriggerDelay = PicamParameter_TriggerDelay,
-    OutputSignal = PicamParameter_OutputSignal,
-    InvertOutputSignal = PicamParameter_InvertOutputSignal,
-    OutputSignal2 = PicamParameter_OutputSignal2,
-    InvertOutputSignal2 = PicamParameter_InvertOutputSignal2,
-    EnableAuxOutput = PicamParameter_EnableAuxOutput,
-    AuxOutput = PicamParameter_AuxOutput,
-    EnableSyncMaster = PicamParameter_EnableSyncMaster,
-    SyncMaster2Delay = PicamParameter_SyncMaster2Delay,
-    EnableModulationOutputSignal = PicamParameter_EnableModulationOutputSignal,
-    ModulationOutputSignalFrequency = PicamParameter_ModulationOutputSignalFrequency,
-    ModulationOutputSignalAmplitude = PicamParameter_ModulationOutputSignalAmplitude,
-    AnticipateTrigger = PicamParameter_AnticipateTrigger,
-    DelayFromPreTrigger = PicamParameter_DelayFromPreTrigger,
-    ReadoutControlMode = PicamParameter_ReadoutControlMode,
-    ReadoutTimeCalculation = PicamParameter_ReadoutTimeCalculation,
-    ReadoutPortCount = PicamParameter_ReadoutPortCount,
-    ReadoutOrientation = PicamParameter_ReadoutOrientation,
-    KineticsWindowHeight = PicamParameter_KineticsWindowHeight,
-    SeNsRWindowHeight = PicamParameter_SeNsRWindowHeight,
-    VerticalShiftRate = PicamParameter_VerticalShiftRate,
-    RowTimeResult = PicamParameter_RowTimeResult,
-    Accumulations = PicamParameter_Accumulations,
-    EnableNondestructiveReadout = PicamParameter_EnableNondestructiveReadout,
-    NondestructiveReadoutPeriod = PicamParameter_NondestructiveReadoutPeriod,
-    Rois = PicamParameter_Rois,
-    NormalizeOrientation = PicamParameter_NormalizeOrientation,
-    DisableDataFormatting = PicamParameter_DisableDataFormatting,
-    ReadoutCount = PicamParameter_ReadoutCount,
-    ExactReadoutCountMaximum = PicamParameter_ExactReadoutCountMaximum,
-    PixelFormat = PicamParameter_PixelFormat,
-    FrameSize = PicamParameter_FrameSize,
-    FrameStride = PicamParameter_FrameStride,
-    FramesPerReadout = PicamParameter_FramesPerReadout,
-    ReadoutStride = PicamParameter_ReadoutStride,
-    PixelBitDepth = PicamParameter_PixelBitDepth,
-    ReadoutRateCalculation = PicamParameter_ReadoutRateCalculation,
-    OnlineReadoutRateCalculation = PicamParameter_OnlineReadoutRateCalculation,
-    FrameRateCalculation = PicamParameter_FrameRateCalculation,
-    Orientation = PicamParameter_Orientation,
-    TimeStamps = PicamParameter_TimeStamps,
-    TimeStampResolution = PicamParameter_TimeStampResolution,
-    TimeStampBitDepth = PicamParameter_TimeStampBitDepth,
-    TrackFrames = PicamParameter_TrackFrames,
-    FrameTrackingBitDepth = PicamParameter_FrameTrackingBitDepth,
-    GateTracking = PicamParameter_GateTracking,
-    GateTrackingBitDepth = PicamParameter_GateTrackingBitDepth,
-    ModulationTracking = PicamParameter_ModulationTracking,
-    ModulationTrackingBitDepth = PicamParameter_ModulationTrackingBitDepth,
-    PhotonDetectionMode = PicamParameter_PhotonDetectionMode,
-    PhotonDetectionThreshold = PicamParameter_PhotonDetectionThreshold,
-    CorrectForDarkCurrent = PicamParameter_CorrectForDarkCurrent,
-    Despeckle = PicamParameter_Despeckle,
-    SensorType = PicamParameter_SensorType,
-    CcdCharacteristics = PicamParameter_CcdCharacteristics,
-    SensorActiveWidth = PicamParameter_SensorActiveWidth,
-    SensorActiveHeight = PicamParameter_SensorActiveHeight,
-    SensorActiveExtendedHeight = PicamParameter_SensorActiveExtendedHeight,
-    SensorActiveLeftMargin = PicamParameter_SensorActiveLeftMargin,
-    SensorActiveTopMargin = PicamParameter_SensorActiveTopMargin,
-    SensorActiveRightMargin = PicamParameter_SensorActiveRightMargin,
-    SensorActiveBottomMargin = PicamParameter_SensorActiveBottomMargin,
-    SensorMaskedHeight = PicamParameter_SensorMaskedHeight,
-    SensorMaskedTopMargin = PicamParameter_SensorMaskedTopMargin,
-    SensorMaskedBottomMargin = PicamParameter_SensorMaskedBottomMargin,
-    SensorSecondaryMaskedHeight = PicamParameter_SensorSecondaryMaskedHeight,
-    SensorSecondaryActiveHeight = PicamParameter_SensorSecondaryActiveHeight,
-    PixelWidth = PicamParameter_PixelWidth,
-    PixelHeight = PicamParameter_PixelHeight,
-    PixelGapWidth = PicamParameter_PixelGapWidth,
-    PixelGapHeight = PicamParameter_PixelGapHeight,
-    ApplicableStarDefectMapID = PicamParameter_ApplicableStarDefectMapID,
-    ActiveWidth = PicamParameter_ActiveWidth,
-    ActiveHeight = PicamParameter_ActiveHeight,
-    ActiveExtendedHeight = PicamParameter_ActiveExtendedHeight,
-    ActiveLeftMargin = PicamParameter_ActiveLeftMargin,
-    ActiveTopMargin = PicamParameter_ActiveTopMargin,
-    ActiveRightMargin = PicamParameter_ActiveRightMargin,
-    ActiveBottomMargin = PicamParameter_ActiveBottomMargin,
-    MaskedHeight = PicamParameter_MaskedHeight,
-    MaskedTopMargin = PicamParameter_MaskedTopMargin,
-    MaskedBottomMargin = PicamParameter_MaskedBottomMargin,
-    SecondaryMaskedHeight = PicamParameter_SecondaryMaskedHeight,
-    SecondaryActiveHeight = PicamParameter_SecondaryActiveHeight,
-    CleanSectionFinalHeight = PicamParameter_CleanSectionFinalHeight,
-    CleanSectionFinalHeightCount = PicamParameter_CleanSectionFinalHeightCount,
-    CleanSerialRegister = PicamParameter_CleanSerialRegister,
-    CleanCycleCount = PicamParameter_CleanCycleCount,
-    CleanCycleHeight = PicamParameter_CleanCycleHeight,
-    CleanBeforeExposure = PicamParameter_CleanBeforeExposure,
-    CleanUntilTrigger = PicamParameter_CleanUntilTrigger,
-    StopCleaningOnPreTrigger = PicamParameter_StopCleaningOnPreTrigger,
-    SensorTemperatureSetPoint = PicamParameter_SensorTemperatureSetPoint,
-    SensorTemperatureReading = PicamParameter_SensorTemperatureReading,
-    SensorTemperatureStatus = PicamParameter_SensorTemperatureStatus,
-    DisableCoolingFan = PicamParameter_DisableCoolingFan,
-    CoolingFanStatus = PicamParameter_CoolingFanStatus,
-    EnableSensorWindowHeater = PicamParameter_EnableSensorWindowHeater,
-    VacuumStatus = PicamParameter_VacuumStatus,
-    CenterWavelengthSetPoint = PicamParameter_CenterWavelengthSetPoint,
-    CenterWavelengthReading = PicamParameter_CenterWavelengthReading,
-    CenterWavelengthStatus = PicamParameter_CenterWavelengthStatus,
-    GratingType = PicamParameter_GratingType,
-    GratingCoating = PicamParameter_GratingCoating,
-    GratingGrooveDensity = PicamParameter_GratingGrooveDensity,
-    GratingBlazingWavelength = PicamParameter_GratingBlazingWavelength,
-    FocalLength = PicamParameter_FocalLength,
-    InclusionAngle = PicamParameter_InclusionAngle,
-    SensorAngle = PicamParameter_SensorAngle,
-    LaserOutputMode = PicamParameter_LaserOutputMode,
-    LaserPower = PicamParameter_LaserPower,
-    LaserWavelength = PicamParameter_LaserWavelength,
-    LaserStatus = PicamParameter_LaserStatus,
-    InputTriggerStatus = PicamParameter_InputTriggerStatus,
-    LightSource = PicamParameter_LightSource,
-    LightSourceStatus = PicamParameter_LightSourceStatus,
-    Age = PicamParameter_Age,
-    LifeExpectancy = PicamParameter_LifeExpectancy,
-}
+include!("generated/parameters.rs");
 
 /// The crate-private halves of the value traits, which seal them.
 ///
@@ -1014,5 +737,29 @@ mod tests {
         assert_round_trips!(ValueType, sys::PicamValueType, 8);
         assert_round_trips!(ValueAccess, sys::PicamValueAccess, 3);
         assert_round_trips!(EnumeratedType, sys::PicamEnumeratedType, 57);
+    }
+
+    #[test]
+    fn parameters_round_trip() {
+        // picam packs a parameter's constraint type, value type and number
+        // into its code (`PI_V` in picam.h), so cover every combination
+        let mut named = 0;
+        for constraint_type in 0..8 {
+            for value_type in 0..10 {
+                for number in 0..512 {
+                    let code = (constraint_type << 24) + (value_type << 16) + number;
+                    let parameter = Parameter::from_raw(sys::PicamParameter(code));
+                    assert_eq!(
+                        parameter.to_raw().0,
+                        code,
+                        "{parameter:?} should keep {code}"
+                    );
+                    if !matches!(parameter, Parameter::Unknown(_)) {
+                        named += 1;
+                    }
+                }
+            }
+        }
+        assert_eq!(named, 171, "every parameter in picam.h should be named");
     }
 }

@@ -31,7 +31,8 @@
       "Edit(/.claude/**)",
       "Edit(/build.rs)",
       "Edit(/Cargo.toml)",
-      "Edit(/xtask/**)",
+      "Edit(/xtask/src/hook.rs)",
+      "Edit(/xtask/src/gate.rs)",
       "Bash(cargo add *)",
       "Bash(cargo remove *)"
     ],

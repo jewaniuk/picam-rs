@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use crate::cargo;
+use crate::{cargo, generate};
 
 /// What to do with the output of each check.
 #[derive(Clone, Copy)]
@@ -16,17 +16,21 @@ pub enum Output {
     Capture,
 }
 
-/// Runs `cargo fmt --check`, the clippy gate and, on Windows, the tests,
-/// stopping at the first failure.
+/// Runs the generated-code check, `cargo fmt --check`, the clippy gate and
+/// the tests, stopping at the first failure.
 ///
-/// The tests are skipped on other platforms because they need the PICam
-/// runtime to link.
+/// The `picam-rs` tests are skipped on platforms other than Windows because
+/// they need the PICam runtime to link. The `xtask` tests always run.
 ///
 /// # Errors
 ///
 /// Returns an error naming the check that failed, with its output when
 /// `output` is [`Output::Capture`].
 pub fn run(root: &Path, output: Output) -> Result<(), String> {
+    // in-process, so it runs before any cargo command
+    eprintln!("gate: generated");
+    generate::check(root)?;
+
     let mut checks: Vec<(&str, &[&str])> = vec![
         ("format", &["fmt", "--all", "--check"]),
         (
@@ -45,9 +49,10 @@ pub fn run(root: &Path, output: Output) -> Result<(), String> {
         ),
     ];
     if cfg!(windows) {
-        checks.push(("tests", &["test", "-p", "picam-rs"]));
+        checks.push(("tests", &["test", "-p", "picam-rs", "-p", "xtask"]));
     } else {
-        eprintln!("gate: skipping tests, they only link on Windows");
+        eprintln!("gate: skipping the picam-rs tests, they only link on Windows");
+        checks.push(("tests", &["test", "-p", "xtask"]));
     }
 
     for (name, args) in checks {

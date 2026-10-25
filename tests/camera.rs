@@ -21,6 +21,14 @@ fn demo_camera_round_trip() {
         .first()
         .expect("PICam should offer at least one demo model");
 
+    let model_name = model
+        .name(&test_library.library)
+        .expect("demo model should be named");
+    assert!(
+        !model_name.is_empty(),
+        "demo model name should not be empty"
+    );
+
     let id = CameraId::connect_demo(model, SERIAL_NUMBER).expect("demo camera should connect");
     assert!(id.is_demo().expect("demo status should be queried"));
 

@@ -1,6 +1,7 @@
 use std::ffi::CStr;
 
-use crate::error::{Error, Result};
+use crate::error::{Error, Result, picam_call};
+use crate::library::Library;
 use crate::sys;
 
 macro_rules! define_picam_enum {
@@ -8,6 +9,7 @@ macro_rules! define_picam_enum {
         $(#[$enum_meta:meta])*
         $enum_name:ident,
         $raw_ty:path,
+        $enumerated:ident,
         $($(#[$meta:meta])* $name:ident = $raw:ident),* $(,)?
     ) => {
         $(#[$enum_meta])*
@@ -34,6 +36,19 @@ macro_rules! define_picam_enum {
                     $enum_name::Unknown(code) => $raw_ty(code),
                 }
             }
+
+            /// Gets PICam's name for this value.
+            ///
+            /// # Errors
+            ///
+            /// Returns an error if PICam is unable to name this value.
+            pub fn name(self, library: &$crate::Library) -> $crate::Result<String> {
+                $crate::convert::enumeration_string(
+                    library,
+                    $crate::sys::PicamEnumeratedType::$enumerated,
+                    self.to_raw().0,
+                )
+            }
         }
     };
 }
@@ -57,6 +72,37 @@ macro_rules! assert_round_trips {
 }
 #[cfg(test)]
 pub(crate) use assert_round_trips;
+
+/// Gets PICam's name for `value`, a value of the enum `enumerated_type`
+/// identifies.
+///
+/// `_library` is only there as proof that PICam is initialized, which
+/// `Picam_GetEnumerationString` needs.
+pub(crate) fn enumeration_string(
+    _library: &Library,
+    enumerated_type: sys::PicamEnumeratedType,
+    value: sys::piint,
+) -> Result<String> {
+    let mut ptr: *const sys::pichar = std::ptr::null();
+    picam_call!(sys::Picam_GetEnumerationString(
+        enumerated_type,
+        value,
+        &mut ptr
+    ))?;
+
+    if ptr.is_null() {
+        return Err(Error::UnexpectedNullPointer);
+    }
+
+    // SAFETY: just checked `ptr` is non-null, and on success PICam returns a
+    // string it allocated (PICam manual 3.2.6), a C string with no length so
+    // nul-terminated, which stays valid until `Picam_DestroyString` below
+    let name = unsafe { CStr::from_ptr(ptr) }
+        .to_string_lossy()
+        .into_owned();
+    picam_call!(sys::Picam_DestroyString(ptr))?;
+    Ok(name)
+}
 
 /// Converts a fixed-size, nul-terminated C character array into an owned,
 /// lossily-converted `String`.

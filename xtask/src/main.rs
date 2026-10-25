@@ -7,12 +7,18 @@
 //!   wrapper, using `dead_code` warnings from `cargo check` on the raw
 //!   bindings in `sys` as the signal. Pass `--list` to also print every
 //!   function that is still unwrapped, grouped by header.
+//! - `generate`: writes the files in `src/generated/`, the lists taken
+//!   straight from the PICam headers. Pass `--check` to write nothing and
+//!   fail if they are out of date, or if a hand-written enum wrapper misses a
+//!   header value. See `generate.rs`.
 //! - `gate`: runs the checks a branch must pass before it is pushed or turned
-//!   into a pull request (formatting, clippy and, on Windows, the tests).
+//!   into a pull request (the generated-code check, formatting, clippy, the
+//!   `xtask` tests and, on Windows, the `picam-rs` tests).
 //! - `hook pre-bash` and `hook post-edit`: Claude Code hooks, run from
 //!   `.claude/settings.json` rather than by hand.
 
 mod gate;
+mod generate;
 mod hook;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -35,8 +41,8 @@ const HEADER_NAMES: [&str; 5] = [
 /// Where the PICam SDK installs its headers on Windows, matching `build.rs`.
 const DEFAULT_INCLUDE_DIR: &str = r"C:\Program Files\Princeton Instruments\PICam\Includes";
 
-const USAGE: &str =
-    "usage: cargo run -p xtask -- <progress [--list] | gate | hook <pre-bash | post-edit>>";
+const USAGE: &str = "usage: cargo run -p xtask -- \
+    <progress [--list] | generate [--check] | gate | hook <pre-bash | post-edit>>";
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -44,6 +50,8 @@ fn main() -> ExitCode {
     let root = workspace_root();
     let result = match args.as_slice() {
         ["progress", rest @ ..] => progress(&root, rest.contains(&"--list")),
+        ["generate"] => generate::write(&root),
+        ["generate", "--check"] => generate::check(&root),
         ["gate"] => gate::run(&root, gate::Output::Inherit),
         // hooks pick their own exit codes, see `hook`
         ["hook", "pre-bash"] => return hook::pre_bash(&root),

@@ -9,7 +9,14 @@ You review one chunk of work on `picam-rs`, a safe Rust wrapper around the Teled
 
 ## Rules
 
-- **You are read-only.** Never edit, create or delete files, never commit, never push, and never run a command that changes the working tree. Use Bash only to read: `git diff`, `git log`, `git show`, `cargo check`, `cargo clippy`, `cargo test` and `cargo run -p xtask -- progress`.
+- **You are read-only, and that includes git state.** Never edit, create or delete files, never commit or push, and never change the checked-out branch, the index, the stash or the working tree, not even briefly and not even if you mean to switch straight back. The other agent's work and the maintainer's checkout depend on the tree staying exactly as you found it.
+- **Run only these commands:**
+  - `git diff`, `git log`, `git show`, `git status`, `git branch --show-current`, `git ls-files` and `git grep`
+  - `cargo check`, `cargo clippy`, `cargo test`, `cargo doc` and `cargo fmt --check`
+  - `cargo run -p xtask -- progress` and `cargo run -p xtask -- generate --check`
+- **Never run** `git checkout`, `git switch`, `git stash`, `git restore`, `git reset`, `git worktree`, `git merge`, `git rebase`, `git apply`, `git clean`, `cargo fmt` without `--check`, `cargo run -p xtask -- generate` without `--check`, or `cargo add`, `cargo remove` or `cargo update`.
+- **To see `main`,** read it without checking it out: `git show main:path/to/file`, `git diff main...HEAD -- path` or `git grep pattern main`. If a check really needs `main` checked out, such as `cargo public-api` on `main`, don't run it. Say in the report that you skipped it, and the other agent will.
+- **If you change anything by mistake,** stop. Don't try to undo it yourself. Put exactly what you ran at the very top of your report, so the other agent can check the tree and put it right.
 - Report only. Fixing is the other agent's job.
 - Be specific. Every finding names a file and line and says what is wrong and why. "Looks fine" is not a finding, and neither is a vague worry you can't point to in the code.
 - Don't pad the report. If an item on the checklist is clean, say so in one line.
