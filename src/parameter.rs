@@ -314,7 +314,7 @@ use sealed::RawHandle;
 
 /// A value type PICam can get or set for a parameter.
 ///
-/// This trait is sealed: it is implemented for `i32`, `i64`, `f64`,
+/// This trait is sealed: it is implemented for `i32`, `bool`, `i64`, `f64`,
 /// `Vec<Roi>`, `Vec<Modulation>` and [`Pulse`], and can't be implemented
 /// outside this crate. It is meant to be used as a bound:
 ///
@@ -431,9 +431,9 @@ impl_parameter_info!(
 /// A value type that can be read directly from hardware, bypassing PICam's
 /// committed-value cache.
 ///
-/// This trait is sealed: it is implemented only for `i32` and `f64`, the two
-/// value types PICam supports this for, and can't be implemented outside this
-/// crate.
+/// This trait is sealed: it is implemented only for `i32`, `bool` and `f64`,
+/// the value types PICam supports this for, and can't be implemented outside
+/// this crate.
 pub trait ReadablePicamValue: PicamValue + sealed::RawReadablePicamValue {}
 
 macro_rules! impl_readable_value {
@@ -453,12 +453,43 @@ macro_rules! impl_readable_value {
 impl_readable_value!(i32, Picam_ReadParameterIntegerValue);
 impl_readable_value!(f64, Picam_ReadParameterFloatingPointValue);
 
+// picam gets and sets booleans through its integer calls, as 0 for false and
+// 1 for true (PICam manual 5.1.1.42, and 5.4.2 for which calls accept them)
+impl sealed::RawPicamValue for bool {
+    fn get(handle: RawHandle, parameter: Parameter) -> Result<Self> {
+        <i32 as sealed::RawPicamValue>::get(handle, parameter).map(|value| value != 0)
+    }
+
+    fn set(handle: RawHandle, parameter: Parameter, value: Self) -> Result<()> {
+        <i32 as sealed::RawPicamValue>::set(handle, parameter, i32::from(value))
+    }
+
+    fn default_value(handle: RawHandle, parameter: Parameter) -> Result<Self> {
+        <i32 as sealed::RawPicamValue>::default_value(handle, parameter).map(|value| value != 0)
+    }
+
+    fn can_set(handle: RawHandle, parameter: Parameter, value: Self) -> Result<bool> {
+        <i32 as sealed::RawPicamValue>::can_set(handle, parameter, i32::from(value))
+    }
+}
+
+impl PicamValue for bool {}
+
+impl sealed::RawReadablePicamValue for bool {
+    fn read(handle: RawHandle, parameter: Parameter) -> Result<Self> {
+        <i32 as sealed::RawReadablePicamValue>::read(handle, parameter).map(|value| value != 0)
+    }
+}
+
+impl ReadablePicamValue for bool {}
+
 /// A value type that can be set and applied to hardware immediately,
 /// without needing [`crate::Camera::commit_parameters`].
 ///
 /// This trait is sealed: it is implemented only for `i32`, `f64` and
 /// [`Pulse`], the three value types PICam supports this for, and can't be
-/// implemented outside this crate.
+/// implemented outside this crate. `bool` isn't one, since PICam only sets
+/// integer parameters online, not on/off ones (PICam manual 5.4.1.20).
 pub trait OnlineSettablePicamValue: PicamValue + sealed::RawOnlineSettablePicamValue {}
 
 macro_rules! impl_online_settable_scalar {
