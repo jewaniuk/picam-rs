@@ -65,12 +65,12 @@ fn check<T: PicamValue>(
             "{parameter:?}: default value rejected the handle's type"
         ));
     }
-    if let Ok(value) = current {
-        if let Err(Error::ParameterHasInvalidValueType) = camera.can_set(handle, value) {
-            findings
-                .problems
-                .push(format!("{parameter:?}: can set rejected the handle's type"));
-        }
+    if let Ok(value) = current
+        && let Err(Error::ParameterHasInvalidValueType) = camera.can_set(handle, value)
+    {
+        findings
+            .problems
+            .push(format!("{parameter:?}: can set rejected the handle's type"));
     }
 }
 
