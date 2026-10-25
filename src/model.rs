@@ -1,4 +1,4 @@
-//! Camera models.
+//! Hardware models, for cameras and accessories.
 
 use std::fmt;
 
@@ -7,7 +7,8 @@ use crate::error::Result;
 use crate::library::Library;
 use crate::sys;
 
-/// A camera model, as PICam identifies it.
+/// A hardware model, as PICam identifies it: a camera, or an accessory such
+/// as a lamp or laser (PICam manual 4.1).
 ///
 /// Every model in the PICam SDK this crate was generated from (5.15) has a
 /// constant here, named after PICam's own name for it, so
@@ -15,7 +16,7 @@ use crate::sys;
 /// model added by a newer PICam runtime, is still a valid `Model`: it just
 /// has no constant yet, and [`Model::name`] still works for it.
 ///
-/// Some values are series: a family of models rather than one camera, which
+/// Some values are series: a family of models rather than a single model, which
 /// PICam may use for older hardware whose exact model it doesn't know (PICam
 /// manual 4.1). [`Model::is_series`] tells them apart.
 ///
@@ -52,7 +53,7 @@ macro_rules! define_models {
             )*
 
             /// Reports whether this is a series: a family of models rather
-            /// than one camera.
+            /// than a single model.
             ///
             /// This comes from this crate's own list, taken from the PICam
             /// SDK it was generated from (5.15), where a series is a model

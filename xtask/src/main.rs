@@ -12,8 +12,8 @@
 //!   fail if they are out of date, or if a hand-written enum wrapper misses a
 //!   header value. See `generate.rs`.
 //! - `gate`: runs the checks a branch must pass before it is pushed or turned
-//!   into a pull request (the generated-code check, formatting, clippy and,
-//!   on Windows, the tests).
+//!   into a pull request (the generated-code check, formatting, clippy, the
+//!   `xtask` tests and, on Windows, the `picam-rs` tests).
 //! - `hook pre-bash` and `hook post-edit`: Claude Code hooks, run from
 //!   `.claude/settings.json` rather than by hand.
 
@@ -41,7 +41,8 @@ const HEADER_NAMES: [&str; 5] = [
 /// Where the PICam SDK installs its headers on Windows, matching `build.rs`.
 const DEFAULT_INCLUDE_DIR: &str = r"C:\Program Files\Princeton Instruments\PICam\Includes";
 
-const USAGE: &str = "usage: cargo run -p xtask -- \n    <progress [--list] | generate [--check] | gate | hook <pre-bash | post-edit>>";
+const USAGE: &str = "usage: cargo run -p xtask -- \
+    <progress [--list] | generate [--check] | gate | hook <pre-bash | post-edit>>";
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();

@@ -194,14 +194,16 @@ fn parse_enum(headers: &str, enum_name: &str) -> Result<Vec<Enumerator>, String>
         .find('{')
         .map(|offset| start + offset + 1)
         .ok_or_else(|| format!("no body found for `{enum_name}`"))?;
-    let close = headers[open..]
+    // strip comments before looking for the closing brace, so a `}` inside a
+    // comment can't end the body early
+    let rest = strip_comments(&headers[open..]);
+    let close = rest
         .find('}')
-        .map(|offset| open + offset)
         .ok_or_else(|| format!("unterminated body for `{enum_name}`"))?;
 
     let prefix = format!("{enum_name}_");
     let mut enumerators = Vec::new();
-    let body = strip_preprocessor_lines(&strip_comments(&headers[open..close]));
+    let body = strip_preprocessor_lines(&rest[..close]);
     for item in split_top_level(&body) {
         let item = item.trim();
         if item.is_empty() {
@@ -232,7 +234,10 @@ fn strip_comments(source: &str) -> String {
         match (block, line) {
             (Some(b), l) if l.is_none_or(|l| b < l) => {
                 out.push_str(&rest[..b]);
-                rest = rest[b..].find("*/").map_or("", |end| &rest[b + end + 2..]);
+                // search after the `/*` so `/*/` isn't taken as a whole comment
+                rest = rest[b + 2..]
+                    .find("*/")
+                    .map_or("", |end| &rest[b + 2 + end + 2..]);
             }
             (_, Some(l)) => {
                 out.push_str(&rest[..l]);
@@ -253,10 +258,7 @@ fn strip_preprocessor_lines(source: &str) -> String {
         .lines()
         .filter(|line| !line.trim_start().starts_with('#'))
         .collect::<Vec<_>>()
-        .join(
-            "
-",
-        )
+        .join("\n")
 }
 
 /// Splits on commas that aren't inside parentheses, so `PI_V(a, b, c)` stays
@@ -367,7 +369,7 @@ fn render_models(enumerators: &[Enumerator]) -> Result<String, String> {
         if is_series(name) {
             models.push_str(&format!(
                 "        /// PICam's `PicamModel_{name}` series: a family of models rather than\n        \
-                 /// one camera.\n"
+                 /// a single model.\n"
             ));
             series.push_str(&format!("        {constant},\n"));
         } else {
@@ -470,7 +472,8 @@ mod tests {
         typedef enum PicamThing
         {
         #define PI_V(v,c,n) ((v)+(c)+(n))
-            /* a block comment, with a comma */
+            /* a block comment, with a comma and a } */
+            /*/ a comment that starts oddly */
             PicamThing_One = 1, // a line comment, with a comma
             PicamThing_Two = PI_V(FloatingPoint, Range, 2),
             PicamThing_Three

@@ -3,10 +3,10 @@
 define_models! {
     models {
         /// PICam's `PicamModel_PIMteSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PI_MTE_SERIES = PicamModel_PIMteSeries,
         /// PICam's `PicamModel_PIMte1024Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PI_MTE_1024_SERIES = PicamModel_PIMte1024Series,
         /// PICam's `PicamModel_PIMte1024F` model.
         PI_MTE_1024F = PicamModel_PIMte1024F,
@@ -17,14 +17,14 @@ define_models! {
         /// PICam's `PicamModel_PIMte1024BUV` model.
         PI_MTE_1024BUV = PicamModel_PIMte1024BUV,
         /// PICam's `PicamModel_PIMte1024FTSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PI_MTE_1024FT_SERIES = PicamModel_PIMte1024FTSeries,
         /// PICam's `PicamModel_PIMte1024FT` model.
         PI_MTE_1024FT = PicamModel_PIMte1024FT,
         /// PICam's `PicamModel_PIMte1024BFT` model.
         PI_MTE_1024BFT = PicamModel_PIMte1024BFT,
         /// PICam's `PicamModel_PIMte1300Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PI_MTE_1300_SERIES = PicamModel_PIMte1300Series,
         /// PICam's `PicamModel_PIMte1300B` model.
         PI_MTE_1300B = PicamModel_PIMte1300B,
@@ -33,39 +33,39 @@ define_models! {
         /// PICam's `PicamModel_PIMte1300BR` model.
         PI_MTE_1300BR = PicamModel_PIMte1300BR,
         /// PICam's `PicamModel_PIMte2048Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PI_MTE_2048_SERIES = PicamModel_PIMte2048Series,
         /// PICam's `PicamModel_PIMte2048B` model.
         PI_MTE_2048B = PicamModel_PIMte2048B,
         /// PICam's `PicamModel_PIMte2048BR` model.
         PI_MTE_2048BR = PicamModel_PIMte2048BR,
         /// PICam's `PicamModel_PIMte2KSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PI_MTE_2K_SERIES = PicamModel_PIMte2KSeries,
         /// PICam's `PicamModel_PIMte2KB` model.
         PI_MTE_2KB = PicamModel_PIMte2KB,
         /// PICam's `PicamModel_PIMte2KBUV` model.
         PI_MTE_2KBUV = PicamModel_PIMte2KBUV,
         /// PICam's `PicamModel_PIMte3Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PI_MTE3_SERIES = PicamModel_PIMte3Series,
         /// PICam's `PicamModel_PIMte32048Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PI_MTE3_2048_SERIES = PicamModel_PIMte32048Series,
         /// PICam's `PicamModel_PIMte32048B` model.
         PI_MTE3_2048B = PicamModel_PIMte32048B,
         /// PICam's `PicamModel_PIMte34096Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PI_MTE3_4096_SERIES = PicamModel_PIMte34096Series,
         /// PICam's `PicamModel_PIMte34096B` model.
         PI_MTE3_4096B = PicamModel_PIMte34096B,
         /// PICam's `PicamModel_PIMte34096B_2` model.
         PI_MTE3_4096B_2 = PicamModel_PIMte34096B_2,
         /// PICam's `PicamModel_PixisSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PIXIS_SERIES = PicamModel_PixisSeries,
         /// PICam's `PicamModel_Pixis100Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PIXIS_100_SERIES = PicamModel_Pixis100Series,
         /// PICam's `PicamModel_Pixis100F` model.
         PIXIS_100F = PicamModel_Pixis100F,
@@ -90,7 +90,7 @@ define_models! {
         /// PICam's `PicamModel_PixisXB100BR` model.
         PIXIS_XB_100BR = PicamModel_PixisXB100BR,
         /// PICam's `PicamModel_Pixis256Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PIXIS_256_SERIES = PicamModel_Pixis256Series,
         /// PICam's `PicamModel_Pixis256F` model.
         PIXIS_256F = PicamModel_Pixis256F,
@@ -103,7 +103,7 @@ define_models! {
         /// PICam's `PicamModel_PixisXB256BR` model.
         PIXIS_XB_256BR = PicamModel_PixisXB256BR,
         /// PICam's `PicamModel_Pixis400Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PIXIS_400_SERIES = PicamModel_Pixis400Series,
         /// PICam's `PicamModel_Pixis400F` model.
         PIXIS_400F = PicamModel_Pixis400F,
@@ -122,7 +122,7 @@ define_models! {
         /// PICam's `PicamModel_PixisXB400BR` model.
         PIXIS_XB_400BR = PicamModel_PixisXB400BR,
         /// PICam's `PicamModel_Pixis512Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PIXIS_512_SERIES = PicamModel_Pixis512Series,
         /// PICam's `PicamModel_Pixis512F` model.
         PIXIS_512F = PicamModel_Pixis512F,
@@ -141,7 +141,7 @@ define_models! {
         /// PICam's `PicamModel_PixisXF512B` model.
         PIXIS_XF_512B = PicamModel_PixisXF512B,
         /// PICam's `PicamModel_Pixis1024Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PIXIS_1024_SERIES = PicamModel_Pixis1024Series,
         /// PICam's `PicamModel_Pixis1024F` model.
         PIXIS_1024F = PicamModel_Pixis1024F,
@@ -168,7 +168,7 @@ define_models! {
         /// PICam's `PicamModel_PixisXB1024BR` model.
         PIXIS_XB_1024BR = PicamModel_PixisXB1024BR,
         /// PICam's `PicamModel_Pixis1300Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PIXIS_1300_SERIES = PicamModel_Pixis1300Series,
         /// PICam's `PicamModel_Pixis1300F` model.
         PIXIS_1300F = PicamModel_Pixis1300F,
@@ -189,7 +189,7 @@ define_models! {
         /// PICam's `PicamModel_PixisXB1300R` model.
         PIXIS_XB_1300R = PicamModel_PixisXB1300R,
         /// PICam's `PicamModel_Pixis2048Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PIXIS_2048_SERIES = PicamModel_Pixis2048Series,
         /// PICam's `PicamModel_Pixis2048F` model.
         PIXIS_2048F = PicamModel_Pixis2048F,
@@ -208,7 +208,7 @@ define_models! {
         /// PICam's `PicamModel_PixisXF2048B` model.
         PIXIS_XF_2048B = PicamModel_PixisXF2048B,
         /// PICam's `PicamModel_Pixis2KSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PIXIS_2K_SERIES = PicamModel_Pixis2KSeries,
         /// PICam's `PicamModel_Pixis2KF` model.
         PIXIS_2KF = PicamModel_Pixis2KF,
@@ -221,7 +221,7 @@ define_models! {
         /// PICam's `PicamModel_PixisXO2KB` model.
         PIXIS_XO_2KB = PicamModel_PixisXO2KB,
         /// PICam's `PicamModel_QuadroSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         QUADRO_SERIES = PicamModel_QuadroSeries,
         /// PICam's `PicamModel_Quadro4096` model.
         QUADRO_4096 = PicamModel_Quadro4096,
@@ -230,10 +230,10 @@ define_models! {
         /// PICam's `PicamModel_Quadro4320` model.
         QUADRO_4320 = PicamModel_Quadro4320,
         /// PICam's `PicamModel_ProEMSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PRO_EM_SERIES = PicamModel_ProEMSeries,
         /// PICam's `PicamModel_ProEM512Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PRO_EM_512_SERIES = PicamModel_ProEM512Series,
         /// PICam's `PicamModel_ProEM512B` model.
         PRO_EM_512B = PicamModel_ProEM512B,
@@ -244,14 +244,14 @@ define_models! {
         /// PICam's `PicamModel_ProEM512BKExcelon` model.
         PRO_EM_512BK_EXCELON = PicamModel_ProEM512BKExcelon,
         /// PICam's `PicamModel_ProEM1024Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PRO_EM_1024_SERIES = PicamModel_ProEM1024Series,
         /// PICam's `PicamModel_ProEM1024B` model.
         PRO_EM_1024B = PicamModel_ProEM1024B,
         /// PICam's `PicamModel_ProEM1024BExcelon` model.
         PRO_EM_1024B_EXCELON = PicamModel_ProEM1024BExcelon,
         /// PICam's `PicamModel_ProEM1600Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PRO_EM_1600_SERIES = PicamModel_ProEM1600Series,
         /// PICam's `PicamModel_ProEM1600xx2B` model.
         PRO_EM_1600XX_2B = PicamModel_ProEM1600xx2B,
@@ -262,10 +262,10 @@ define_models! {
         /// PICam's `PicamModel_ProEM1600xx4BExcelon` model.
         PRO_EM_1600XX_4B_EXCELON = PicamModel_ProEM1600xx4BExcelon,
         /// PICam's `PicamModel_ProEMPlusSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PRO_EM_PLUS_SERIES = PicamModel_ProEMPlusSeries,
         /// PICam's `PicamModel_ProEMPlus512Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PRO_EM_PLUS_512_SERIES = PicamModel_ProEMPlus512Series,
         /// PICam's `PicamModel_ProEMPlus512B` model.
         PRO_EM_PLUS_512B = PicamModel_ProEMPlus512B,
@@ -276,14 +276,14 @@ define_models! {
         /// PICam's `PicamModel_ProEMPlus512BKExcelon` model.
         PRO_EM_PLUS_512BK_EXCELON = PicamModel_ProEMPlus512BKExcelon,
         /// PICam's `PicamModel_ProEMPlus1024Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PRO_EM_PLUS_1024_SERIES = PicamModel_ProEMPlus1024Series,
         /// PICam's `PicamModel_ProEMPlus1024B` model.
         PRO_EM_PLUS_1024B = PicamModel_ProEMPlus1024B,
         /// PICam's `PicamModel_ProEMPlus1024BExcelon` model.
         PRO_EM_PLUS_1024B_EXCELON = PicamModel_ProEMPlus1024BExcelon,
         /// PICam's `PicamModel_ProEMPlus1600Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PRO_EM_PLUS_1600_SERIES = PicamModel_ProEMPlus1600Series,
         /// PICam's `PicamModel_ProEMPlus1600xx2B` model.
         PRO_EM_PLUS_1600XX_2B = PicamModel_ProEMPlus1600xx2B,
@@ -294,10 +294,10 @@ define_models! {
         /// PICam's `PicamModel_ProEMPlus1600xx4BExcelon` model.
         PRO_EM_PLUS_1600XX_4B_EXCELON = PicamModel_ProEMPlus1600xx4BExcelon,
         /// PICam's `PicamModel_ProEMHSSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PRO_EMHS_SERIES = PicamModel_ProEMHSSeries,
         /// PICam's `PicamModel_ProEMHS512Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PRO_EMHS_512_SERIES = PicamModel_ProEMHS512Series,
         /// PICam's `PicamModel_ProEMHS512B` model.
         PRO_EMHS_512B = PicamModel_ProEMHS512B,
@@ -312,7 +312,7 @@ define_models! {
         /// PICam's `PicamModel_ProEMHS512BExcelon_2` model.
         PRO_EMHS_512B_EXCELON_2 = PicamModel_ProEMHS512BExcelon_2,
         /// PICam's `PicamModel_ProEMHS1024Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PRO_EMHS_1024_SERIES = PicamModel_ProEMHS1024Series,
         /// PICam's `PicamModel_ProEMHS1024B` model.
         PRO_EMHS_1024B = PicamModel_ProEMHS1024B,
@@ -327,45 +327,45 @@ define_models! {
         /// PICam's `PicamModel_ProEMHS1024BExcelon_3` model.
         PRO_EMHS_1024B_EXCELON_3 = PicamModel_ProEMHS1024BExcelon_3,
         /// PICam's `PicamModel_ProEMHS1K10Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PRO_EMHS_1K_10_SERIES = PicamModel_ProEMHS1K10Series,
         /// PICam's `PicamModel_ProEMHS1KB10` model.
         PRO_EMHS_1KB_10 = PicamModel_ProEMHS1KB10,
         /// PICam's `PicamModel_ProEMHS1KB10Excelon` model.
         PRO_EMHS_1KB_10_EXCELON = PicamModel_ProEMHS1KB10Excelon,
         /// PICam's `PicamModel_PIMax3Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PI_MAX3_SERIES = PicamModel_PIMax3Series,
         /// PICam's `PicamModel_PIMax31024I` model.
         PI_MAX3_1024I = PicamModel_PIMax31024I,
         /// PICam's `PicamModel_PIMax31024x256` model.
         PI_MAX3_1024X256 = PicamModel_PIMax31024x256,
         /// PICam's `PicamModel_PIMax4Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PI_MAX4_SERIES = PicamModel_PIMax4Series,
         /// PICam's `PicamModel_PIMax41024ISeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PI_MAX4_1024I_SERIES = PicamModel_PIMax41024ISeries,
         /// PICam's `PicamModel_PIMax41024I` model.
         PI_MAX4_1024I = PicamModel_PIMax41024I,
         /// PICam's `PicamModel_PIMax41024IRF` model.
         PI_MAX4_1024IRF = PicamModel_PIMax41024IRF,
         /// PICam's `PicamModel_PIMax41024FSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PI_MAX4_1024F_SERIES = PicamModel_PIMax41024FSeries,
         /// PICam's `PicamModel_PIMax41024F` model.
         PI_MAX4_1024F = PicamModel_PIMax41024F,
         /// PICam's `PicamModel_PIMax41024FRF` model.
         PI_MAX4_1024FRF = PicamModel_PIMax41024FRF,
         /// PICam's `PicamModel_PIMax41024x256Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PI_MAX4_1024X256_SERIES = PicamModel_PIMax41024x256Series,
         /// PICam's `PicamModel_PIMax41024x256` model.
         PI_MAX4_1024X256 = PicamModel_PIMax41024x256,
         /// PICam's `PicamModel_PIMax41024x256RF` model.
         PI_MAX4_1024X256RF = PicamModel_PIMax41024x256RF,
         /// PICam's `PicamModel_PIMax42048Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PI_MAX4_2048_SERIES = PicamModel_PIMax42048Series,
         /// PICam's `PicamModel_PIMax42048F` model.
         PI_MAX4_2048F = PicamModel_PIMax42048F,
@@ -376,24 +376,24 @@ define_models! {
         /// PICam's `PicamModel_PIMax42048BRF` model.
         PI_MAX4_2048BRF = PicamModel_PIMax42048BRF,
         /// PICam's `PicamModel_PIMax4512EMSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PI_MAX4_512EM_SERIES = PicamModel_PIMax4512EMSeries,
         /// PICam's `PicamModel_PIMax4512EM` model.
         PI_MAX4_512EM = PicamModel_PIMax4512EM,
         /// PICam's `PicamModel_PIMax4512BEM` model.
         PI_MAX4_512BEM = PicamModel_PIMax4512BEM,
         /// PICam's `PicamModel_PIMax41024EMSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PI_MAX4_1024EM_SERIES = PicamModel_PIMax41024EMSeries,
         /// PICam's `PicamModel_PIMax41024EM` model.
         PI_MAX4_1024EM = PicamModel_PIMax41024EM,
         /// PICam's `PicamModel_PIMax41024BEM` model.
         PI_MAX4_1024BEM = PicamModel_PIMax41024BEM,
         /// PICam's `PicamModel_PylonSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PYLON_SERIES = PicamModel_PylonSeries,
         /// PICam's `PicamModel_Pylon100Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PYLON_100_SERIES = PicamModel_Pylon100Series,
         /// PICam's `PicamModel_Pylon100F` model.
         PYLON_100F = PicamModel_Pylon100F,
@@ -406,7 +406,7 @@ define_models! {
         /// PICam's `PicamModel_Pylon100BRExcelon` model.
         PYLON_100BR_EXCELON = PicamModel_Pylon100BRExcelon,
         /// PICam's `PicamModel_Pylon256Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PYLON_256_SERIES = PicamModel_Pylon256Series,
         /// PICam's `PicamModel_Pylon256F` model.
         PYLON_256F = PicamModel_Pylon256F,
@@ -417,7 +417,7 @@ define_models! {
         /// PICam's `PicamModel_Pylon256BR` model.
         PYLON_256BR = PicamModel_Pylon256BR,
         /// PICam's `PicamModel_Pylon400Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PYLON_400_SERIES = PicamModel_Pylon400Series,
         /// PICam's `PicamModel_Pylon400F` model.
         PYLON_400F = PicamModel_Pylon400F,
@@ -430,14 +430,14 @@ define_models! {
         /// PICam's `PicamModel_Pylon400BRExcelon` model.
         PYLON_400BR_EXCELON = PicamModel_Pylon400BRExcelon,
         /// PICam's `PicamModel_Pylon1024Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PYLON_1024_SERIES = PicamModel_Pylon1024Series,
         /// PICam's `PicamModel_Pylon1024B` model.
         PYLON_1024B = PicamModel_Pylon1024B,
         /// PICam's `PicamModel_Pylon1024BExcelon` model.
         PYLON_1024B_EXCELON = PicamModel_Pylon1024BExcelon,
         /// PICam's `PicamModel_Pylon1300Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PYLON_1300_SERIES = PicamModel_Pylon1300Series,
         /// PICam's `PicamModel_Pylon1300F` model.
         PYLON_1300F = PicamModel_Pylon1300F,
@@ -452,7 +452,7 @@ define_models! {
         /// PICam's `PicamModel_Pylon1300BRExcelon` model.
         PYLON_1300BR_EXCELON = PicamModel_Pylon1300BRExcelon,
         /// PICam's `PicamModel_Pylon2048Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PYLON_2048_SERIES = PicamModel_Pylon2048Series,
         /// PICam's `PicamModel_Pylon2048F` model.
         PYLON_2048F = PicamModel_Pylon2048F,
@@ -465,7 +465,7 @@ define_models! {
         /// PICam's `PicamModel_Pylon2048BRExcelon` model.
         PYLON_2048BR_EXCELON = PicamModel_Pylon2048BRExcelon,
         /// PICam's `PicamModel_Pylon2KSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PYLON_2K_SERIES = PicamModel_Pylon2KSeries,
         /// PICam's `PicamModel_Pylon2KF` model.
         PYLON_2KF = PicamModel_Pylon2KF,
@@ -476,45 +476,45 @@ define_models! {
         /// PICam's `PicamModel_Pylon2KBExcelon` model.
         PYLON_2KB_EXCELON = PicamModel_Pylon2KBExcelon,
         /// PICam's `PicamModel_PylonirSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PYLONIR_SERIES = PicamModel_PylonirSeries,
         /// PICam's `PicamModel_Pylonir1024Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PYLONIR_1024_SERIES = PicamModel_Pylonir1024Series,
         /// PICam's `PicamModel_Pylonir102422` model.
         PYLONIR_1024_22 = PicamModel_Pylonir102422,
         /// PICam's `PicamModel_Pylonir102417` model.
         PYLONIR_1024_17 = PicamModel_Pylonir102417,
         /// PICam's `PicamModel_PionirSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         PIONIR_SERIES = PicamModel_PionirSeries,
         /// PICam's `PicamModel_Pionir640` model.
         PIONIR_640 = PicamModel_Pionir640,
         /// PICam's `PicamModel_NirvanaSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         NIRVANA_SERIES = PicamModel_NirvanaSeries,
         /// PICam's `PicamModel_Nirvana640` model.
         NIRVANA_640 = PicamModel_Nirvana640,
         /// PICam's `PicamModel_NirvanaSTSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         NIRVANA_ST_SERIES = PicamModel_NirvanaSTSeries,
         /// PICam's `PicamModel_NirvanaST640` model.
         NIRVANA_ST_640 = PicamModel_NirvanaST640,
         /// PICam's `PicamModel_NirvanaLNSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         NIRVANA_LN_SERIES = PicamModel_NirvanaLNSeries,
         /// PICam's `PicamModel_NirvanaLN640` model.
         NIRVANA_LN_640 = PicamModel_NirvanaLN640,
         /// PICam's `PicamModel_NirvanaHSSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         NIRVANA_HS_SERIES = PicamModel_NirvanaHSSeries,
         /// PICam's `PicamModel_NirvanaHS` model.
         NIRVANA_HS = PicamModel_NirvanaHS,
         /// PICam's `PicamModel_SophiaSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         SOPHIA_SERIES = PicamModel_SophiaSeries,
         /// PICam's `PicamModel_Sophia2048Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         SOPHIA_2048_SERIES = PicamModel_Sophia2048Series,
         /// PICam's `PicamModel_Sophia2048B` model.
         SOPHIA_2048B = PicamModel_Sophia2048B,
@@ -527,7 +527,7 @@ define_models! {
         /// PICam's `PicamModel_SophiaXB2048B` model.
         SOPHIA_XB_2048B = PicamModel_SophiaXB2048B,
         /// PICam's `PicamModel_Sophia2048135Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         SOPHIA_2048_135_SERIES = PicamModel_Sophia2048135Series,
         /// PICam's `PicamModel_Sophia2048135` model.
         SOPHIA_2048_135 = PicamModel_Sophia2048135,
@@ -548,7 +548,7 @@ define_models! {
         /// PICam's `PicamModel_Sophia2048B135Excelon_2` model.
         SOPHIA_2048B_135_EXCELON_2 = PicamModel_Sophia2048B135Excelon_2,
         /// PICam's `PicamModel_Sophia4096Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         SOPHIA_4096_SERIES = PicamModel_Sophia4096Series,
         /// PICam's `PicamModel_Sophia4096B` model.
         SOPHIA_4096B = PicamModel_Sophia4096B,
@@ -561,7 +561,7 @@ define_models! {
         /// PICam's `PicamModel_Sophia4096B_2` model.
         SOPHIA_4096B_2 = PicamModel_Sophia4096B_2,
         /// PICam's `PicamModel_Sophia4096HdrSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         SOPHIA_4096_HDR_SERIES = PicamModel_Sophia4096HdrSeries,
         /// PICam's `PicamModel_Sophia4096BHdr` model.
         SOPHIA_4096B_HDR = PicamModel_Sophia4096BHdr,
@@ -584,10 +584,10 @@ define_models! {
         /// PICam's `PicamModel_Sophia4096BRHdr_2` model.
         SOPHIA_4096BR_HDR_2 = PicamModel_Sophia4096BRHdr_2,
         /// PICam's `PicamModel_BlazeSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         BLAZE_SERIES = PicamModel_BlazeSeries,
         /// PICam's `PicamModel_Blaze100Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         BLAZE_100_SERIES = PicamModel_Blaze100Series,
         /// PICam's `PicamModel_Blaze100B` model.
         BLAZE_100B = PicamModel_Blaze100B,
@@ -606,7 +606,7 @@ define_models! {
         /// PICam's `PicamModel_Blaze100BRLDExcelon` model.
         BLAZE_100BRLD_EXCELON = PicamModel_Blaze100BRLDExcelon,
         /// PICam's `PicamModel_Blaze400Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         BLAZE_400_SERIES = PicamModel_Blaze400Series,
         /// PICam's `PicamModel_Blaze400B` model.
         BLAZE_400B = PicamModel_Blaze400B,
@@ -625,10 +625,10 @@ define_models! {
         /// PICam's `PicamModel_Blaze400BRLDExcelon` model.
         BLAZE_400BRLD_EXCELON = PicamModel_Blaze400BRLDExcelon,
         /// PICam's `PicamModel_FergieSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         FERGIE_SERIES = PicamModel_FergieSeries,
         /// PICam's `PicamModel_Fergie256Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         FERGIE_256_SERIES = PicamModel_Fergie256Series,
         /// PICam's `PicamModel_Fergie256B` model.
         FERGIE_256B = PicamModel_Fergie256B,
@@ -639,7 +639,7 @@ define_models! {
         /// PICam's `PicamModel_Fergie256BRExcelon` model.
         FERGIE_256BR_EXCELON = PicamModel_Fergie256BRExcelon,
         /// PICam's `PicamModel_Fergie256FTSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         FERGIE_256FT_SERIES = PicamModel_Fergie256FTSeries,
         /// PICam's `PicamModel_Fergie256FFT` model.
         FERGIE_256FFT = PicamModel_Fergie256FFT,
@@ -652,34 +652,34 @@ define_models! {
         /// PICam's `PicamModel_Fergie256BRFTExcelon` model.
         FERGIE_256BRFT_EXCELON = PicamModel_Fergie256BRFTExcelon,
         /// PICam's `PicamModel_FergieIso81Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         FERGIE_ISO_81_SERIES = PicamModel_FergieIso81Series,
         /// PICam's `PicamModel_FergieIso81256FTSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         FERGIE_ISO_81_256FT_SERIES = PicamModel_FergieIso81256FTSeries,
         /// PICam's `PicamModel_FergieIso81256BFTExcelon` model.
         FERGIE_ISO_81_256BFT_EXCELON = PicamModel_FergieIso81256BFTExcelon,
         /// PICam's `PicamModel_FergieIso81256BRFTExcelon` model.
         FERGIE_ISO_81_256BRFT_EXCELON = PicamModel_FergieIso81256BRFTExcelon,
         /// PICam's `PicamModel_FergieAccessorySeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         FERGIE_ACCESSORY_SERIES = PicamModel_FergieAccessorySeries,
         /// PICam's `PicamModel_FergieLampSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         FERGIE_LAMP_SERIES = PicamModel_FergieLampSeries,
         /// PICam's `PicamModel_FergieAEL` model.
         FERGIE_AEL = PicamModel_FergieAEL,
         /// PICam's `PicamModel_FergieQTH` model.
         FERGIE_QTH = PicamModel_FergieQTH,
         /// PICam's `PicamModel_FergieLaserSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         FERGIE_LASER_SERIES = PicamModel_FergieLaserSeries,
         /// PICam's `PicamModel_FergieLaser785` model.
         FERGIE_LASER_785 = PicamModel_FergieLaser785,
         /// PICam's `PicamModel_FergieLaser532` model.
         FERGIE_LASER_532 = PicamModel_FergieLaser532,
         /// PICam's `PicamModel_KuroSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         KURO_SERIES = PicamModel_KuroSeries,
         /// PICam's `PicamModel_Kuro1200B` model.
         KURO_1200B = PicamModel_Kuro1200B,
@@ -688,35 +688,35 @@ define_models! {
         /// PICam's `PicamModel_Kuro2048B` model.
         KURO_2048B = PicamModel_Kuro2048B,
         /// PICam's `PicamModel_IntellicalAccessorySeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         INTELLICAL_ACCESSORY_SERIES = PicamModel_IntellicalAccessorySeries,
         /// PICam's `PicamModel_IntellicalLampSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         INTELLICAL_LAMP_SERIES = PicamModel_IntellicalLampSeries,
         /// PICam's `PicamModel_IntellicalSwirQTH` model.
         INTELLICAL_SWIR_QTH = PicamModel_IntellicalSwirQTH,
         /// PICam's `PicamModel_TpirSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         TPIR_SERIES = PicamModel_TpirSeries,
         /// PICam's `PicamModel_Tpir785Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         TPIR_785_SERIES = PicamModel_Tpir785Series,
         /// PICam's `PicamModel_Tpir785100` model.
         TPIR_785_100 = PicamModel_Tpir785100,
         /// PICam's `PicamModel_Tpir785400` model.
         TPIR_785_400 = PicamModel_Tpir785400,
         /// PICam's `PicamModel_TpirHRSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         TPIR_HR_SERIES = PicamModel_TpirHRSeries,
         /// PICam's `PicamModel_Tpir785HRSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         TPIR_785_HR_SERIES = PicamModel_Tpir785HRSeries,
         /// PICam's `PicamModel_Tpir785HR100` model.
         TPIR_785_HR_100 = PicamModel_Tpir785HR100,
         /// PICam's `PicamModel_Tpir785HR400` model.
         TPIR_785_HR_400 = PicamModel_Tpir785HR400,
         /// PICam's `PicamModel_EvolveSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         EVOLVE_SERIES = PicamModel_EvolveSeries,
         /// PICam's `PicamModel_Evolve10` model.
         EVOLVE_10 = PicamModel_Evolve10,
@@ -725,17 +725,17 @@ define_models! {
         /// PICam's `PicamModel_Evolve16` model.
         EVOLVE_16 = PicamModel_Evolve16,
         /// PICam's `PicamModel_LansisSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         LANSIS_SERIES = PicamModel_LansisSeries,
         /// PICam's `PicamModel_Lansis261Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         LANSIS_261_SERIES = PicamModel_Lansis261Series,
         /// PICam's `PicamModel_LansisA261BR` model.
         LANSIS_A_261BR = PicamModel_LansisA261BR,
         /// PICam's `PicamModel_LansisA261BRX` model.
         LANSIS_A_261BRX = PicamModel_LansisA261BRX,
         /// PICam's `PicamModel_Lansis424Series` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         LANSIS_424_SERIES = PicamModel_Lansis424Series,
         /// PICam's `PicamModel_LansisD424B` model.
         LANSIS_D_424B = PicamModel_LansisD424B,
@@ -744,7 +744,7 @@ define_models! {
         /// PICam's `PicamModel_LansisD424BX_2` model.
         LANSIS_D_424BX_2 = PicamModel_LansisD424BX_2,
         /// PICam's `PicamModel_RetigaSeries` series: a family of models rather than
-        /// one camera.
+        /// a single model.
         RETIGA_SERIES = PicamModel_RetigaSeries,
         /// PICam's `PicamModel_RetigaE7` model.
         RETIGA_E7 = PicamModel_RetigaE7,

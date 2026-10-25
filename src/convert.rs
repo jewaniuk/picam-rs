@@ -94,9 +94,9 @@ pub(crate) fn enumeration_string(
         return Err(Error::UnexpectedNullPointer);
     }
 
-    // SAFETY: just checked `ptr` is non-null, and on success PICam guarantees
-    // it points to a nul-terminated string it allocated (PICam manual 3.2.6),
-    // which stays valid until `Picam_DestroyString` below
+    // SAFETY: just checked `ptr` is non-null, and on success PICam returns a
+    // string it allocated (PICam manual 3.2.6), a C string with no length so
+    // nul-terminated, which stays valid until `Picam_DestroyString` below
     let name = unsafe { CStr::from_ptr(ptr) }
         .to_string_lossy()
         .into_owned();

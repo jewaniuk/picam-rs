@@ -83,7 +83,7 @@ The maintainer writes acquisition, callbacks and any `Send`/`Sync` decision pers
 - every public item and field has a `///` doc, every fallible public function has `# Errors`, every `unsafe fn` has `# Safety`, and every `unsafe` block has a `// SAFETY:` comment
 - inline `//` comments are lowercase with minimal punctuation
 - never add `#![allow(dead_code)]`, because the progress tool depends on those warnings
-- never edit `src/generated/` by hand: change `xtask/src/generate.rs` and rerun `cargo run -p xtask -- generate`. A new long list taken straight from a header should be generated the same way
+- never edit `src/generated/` by hand: change `xtask/src/generate.rs` and rerun `cargo run -p xtask -- generate`. A new long list taken straight from a header should be generated the same way. After an SDK update, run `generate`, review the diff, and add any values `generate --check` reports to the hand-written wrappers
 
 ### Reference implementations
 
