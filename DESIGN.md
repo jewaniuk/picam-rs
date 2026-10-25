@@ -46,7 +46,7 @@ The crate only runs on Windows, the only platform the lab uses. The SDK also shi
 |---|---|---|
 | `sys` | raw bindgen output, private, never exposed | done |
 | `error` | `Error`, `Result`, `picam_call!` | done |
-| `library` | `Library` (initialize/uninitialize lifecycle) | done |
+| `library` | `Library` (initialize/uninitialize lifecycle, the initialized check), `Version` | done |
 | `camera` | `Camera`, `CameraId`, `CameraHandle`, discovery, demo cameras, parameter/constraint methods | done apart from acquisition |
 | `parameter` | `Parameter`, `TypedParameter` and the generated `params` handles, value traits, `Roi`/`Pulse`/`Modulation`, parameter info queries | done |
 | `constraint` | constraint structs and their enums | done |
@@ -98,7 +98,7 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 - `Library::new()` calls `Picam_InitializeLibrary`; `Drop` calls `Picam_UninitializeLibrary` and logs any failure, since `Drop` can't return one.
 - Cameras hold an `Arc<Library>`, so many cameras share one library and the library outlives them all. This was chosen to fit the downstream server's design.
 - With SDK 5.15, connecting a 65th different demo camera (model and serial number pair) in one library session corrupts PICam's heap inside `Picam_ConnectDemoCamera` and kills the process, even if the others were disconnected. Reconnecting a pair already used doesn't count again, and a fresh library resets the count. This was found with demo cameras and reproduced with raw `sys` calls: a new model each time, or one model with a new serial number each time, crashes on the 65th connect, while repeating pairs never does. Safe code must not reach it, so `Library` records the pairs `CameraId::connect_demo` has connected (counting attempts, to be safe), and `connect_demo` returns `Error::TooManyDemoCameras` instead of making a 65th.
-- PICam needs an initialized library for every call except `Picam_GetVersion` and `Picam_IsLibraryInitialized` (manual 3.2). So every public function that calls PICam takes `library: &Library` (first, after any `self`), unless its receiver already holds one (`Camera`) or borrows one (`CameraHandle`). Constructors that keep the library (`Camera::open`, `Camera::open_first`) take an `Arc<Library>` instead. Calling PICam too early then fails to compile rather than returning `Error::LibraryNotInitialized`. A function that only needs the proof takes the argument and ignores it (`let _ = library;`).
+- PICam needs an initialized library for every call except `Picam_GetVersion` and `Picam_IsLibraryInitialized` (manual 3.2). So every public function that calls PICam takes `library: &Library` (first, after any `self`), unless its receiver already holds one (`Camera`) or borrows one (`CameraHandle`). Constructors that keep the library (`Camera::open`, `Camera::open_first`) take an `Arc<Library>` instead. Calling PICam too early then fails to compile rather than returning `Error::LibraryNotInitialized`. A function that only needs the proof takes the argument and ignores it (`let _ = library;`). The two exceptions are the associated functions `Library::version()` and `Library::is_initialized()`, which take no `&Library`.
 
 ### Cameras and thread safety (settled)
 
@@ -181,7 +181,7 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 
 ## Roadmap
 
-As of 2026-10-25: 84 / 199 functions wrapped.
+As of 2026-10-25: 86 / 199 functions wrapped.
 
 ### 1. Finish the `sys`-type refactor (done)
 
@@ -219,10 +219,10 @@ Decided with the maintainer on 2026-10-25. Two chunks, after stage 1, because th
   - Enum parameters switch from `i32` to their enum through a mapping table in the generator, matched by name with overrides. It is checked against `Camera::enumerated_type` on the demo models, and any parameter no demo model has goes on the README's "to test" list.
   - The acquisition enums (`AcquisitionState`, `AcquisitionErrorsMask` and `AcquisitionStateErrorsMask`) wait for acquisition. The advanced API's (`DiscoveryAction`, `HandleType` and `DynamicsMask`) wait for stage 4.
 
-### 3. Remaining `picam.h` (8 functions)
+### 3. Remaining `picam.h` (7 functions, plus `Picam_DestroyCalibrations` in stage 5)
 
-- quick wins: `Picam_GetVersion`, `Picam_IsLibraryInitialized`, `Picam_DestroyCalibrations`
-- acquisition: `Picam_Acquire`, `Picam_StartAcquisition`, `Picam_StopAcquisition`, `Picam_IsAcquisitionRunning`, `Picam_WaitForAcquisitionUpdate`. This is the most important remaining piece and needs careful design: who owns the frame buffers, and how data is copied out.
+- [x] quick wins: `Picam_GetVersion`, `Picam_IsLibraryInitialized`. `Picam_DestroyCalibrations` moved to stage 5: it frees only the array `PicamAccessory_GetLightSourceReference` allocates (manual 4.3.3.4 and 7.4.6.1), so it is wrapped with that call
+- [ ] acquisition: `Picam_Acquire`, `Picam_StartAcquisition`, `Picam_StopAcquisition`, `Picam_IsAcquisitionRunning`, `Picam_WaitForAcquisitionUpdate`. This is the most important remaining piece and needs careful design: who owns the frame buffers, and how data is copied out. An agent may write it, but only after the longer design discussion in `CLAUDE.md`, with the actual code shown and approved first (decided with the maintainer on 2026-10-25).
 
 ### 4. `picam_advanced.h` (76 functions)
 
@@ -230,7 +230,7 @@ Callback registration (`Register*`/`Unregister*` pairs), parameter validation, c
 
 ### 5. `picam_accessory.h` (18), `picam_em_calibration.h` (11), `picam_special.h` (2)
 
-These largely mirror patterns already in `camera.rs`.
+These largely mirror patterns already in `camera.rs`. `Picam_DestroyCalibrations` from `picam.h` is wrapped here too, together with `PicamAccessory_GetLightSourceReference`, whose array it frees.
 
 ### 6. Finishing
 
@@ -240,5 +240,5 @@ These largely mirror patterns already in `camera.rs`.
 
 ## Open questions
 
-- **Acquisition API design:** blocking versus non-blocking, buffer ownership, and how frames are handed to the user.
+- **Acquisition API design:** blocking versus non-blocking, buffer ownership, and how frames are handed to the user. To be settled in the acquisition design discussion (see `CLAUDE.md`).
 - **Callback design** for `picam_advanced.h`.

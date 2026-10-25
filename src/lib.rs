@@ -43,7 +43,7 @@ pub use constraint::{
 pub use convert::FirmwareDetail;
 pub use enums::*;
 pub use error::{Error, Result};
-pub use library::Library;
+pub use library::{Library, Version};
 pub use model::Model;
 pub use parameter::{
     ComputerInterface, EnumeratedType, Modulation, OnlineSettablePicamValue, Parameter, PicamValue,
