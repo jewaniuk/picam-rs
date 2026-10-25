@@ -78,7 +78,7 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 ### Models (settled)
 
 - `Model` is a newtype over PICam's model code, which identifies cameras and accessories alike (manual 4.1). It has a private field and is not an enum, so any code PICam reports is a valid `Model`.
-- Each model in the SDK the crate was generated from has an associated constant (`Model::PIXIS_100F`), generated from the header. Constant names are converted automatically from PICam's names, with a few overrides in `xtask/src/generate.rs` where a product name and model number run together.
+- Each model in the SDK the crate was generated from has an associated constant (`Model::PIXIS_100F`), generated from the header. Constant names are converted automatically from PICam's names, with a few overrides in `xtask/src/generate.rs` where a product name and model number run together, or where a product name's capitals hide a word boundary (`ProEMHS` → `PRO_EM_HS`).
 - PICam's "series" values stand for a model family rather than a single model (manual 4.1). `Model::is_series` reports them, based on the crate's own list (a PICam name ending in `Series`), since PICam has no call that answers it. Its docs say so.
 - `Debug` shows the constant name when there is one, and `Model::name(&Library)` gives PICam's readable name.
 
