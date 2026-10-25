@@ -923,18 +923,29 @@ impl CameraId {
     /// Returns the new camera's [`CameraId`], pass it to [`Camera::open`] to
     /// actually open it.
     ///
+    /// One `library` connects at most 64 different demo cameras, counting
+    /// each model and serial number pair once. PICam 5.15 corrupts its own
+    /// memory, killing the process, when a 65th different pair is connected
+    /// in one library session, even if the others were disconnected (found
+    /// with demo cameras, not documented), so this refuses instead.
+    /// Reconnecting a pair already used doesn't count again, and dropping the
+    /// `Library` and making a new one starts the count again.
+    ///
     /// # Errors
     ///
     /// Returns [`crate::Error::InvalidString`] if `serial_number`
-    /// contains an embedded null byte, [`crate::Error::InvalidDemoModel`]
-    /// if `model` isn't a valid demo model, or
-    /// [`crate::Error::DemoAlreadyConnected`] if a demo camera with this
-    /// serial number is already connected.
+    /// contains an embedded null byte, [`crate::Error::TooManyDemoCameras`]
+    /// if this would be the 65th different demo camera for `library`,
+    /// [`crate::Error::InvalidDemoModel`] if `model` isn't a valid demo
+    /// model, or [`crate::Error::DemoAlreadyConnected`] if a demo camera with
+    /// this serial number is already connected.
     pub fn connect_demo(library: &Library, model: Model, serial_number: &str) -> Result<CameraId> {
-        let _ = library; // only taken to prove picam is initialized
         tracing::debug!("connecting demo camera: {serial_number}");
         let c_serial_number = std::ffi::CString::new(serial_number)
             .map_err(|_| crate::error::Error::InvalidString)?;
+        // counted before the call, whether or not it succeeds, since an
+        // attempt might use up one of picam's slots too
+        library.note_demo_camera(model, serial_number)?;
 
         // SAFETY: `PicamCameraID` is a plain-data struct with no invariant
         // that forbids an all-zero bit pattern, `model`/`computer_interface`

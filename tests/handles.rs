@@ -94,11 +94,10 @@ macro_rules! define_parameters {
 
 include!("../src/generated/parameters.rs");
 
-/// How many demo models to connect per library. With SDK 5.15, connecting a
-/// 65th distinct demo model in one library session corrupts PICam's heap and
-/// kills the process, inside `Picam_ConnectDemoCamera` itself (reproduced with
-/// raw calls, see `DESIGN.md`'s open questions), so the models are checked in
-/// batches, each with a fresh library.
+/// How many demo models to connect per library. One library connects at most
+/// 64 different demo cameras (model and serial number pairs), because PICam
+/// 5.15 corrupts its heap on the 65th, so `connect_demo` refuses it. The
+/// models are checked in batches, each with a fresh library.
 const MODELS_PER_LIBRARY: usize = 32;
 
 /// Connects each demo model in turn and checks every handle on it.
