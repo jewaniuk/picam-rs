@@ -8,6 +8,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+bitflags = "2.13.2"
 thiserror = "2.0.20"
 tracing = "0.1.44"
 

@@ -35,10 +35,13 @@ mod sys;
 
 pub use camera::{Camera, CameraHandle, CameraId};
 pub use constraint::{
-    CollectionConstraint, ModulationsConstraint, PulseConstraint, RangeConstraint, RoisConstraint,
+    CollectionConstraint, ConstraintCategory, ConstraintScope, ConstraintSeverity, ConstraintType,
+    ModulationsConstraint, PulseConstraint, RangeConstraint, RoisConstraint, RoisConstraintRules,
 };
+pub use convert::FirmwareDetail;
 pub use error::{Error, Result};
 pub use library::Library;
 pub use parameter::{
-    Modulation, OnlineSettablePicamValue, Parameter, PicamValue, Pulse, ReadablePicamValue, Roi,
+    ComputerInterface, EnumeratedType, Modulation, OnlineSettablePicamValue, Parameter, PicamValue,
+    Pulse, ReadablePicamValue, Roi, ValueAccess, ValueType,
 };

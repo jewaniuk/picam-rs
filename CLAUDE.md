@@ -91,8 +91,9 @@ Copy these instead of inventing something new:
 | PICam allocates an array | `Camera::parameters` in `src/camera.rs` |
 | PICam allocates a single struct | `Camera::collection_constraint` in `src/camera.rs` |
 | the same wrapper repeated for several types | `impl_picam_value!` in `src/parameter.rs` |
-| passing an array into PICam | `<Vec<Roi> as PicamValue>::set` in `src/parameter.rs` |
+| passing an array into PICam | `<Vec<Roi> as sealed::RawPicamValue>::set` in `src/parameter.rs` |
 | a public enum | `define_picam_enum!` in `src/convert.rs` |
+| a public trait whose methods need a PICam handle | the `sealed` module and `RawHandle` in `src/parameter.rs` |
 | an integration test | `tests/camera.rs`, using `tests/common/mod.rs` |
 
 ## Testing

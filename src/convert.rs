@@ -4,10 +4,16 @@ use crate::error::{Error, Result};
 use crate::sys;
 
 macro_rules! define_picam_enum {
-    ($enum_name:ident, $raw_ty:path, $($name:ident = $raw:ident),* $(,)?) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    (
+        $(#[$enum_meta:meta])*
+        $enum_name:ident,
+        $raw_ty:path,
+        $($(#[$meta:meta])* $name:ident = $raw:ident),* $(,)?
+    ) => {
+        $(#[$enum_meta])*
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub enum $enum_name {
-            $($name,)*
+            $($(#[$meta])* $name,)*
             /// A value this crate doesn't recognize, most likely because
             /// the installed PICam runtime is newer than the SDK version
             /// these bindings were generated against.
@@ -32,6 +38,25 @@ macro_rules! define_picam_enum {
     };
 }
 pub(crate) use define_picam_enum;
+
+/// Checks that every raw value in a range survives a round trip through
+/// a wrapper, and that exactly `known` of them map to a named variant.
+#[cfg(test)]
+macro_rules! assert_round_trips {
+    ($enum_name:ident, $raw_ty:path, $known:expr) => {
+        let mut named = 0;
+        for code in -10..1000 {
+            let value = $enum_name::from_raw($raw_ty(code));
+            assert_eq!(value.to_raw().0, code, "{value:?} should keep {code}");
+            if !matches!(value, $enum_name::Unknown(_)) {
+                named += 1;
+            }
+        }
+        assert_eq!(named, $known, "every value in picam.h should be named");
+    };
+}
+#[cfg(test)]
+pub(crate) use assert_round_trips;
 
 /// Converts a fixed-size, nul-terminated C character array into an owned,
 /// lossily-converted `String`.
@@ -86,7 +111,9 @@ pub(crate) unsafe fn collect_raw_array<T, U>(
 /// reported by a camera or accessory.
 #[derive(Debug, Clone)]
 pub struct FirmwareDetail {
+    /// The name of the firmware component.
     pub name: String,
+    /// The component's version or other detail.
     pub detail: String,
 }
 
