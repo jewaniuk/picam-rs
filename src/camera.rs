@@ -11,6 +11,7 @@ use crate::convert::{
 };
 use crate::error::{Result, picam_call};
 use crate::library::Library;
+use crate::model::Model;
 use crate::parameter::sealed::RawHandle;
 use crate::parameter::{
     ComputerInterface, EnumeratedType, OnlineSettablePicamValue, Parameter, PicamValue,
@@ -145,12 +146,12 @@ impl Camera {
         handle_id(self.handle)
     }
 
-    /// Lists the camera models available for use with [`Camera::connect_demo`].
+    /// Lists the camera models available for use with [`CameraId::connect_demo`].
     ///
     /// # Errors
     ///
     /// Returns an error if PICam is unable to enumerate demo camera models.
-    pub fn available_demo_models() -> Result<Vec<sys::PicamModel>> {
+    pub fn available_demo_models() -> Result<Vec<Model>> {
         tracing::debug!("enumerating available demo camera models");
         let mut array: *const sys::PicamModel = std::ptr::null();
         let mut count: sys::piint = 0;
@@ -159,7 +160,7 @@ impl Camera {
         ))?;
 
         // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
-        let models = unsafe { collect_raw_array(array, count, |&m| m) };
+        let models = unsafe { collect_raw_array(array, count, |&m| Model::from_raw(m)) };
 
         if !array.is_null() {
             picam_call!(sys::Picam_DestroyModels(array))?;
@@ -729,7 +730,7 @@ fn handle_id(handle: sys::PicamHandle) -> Result<CameraId> {
 #[derive(Debug, Clone)]
 pub struct CameraId {
     /// The camera model.
-    pub model: sys::PicamModel,
+    pub model: Model,
     /// How the camera connects to the computer.
     pub computer_interface: ComputerInterface,
     /// The name of the camera's sensor.
@@ -743,7 +744,7 @@ impl CameraId {
     /// Converts a raw `PicamCameraID` into an owned `CameraId`.
     fn from_raw(raw: &sys::PicamCameraID) -> Self {
         Self {
-            model: raw.model,
+            model: Model::from_raw(raw.model),
             computer_interface: ComputerInterface::from_raw(raw.computer_interface),
             sensor_name: c_char_array_to_string(&raw.sensor_name),
             serial_number: c_char_array_to_string(&raw.serial_number),
@@ -760,7 +761,7 @@ impl CameraId {
     /// fixed-size buffers.
     fn to_raw(&self) -> Result<sys::PicamCameraID> {
         Ok(sys::PicamCameraID {
-            model: self.model,
+            model: self.model.to_raw(),
             computer_interface: self.computer_interface.to_raw(),
             sensor_name: string_to_c_char_array(&self.sensor_name)?,
             serial_number: string_to_c_char_array(&self.serial_number)?,
@@ -812,7 +813,7 @@ impl CameraId {
     /// if `model` isn't a valid demo model, or
     /// [`crate::error::Error::DemoAlreadyConnected`] if a demo camera with this
     /// serial number is already connected.
-    pub fn connect_demo(model: sys::PicamModel, serial_number: &str) -> Result<CameraId> {
+    pub fn connect_demo(model: Model, serial_number: &str) -> Result<CameraId> {
         tracing::debug!("connecting demo camera: {serial_number}");
         let c_serial_number = std::ffi::CString::new(serial_number)
             .map_err(|_| crate::error::Error::InvalidString)?;
@@ -826,7 +827,7 @@ impl CameraId {
         let mut raw: sys::PicamCameraID = unsafe { std::mem::zeroed() };
 
         picam_call!(sys::Picam_ConnectDemoCamera(
-            model,
+            model.to_raw(),
             c_serial_number.as_ptr(),
             &mut raw
         ))?;
