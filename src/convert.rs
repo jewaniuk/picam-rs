@@ -4,10 +4,16 @@ use crate::error::{Error, Result};
 use crate::sys;
 
 macro_rules! define_picam_enum {
-    ($enum_name:ident, $raw_ty:path, $($name:ident = $raw:ident),* $(,)?) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    (
+        $(#[$enum_meta:meta])*
+        $enum_name:ident,
+        $raw_ty:path,
+        $($(#[$meta:meta])* $name:ident = $raw:ident),* $(,)?
+    ) => {
+        $(#[$enum_meta])*
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub enum $enum_name {
-            $($name,)*
+            $($(#[$meta])* $name,)*
             /// A value this crate doesn't recognize, most likely because
             /// the installed PICam runtime is newer than the SDK version
             /// these bindings were generated against.

@@ -5,29 +5,52 @@ use crate::error::{Result, picam_call};
 use crate::sys;
 
 define_picam_enum!(
+    /// How a camera connects to the computer (PICam manual 4.1).
     ComputerInterface,
     sys::PicamComputerInterface,
+    /// USB 2.0.
     Usb2 = PicamComputerInterface_Usb2,
+    /// USB 3.0.
     Usb3 = PicamComputerInterface_Usb3,
+    /// USB 3.1.
+    Usb31 = PicamComputerInterface_Usb31,
+    /// IEEE 1394a (FireWire).
+    Ieee1394A = PicamComputerInterface_1394A,
+    /// Gigabit Ethernet.
     GigabitEthernet = PicamComputerInterface_GigabitEthernet,
 );
 define_picam_enum!(
+    /// The kind of value a parameter holds, which decides the Rust type used
+    /// to get and set it (PICam manual 5.1.1.42).
     ValueType,
     sys::PicamValueType,
+    /// A whole number, used as `i32`.
     Integer = PicamValueType_Integer,
+    /// A true/false value, used as `i32` (zero is false).
     Boolean = PicamValueType_Boolean,
+    /// One value of a PICam enum, used as `i32`. [`crate::Camera::enumerated_type`]
+    /// says which enum.
     Enumeration = PicamValueType_Enumeration,
+    /// A 64-bit whole number, used as `i64`.
     LargeInteger = PicamValueType_LargeInteger,
+    /// A floating-point number, used as `f64`.
     FloatingPoint = PicamValueType_FloatingPoint,
+    /// A set of regions of interest, used as `Vec<Roi>`.
     Rois = PicamValueType_Rois,
+    /// A gate pulse, used as [`Pulse`].
     Pulse = PicamValueType_Pulse,
+    /// A custom modulation sequence, used as `Vec<Modulation>`.
     Modulations = PicamValueType_Modulations,
 );
 define_picam_enum!(
+    /// How a parameter's value may be accessed (PICam manual 5.1.2.1).
     ValueAccess,
     sys::PicamValueAccess,
+    /// The value can only be read.
     ReadOnly = PicamValueAccess_ReadOnly,
+    /// The value can be read and written, but only one value is allowed.
     ReadWriteTrivial = PicamValueAccess_ReadWriteTrivial,
+    /// The value can be read and written.
     ReadWrite = PicamValueAccess_ReadWrite,
 );
 

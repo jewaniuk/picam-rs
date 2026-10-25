@@ -2,26 +2,43 @@ use crate::convert::{collect_raw_array, define_picam_enum};
 use crate::sys;
 
 define_picam_enum!(
+    /// The kind of constraint on a parameter's value, which decides which
+    /// `Camera::*_constraint` method reads it (PICam manual 5.1.1.6).
     ConstraintType,
     sys::PicamConstraintType,
+    /// No constraint, because the value is read-only.
     None = PicamConstraintType_None,
+    /// A numeric range, read with [`crate::Camera::range_constraint`].
     Range = PicamConstraintType_Range,
+    /// A fixed set of choices, read with [`crate::Camera::collection_constraint`].
     Collection = PicamConstraintType_Collection,
+    /// Rules for regions of interest, read with [`crate::Camera::rois_constraint`].
     Rois = PicamConstraintType_Rois,
+    /// Limits on a gate pulse, read with [`crate::Camera::pulse_constraint`].
     Pulse = PicamConstraintType_Pulse,
+    /// Limits on a custom modulation sequence, read with
+    /// [`crate::Camera::modulations_constraint`].
     Modulations = PicamConstraintType_Modulations,
 );
 define_picam_enum!(
+    /// Whether a constraint is fixed or depends on other parameters
+    /// (PICam manual 5.1.3.1).
     ConstraintScope,
     sys::PicamConstraintScope,
+    /// The constraint never changes.
     Independent = PicamConstraintScope_Independent,
+    /// The constraint can change with other parameters' values.
     Dependent = PicamConstraintScope_Dependent,
 );
 define_picam_enum!(
+    /// Which set of values a constraint query describes (PICam manual 5.1.3.3).
     ConstraintCategory,
     sys::PicamConstraintCategory,
+    /// Every value the camera could ever accept.
     Capable = PicamConstraintCategory_Capable,
+    /// The values allowed right now, given the other parameters.
     Required = PicamConstraintCategory_Required,
+    /// The values suited to most uses.
     Recommended = PicamConstraintCategory_Recommended,
 );
 
