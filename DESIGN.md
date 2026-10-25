@@ -78,7 +78,7 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 ### Models (settled)
 
 - `Model` is a newtype over PICam's model code, which identifies cameras and accessories alike (manual 4.1). It has a private field and is not an enum, so any code PICam reports is a valid `Model`.
-- Each model in the SDK the crate was generated from has an associated constant (`Model::PIXIS_100F`), generated from the header. Constant names are converted automatically from PICam's names, with a few overrides in `xtask/src/generate.rs` where a product name and model number run together.
+- Each model in the SDK the crate was generated from has an associated constant (`Model::PIXIS_100F`), generated from the header. Constant names are converted automatically from PICam's names, with a few overrides in `xtask/src/generate.rs` where a product name and model number run together, or where a product name's capitals hide a word boundary (`ProEMHS` → `PRO_EM_HS`).
 - PICam's "series" values stand for a model family rather than a single model (manual 4.1). `Model::is_series` reports them, based on the crate's own list (a PICam name ending in `Series`), since PICam has no call that answers it. Its docs say so.
 - `Debug` shows the constant name when there is one, and `Model::name(&Library)` gives PICam's readable name.
 
@@ -91,6 +91,7 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 
 - `Library::new()` calls `Picam_InitializeLibrary`; `Drop` calls `Picam_UninitializeLibrary` and logs any failure, since `Drop` can't return one.
 - Cameras hold an `Arc<Library>`, so many cameras share one library and the library outlives them all. This was chosen to fit the downstream server's design.
+- PICam needs an initialized library for every call except `Picam_GetVersion` and `Picam_IsLibraryInitialized` (manual 3.2). So every public function that calls PICam takes `library: &Library` (first, after any `self`), unless its receiver already holds one (`Camera`) or borrows one (`CameraHandle`). Calling PICam too early then fails to compile rather than returning `Error::LibraryNotInitialized`. A function that only needs the proof takes the argument and ignores it (`let _ = library;`).
 
 ### Cameras and thread safety (settled)
 
@@ -99,7 +100,7 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 - `CameraId` identifies a camera whether or not it is open. It is spelled `CameraId`, not `CameraID`, following Rust naming conventions.
 - `CameraHandle<'a>` is a non-owning view of a handle that is open somewhere in the process, returned by `Camera::list_open_cameras`. It never closes the handle, and its lifetime ties it to the `Library`. A call on a handle that has since been closed should fail with `Error::InvalidHandle`, which is listed in the README's "to test" list to confirm on hardware.
 - Method names say what they do. For example, `list_open_cameras` (not `open_cameras`) so it isn't mistaken for a way to open cameras.
-- Demo cameras: `CameraId::connect_demo` creates one and `CameraId::disconnect_demo` removes it; `Camera::available_demo_models` lists the models.
+- Demo cameras: `CameraId::connect_demo(&library, model, serial_number)` creates one and `CameraId::disconnect_demo(&library)` removes it; `Camera::available_demo_models(&library)` lists the models.
 
 ### Parameters (settled)
 
@@ -129,7 +130,8 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 
 **Settled:**
 
-- No `sys` type may appear in a public signature or a public field. `sys` is private, so users can't even name those types. Use the `define_picam_enum!` wrappers and Rust primitives (`i32`, `i64`, `f64`, `bool`) instead of `sys::piint`, `sys::pi64s`, `sys::piflt` or `sys::pibln`. This is not fully true yet; see the [roadmap](#roadmap).
+- No `sys` type may appear in a public signature or a public field. `sys` is private, so users can't even name those types. Use the `define_picam_enum!` wrappers and Rust primitives (`i32`, `i64`, `f64`, `bool`) instead of `sys::piint`, `sys::pi64s`, `sys::piflt` or `sys::pibln`.
+- Public names treat acronyms as words, following Rust convention: `CameraId`, `Error::InvalidCameraId`, `Parameter::EmIccdGain`, not PICam's `CameraID` or `EMIccdGain`. Generated names get this from `type_case` in `xtask/src/generate.rs`, with an override table for names it can't convert (such as the SeNsR product name, `Parameter::SensrWindowHeight`). Any item whose name differs from PICam's carries `#[doc(alias = "...")]` with PICam's spelling, so rustdoc search still finds it, and its doc names the PICam constant.
 - Every public type is re-exported from `lib.rs`. Modules themselves stay private.
 - Follow Rust API conventions (the Rust API Guidelines) wherever possible: idiomatic names, `Result` for anything fallible, owned return types, and RAII for resources.
 
@@ -141,6 +143,7 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 - Every fallible public function has a `# Errors` section.
   - When the manual or the code makes clear which errors can occur, name them with intra-doc links.
   - When it is not clear, write "Returns an error if PICam is unable to …" rather than guessing. A final pass through the PICam manual to fill in these gaps is planned.
+- Intra-doc links use public paths, the crate-root re-exports (`crate::Error::X`, `crate::Camera::open`), never paths through a private module (`crate::error::Error::X`).
 - Every `unsafe fn` has a `# Safety` section saying what the caller must guarantee.
 - Every `unsafe` block is preceded by a `// SAFETY:` comment explaining why it is sound.
 - Inline (`//`) comments are lowercase with minimal punctuation, matching the existing code.
@@ -171,16 +174,16 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 
 As of 2026-10-25: 84 / 199 functions wrapped.
 
-### 1. Finish the `sys`-type refactor (in progress)
+### 1. Finish the `sys`-type refactor (done)
 
 - [x] `define_picam_enum!` and wrappers for `ComputerInterface`, `ValueType`, `ValueAccess`, `ConstraintType`, `ConstraintScope`, `ConstraintCategory`
 - [x] wrappers for `PicamEnumeratedType`, `PicamConstraintSeverity`, `PicamRoisConstraintRulesMask` (bitmask)
 - [x] decide on and implement a public `Model` type (see [Models](#models-settled))
 - [x] replace `sys` enums in public signatures and fields with the wrappers (`CameraId`, `Camera::value_type` and friends, the constraint `category` arguments, the constraint struct fields, `available_demo_models`)
-- [ ] replace `sys::piint`/`pi64s`/`piflt` with `i32`/`i64`/`f64` in public items
-- [ ] `Camera::available_ids`, `Camera::unavailable_ids`, `Camera::available_demo_models`, `CameraId::connect_demo`, `CameraId::disconnect_demo` and `CameraId::is_demo` take `&Library`, like `Camera::list_open_cameras` and `name()`, so calling them without an initialized library doesn't compile instead of failing with `Error::LibraryNotInitialized`
-- [ ] intra-doc links use the public path `crate::Error::X`, not `crate::error::Error::X`
-- [ ] public names treat acronyms as words, following Rust convention: `Error::InvalidCameraId`, `Error::InvalidAccessoryId`, `Parameter::EmIccdGain`, `Parameter::EmIccdGainControlMode`, `Parameter::AdcEmGain`, `Parameter::ApplicableStarDefectMapId`, `Parameter::SensrWindowHeight` and `EnumeratedType::EmIccdGainControlMode`. Generated names get this from a rule in `xtask/src/generate.rs` rather than one-off overrides, and each renamed item carries `#[doc(alias = "...")]` with PICam's spelling so rustdoc search still finds it. In the same pass, read the full list of `Model` constants once and add overrides where names are uneven (such as `PRO_EM_1600XX_2B` next to `PI_MAX4_1024X256`, or `RETIGA_E7` next to `LANSIS_A_261BR`)
+- [x] replace `sys::piint`/`pi64s`/`piflt` with `i32`/`i64`/`f64` in public items
+- [x] `Camera::available_ids`, `Camera::unavailable_ids`, `Camera::available_demo_models`, `CameraId::connect_demo`, `CameraId::disconnect_demo`, `CameraId::is_demo`, `CameraId::is_connected`, `CameraId::is_open_elsewhere` and `CameraId::firmware_details` take `&Library`, like `Camera::list_open_cameras` and `name()`, so calling them without an initialized library doesn't compile instead of failing with `Error::LibraryNotInitialized`
+- [x] intra-doc links use the public path `crate::Error::X`, not `crate::error::Error::X`
+- [x] public names treat acronyms as words, following Rust convention: `Error::InvalidCameraId`, `Error::InvalidAccessoryId`, `Parameter::EmIccdGain`, `Parameter::EmIccdGainControlMode`, `Parameter::AdcEmGain`, `Parameter::ApplicableStarDefectMapId`, `Parameter::SensrWindowHeight` and `EnumeratedType::EmIccdGainControlMode`. Generated names get this from a rule in `xtask/src/generate.rs` rather than one-off overrides, and each renamed item carries `#[doc(alias = "...")]` with PICam's spelling so rustdoc search still finds it. In the same pass, read the full list of `Model` constants once and add overrides where names are uneven (such as `PRO_EM_1600XX_2B` next to `PI_MAX4_1024X256`, or `RETIGA_E7` next to `LANSIS_A_261BR`). Outcome: `ProEMHS` became `PRO_EM_HS`. The rest keep PICam's own grouping, since `1600xx` isn't a `width x height` size like `1024x256`
 - [x] re-export `CameraId` and `CameraHandle` from `lib.rs`
 - [x] re-export `FirmwareDetail`, the existing `define_picam_enum!` enums (`ComputerInterface`, `ValueType`, `ValueAccess`, `ConstraintType`, `ConstraintScope`, `ConstraintCategory`) and the new ones from `lib.rs`
 - [x] doc comments on the enums generated by `define_picam_enum!` and their variants, and on all public struct fields
