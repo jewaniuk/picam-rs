@@ -820,8 +820,9 @@ impl CameraId {
         // SAFETY: `PicamCameraID` is a plain-data struct with no invariant
         // that forbids an all-zero bit pattern, `model`/`computer_interface`
         // are newtypes (any i32 is a valid value), and the name fields are
-        // just byte arrays, `Picam_GetCameraID` fully overwrites this before
-        // we read any of it back
+        // just byte arrays, so the zeroed value is valid even before
+        // `Picam_ConnectDemoCamera` writes the new camera's id into it on
+        // success (PICam manual 4.3.4.3)
         let mut raw: sys::PicamCameraID = unsafe { std::mem::zeroed() };
 
         picam_call!(sys::Picam_ConnectDemoCamera(
