@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use picam_rs::{
     Camera, CameraId, ConstraintCategory, ConstraintScope, ConstraintSeverity, ConstraintType,
-    Library, Parameter, Roi, ValueAccess, ValueType,
+    Library, Parameter, Roi, ValueAccess, ValueType, params,
 };
 
 /// Connects a demo camera of the first model PICam offers.
@@ -33,16 +33,17 @@ fn scalar_values_through_camera() {
     let camera =
         Camera::open(&id, Arc::clone(&test_library.library)).expect("demo camera should open");
 
+    // the untyped fallback, with the type chosen here rather than by a handle
     let width: i32 = camera
-        .get(Parameter::SensorActiveWidth)
+        .get_untyped(Parameter::SensorActiveWidth)
         .expect("sensor width should be read");
     assert!(width > 0, "sensor width should be positive, got {width}");
 
     let exposure_time: f64 = camera
-        .get(Parameter::ExposureTime)
+        .get(params::EXPOSURE_TIME)
         .expect("exposure time should be read");
     let default_exposure_time: f64 = camera
-        .default_value(Parameter::ExposureTime)
+        .default_value(params::EXPOSURE_TIME)
         .expect("default exposure time should be read");
     assert!(
         default_exposure_time.is_finite() && default_exposure_time >= 0.0,
@@ -53,12 +54,12 @@ fn scalar_values_through_camera() {
     // sdk 5.15 but not documented
     assert!(
         camera
-            .can_set(Parameter::ExposureTime, exposure_time)
+            .can_set(params::EXPOSURE_TIME, exposure_time)
             .expect("settability should be checked"),
         "current exposure time {exposure_time} should be settable"
     );
     camera
-        .set(Parameter::ExposureTime, exposure_time)
+        .set(params::EXPOSURE_TIME, exposure_time)
         .expect("exposure time should be set");
     let failed = camera
         .commit_parameters()
@@ -85,19 +86,19 @@ fn rois_through_camera() {
     let camera =
         Camera::open(&id, Arc::clone(&test_library.library)).expect("demo camera should open");
 
-    let rois: Vec<Roi> = camera.get(Parameter::Rois).expect("rois should be read");
+    let rois: Vec<Roi> = camera.get(params::ROIS).expect("rois should be read");
     assert!(!rois.is_empty(), "a camera should have at least one roi");
 
     // a freshly opened demo camera accepts its own current value, seen with
     // sdk 5.15 but not documented
     assert!(
         camera
-            .can_set(Parameter::Rois, rois.clone())
+            .can_set(params::ROIS, rois.clone())
             .expect("settability should be checked"),
         "current rois {rois:?} should be settable"
     );
     camera
-        .set(Parameter::Rois, rois.clone())
+        .set(params::ROIS, rois.clone())
         .expect("rois should be set");
     let failed = camera
         .commit_parameters()
@@ -107,9 +108,7 @@ fn rois_through_camera() {
         "no parameters should fail, got {failed:?}"
     );
 
-    let committed: Vec<Roi> = camera
-        .get(Parameter::Rois)
-        .expect("rois should be read back");
+    let committed: Vec<Roi> = camera.get(params::ROIS).expect("rois should be read back");
     assert_eq!(committed, rois);
 
     drop(camera);
@@ -134,7 +133,7 @@ fn parameter_info_through_camera() {
     // text of a-2 gives range, which looks like a slip in the manual
     assert_eq!(
         camera
-            .value_type(Parameter::ExposureTime)
+            .value_type(params::EXPOSURE_TIME)
             .expect("value type should be queried"),
         ValueType::FloatingPoint
     );
@@ -146,7 +145,7 @@ fn parameter_info_through_camera() {
     );
     assert_eq!(
         camera
-            .constraint_type(Parameter::ExposureTime)
+            .constraint_type(params::EXPOSURE_TIME)
             .expect("constraint type should be queried"),
         ConstraintType::Range
     );
@@ -168,7 +167,7 @@ fn parameter_info_through_camera() {
     );
 
     let range = camera
-        .range_constraint(Parameter::ExposureTime, ConstraintCategory::Capable)
+        .range_constraint(params::EXPOSURE_TIME, ConstraintCategory::Capable)
         .expect("exposure time range constraint should be read");
     assert!(
         !matches!(range.scope, ConstraintScope::Unknown(_)),

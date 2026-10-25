@@ -146,11 +146,16 @@ include!("generated/parameters.rs");
 /// fn exposure_time(camera: &Camera) -> Result<f64> {
 ///     camera.get(params::EXPOSURE_TIME)
 /// }
+///
+/// fn set_up(camera: &Camera) -> Result<()> {
+///     camera.set(params::EXPOSURE_TIME, 5.0)?;
+///     camera.set(params::ENABLE_INTENSIFIER, true)
+/// }
 /// ```
 ///
 /// A value of the wrong type doesn't compile:
 ///
-/// ```compile_fail
+/// ```compile_fail,E0308
 /// use picam_rs::{Camera, Result, params};
 ///
 /// fn exposure_time(camera: &Camera) -> Result<i32> {
@@ -158,11 +163,22 @@ include!("generated/parameters.rs");
 /// }
 /// ```
 ///
-/// ```compile_fail
+/// ```compile_fail,E0308
 /// use picam_rs::{Camera, Result, params};
 ///
 /// fn set_exposure_time(camera: &Camera) -> Result<()> {
 ///     camera.set(params::EXPOSURE_TIME, 5_i32)
+/// }
+/// ```
+///
+/// Neither does an operation PICam doesn't support for the parameter's type,
+/// such as setting an on/off parameter online:
+///
+/// ```compile_fail,E0277
+/// use picam_rs::{Camera, Result, params};
+///
+/// fn enable_intensifier(camera: &Camera) -> Result<()> {
+///     camera.set_online(params::ENABLE_INTENSIFIER, true)
 /// }
 /// ```
 pub struct TypedParameter<T> {
@@ -319,9 +335,9 @@ use sealed::RawHandle;
 /// outside this crate. It is meant to be used as a bound:
 ///
 /// ```no_run
-/// use picam_rs::{Camera, Parameter, PicamValue, Result};
+/// use picam_rs::{Camera, PicamValue, Result, TypedParameter};
 ///
-/// fn current<T: PicamValue>(camera: &Camera, parameter: Parameter) -> Result<T> {
+/// fn current<T: PicamValue>(camera: &Camera, parameter: TypedParameter<T>) -> Result<T> {
 ///     camera.get(parameter)
 /// }
 /// ```

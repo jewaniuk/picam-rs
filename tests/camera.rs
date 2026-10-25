@@ -5,7 +5,7 @@ mod common;
 
 use std::sync::Arc;
 
-use picam_rs::{Camera, CameraId, Parameter};
+use picam_rs::{Camera, CameraId, params};
 
 /// Connects, opens, queries, closes and disconnects a demo camera, as a
 /// smoke test of the whole chain from `Library` through to a parameter read.
@@ -69,7 +69,7 @@ fn demo_camera_round_trip() {
 
     // every camera reports its sensor size, whatever the model
     let width: i32 = camera
-        .get(Parameter::SensorActiveWidth)
+        .get(params::SENSOR_ACTIVE_WIDTH)
         .expect("sensor width should be read");
     assert!(width > 0, "sensor width should be positive, got {width}");
 

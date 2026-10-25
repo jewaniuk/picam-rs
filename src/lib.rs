@@ -14,12 +14,12 @@
 //! ```no_run
 //! use std::sync::Arc;
 //!
-//! use picam_rs::{Camera, Library, Parameter};
+//! use picam_rs::{Camera, Library, params};
 //!
 //! # fn main() -> picam_rs::Result<()> {
 //! let library = Arc::new(Library::new()?);
 //! let camera = Camera::open_first(library)?;
-//! let exposure_time: f64 = camera.get(Parameter::ExposureTime)?;
+//! let exposure_time = camera.get(params::EXPOSURE_TIME)?;
 //! println!("exposure time: {exposure_time}");
 //! # Ok(())
 //! # }
