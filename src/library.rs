@@ -10,6 +10,7 @@ use crate::sys;
 /// that requirement into something the type system enforces: you can't
 /// obtain a `Camera` (or anything else) without a live `Library`, and
 /// initialization/uninitialization become `new`/`Drop`.
+#[derive(Debug)]
 pub struct Library {
     // a private field, so `Library` can't be constructed from outside this module
     _private: (),
