@@ -17,8 +17,10 @@ This repository is **public**. Never commit PICam SDK files (headers, libraries,
 | build | `cargo build -p picam-rs` |
 | all tests (needs the SDK installed) | `cargo test -p picam-rs` |
 | format | `cargo fmt --all` |
-| the gate, which must pass before pushing | `cargo run -p xtask -- gate` (format check, `cargo clippy -p picam-rs --all-targets -- -D warnings -A dead_code`, then the tests) |
+| the gate, which must pass before pushing | `cargo run -p xtask -- gate` (`generate --check`, format check, `cargo clippy -p picam-rs --all-targets -- -D warnings -A dead_code`, then the `picam-rs` and `xtask` tests) |
 | progress | `cargo run -p xtask -- progress` (add `--list` for every unwrapped function) |
+| regenerate the lists taken from the headers | `cargo run -p xtask -- generate` |
+| check them without writing | `cargo run -p xtask -- generate --check` (the gate runs this) |
 | public API listing | `cargo public-api --package picam-rs` |
 
 Hooks in `.claude/settings.json` format every Rust file you edit, and run the gate before every `git push` and `gh pr create`, blocking either one if it fails. They also block pushes to `main`, force pushes and `gh pr merge`. When a hook blocks a command, read its message and fix the cause. Never try to get around a hook.
@@ -81,6 +83,7 @@ The maintainer writes acquisition, callbacks and any `Send`/`Sync` decision pers
 - every public item and field has a `///` doc, every fallible public function has `# Errors`, every `unsafe fn` has `# Safety`, and every `unsafe` block has a `// SAFETY:` comment
 - inline `//` comments are lowercase with minimal punctuation
 - never add `#![allow(dead_code)]`, because the progress tool depends on those warnings
+- never edit `src/generated/` by hand: change `xtask/src/generate.rs` and rerun `cargo run -p xtask -- generate`. A new long list taken straight from a header should be generated the same way
 
 ### Reference implementations
 
@@ -93,6 +96,7 @@ Copy these instead of inventing something new:
 | the same wrapper repeated for several types | `impl_picam_value!` in `src/parameter.rs` |
 | passing an array into PICam | `<Vec<Roi> as sealed::RawPicamValue>::set` in `src/parameter.rs` |
 | a public enum | `define_picam_enum!` in `src/convert.rs` |
+| an enum or list taken straight from a header | `xtask generate`, see `xtask/src/generate.rs` and `src/generated/` |
 | a public trait whose methods need a PICam handle | the `sealed` module and `RawHandle` in `src/parameter.rs` |
 | an integration test | `tests/camera.rs`, using `tests/common/mod.rs` |
 

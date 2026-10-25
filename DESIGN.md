@@ -48,9 +48,10 @@ The crate only runs on Windows, the only platform the lab uses. The SDK also shi
 | `error` | `Error`, `Result`, `picam_call!` | done |
 | `library` | `Library` (initialize/uninitialize lifecycle) | done |
 | `camera` | `Camera`, `CameraId`, `CameraHandle`, discovery, demo cameras, parameter/constraint methods | done apart from acquisition |
-| `parameter` | `Parameter`, value traits, `Roi`/`Pulse`/`Modulation`, parameter info queries | done, enum refactor in progress |
-| `constraint` | constraint structs and their enums | done, enum refactor in progress |
-| `convert` | shared FFI helpers (string/array conversion, `define_picam_enum!`, `FirmwareDetail`) | done |
+| `parameter` | `Parameter`, value traits, `Roi`/`Pulse`/`Modulation`, parameter info queries | done |
+| `constraint` | constraint structs and their enums | done |
+| `model` | `Model`, with a constant per camera model from `src/generated/models.rs` | done |
+| `convert` | shared FFI helpers (string/array conversion, `define_picam_enum!`, `FirmwareDetail`, enum names through `Picam_GetEnumerationString`) | done |
 | acquisition | `Picam_Acquire`, start/stop, waiting for updates | not started |
 | advanced | `picam_advanced.h` | not started |
 | accessory | `picam_accessory.h` | not started |
@@ -66,8 +67,18 @@ There is no separate `picam-sys` crate. The raw bindings live in the private `sy
 A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. PICam can return enum values the bindings don't know about, for example when the installed runtime is newer than the SDK used to generate them. So:
 
 - In `build.rs`, bindgen generates real Rust enums by default, but any enum whose values **come back from C** is generated as a newtype (`.newtype_enum(...)`): a struct wrapping a plain integer, where any value is valid. Add new entries there whenever a new such enum is wrapped. Bitmask enums use `.bitfield_enum(...)`.
-- Public-facing enums are defined with `define_picam_enum!` (in `src/convert.rs`). Each generated enum has an `Unknown(i32)` variant and `pub(crate)` `from_raw`/`to_raw` conversions. `Parameter` uses its own macro, `define_parameters!`, for the same reason.
+- Public-facing enums are defined with `define_picam_enum!` (in `src/convert.rs`). Each generated enum has an `Unknown(i32)` variant, `pub(crate)` `from_raw`/`to_raw` conversions and a `name(&Library)` method. `Parameter` uses its own macro, `define_parameters!`, for the same reason.
+- Readable names come from `Picam_GetEnumerationString`, which needs an initialized library, so they are a `name(self, library: &Library) -> Result<String>` method rather than `Display`.
+- Enums and constants are not `#[non_exhaustive]`. When an SDK update adds values, the crate is updated to match.
+- Lists taken straight from the headers are generated, not written by hand. `cargo run -p xtask -- generate` (`xtask/src/generate.rs`) reads the installed headers and writes them into `src/generated/`, which the modules pull in with `include!`. Those files are never edited by hand: change the generator and rerun it. Today that covers `Parameter`, `EnumeratedType` and `Model`. Enums whose docs need prose (`Error`, the small `define_picam_enum!` enums, `RoisConstraintRules`) stay hand-written, but `generate --check` verifies that each one still names every value its C enum has. The gate runs `generate --check`, so a stale generated file or a missing value fails before anything is pushed. After an SDK update, run `generate`, review the diff and fill in any values `--check` reports.
 - `Error::from_raw` follows the same rule and maps unrecognized codes to `Error::Unknown(i32)`.
+
+### Camera models (settled)
+
+- `Model` is a newtype over PICam's model code with a private field, not an enum, so any code PICam reports is a valid `Model`.
+- Each model in the SDK the crate was generated from has an associated constant (`Model::PIXIS_100F`), generated from the header. Constant names are converted automatically from PICam's names, with a few overrides in `xtask/src/generate.rs` where a product name and model number run together.
+- PICam's "series" values stand for a model family rather than one camera (manual 4.1). `Model::is_series` reports them, based on the crate's own list (a PICam name ending in `Series`), since PICam has no call that answers it. Its docs say so.
+- `Debug` shows the constant name when there is one, and `Model::name(&Library)` gives PICam's readable name.
 
 ### Errors (settled)
 
@@ -151,18 +162,19 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 ## Progress tracking
 
 - `cargo run -p xtask -- progress` counts `dead_code` warnings from `cargo check` and reports how many of the 199 header functions are wired into the safe layer, overall and per header. Add `--list` to print every function still unwrapped. It is plain Rust (the `xtask` workspace member, never published), so it runs the same on macOS and Windows. Because the tool relies on these warnings, the crate deliberately has **no** `#![allow(dead_code)]`; don't add one.
+- `cargo run -p xtask -- generate` writes the files in `src/generated/` from the installed headers, and `generate --check` checks them and the hand-written enums without writing anything. See [Enums and undefined behaviour](#enums-and-undefined-behaviour-settled).
 - The README's "to test" list collects behaviour that can only be confirmed on real hardware or with the SDK running. Add to it whenever an assumption can't be checked from the manual.
 
 ## Roadmap
 
-As of 2026-10-24: 82 / 199 functions wrapped.
+As of 2026-10-25: 84 / 199 functions wrapped.
 
 ### 1. Finish the `sys`-type refactor (in progress)
 
 - [x] `define_picam_enum!` and wrappers for `ComputerInterface`, `ValueType`, `ValueAccess`, `ConstraintType`, `ConstraintScope`, `ConstraintCategory`
 - [x] wrappers for `PicamEnumeratedType`, `PicamConstraintSeverity`, `PicamRoisConstraintRulesMask` (bitmask)
-- [ ] decide on and implement a public `Model` type (see open questions)
-- [ ] replace `sys` enums in public signatures and fields with the wrappers (`CameraId`, `Camera::value_type` and friends, the constraint `category` arguments, the constraint struct fields, `available_demo_models`)
+- [x] decide on and implement a public `Model` type (see open questions)
+- [x] replace `sys` enums in public signatures and fields with the wrappers (`CameraId`, `Camera::value_type` and friends, the constraint `category` arguments, the constraint struct fields, `available_demo_models`)
 - [ ] replace `sys::piint`/`pi64s`/`piflt` with `i32`/`i64`/`f64` in public items
 - [x] re-export `CameraId` and `CameraHandle` from `lib.rs`
 - [x] re-export `FirmwareDetail`, the existing `define_picam_enum!` enums (`ComputerInterface`, `ValueType`, `ValueAccess`, `ConstraintType`, `ConstraintScope`, `ConstraintCategory`) and the new ones from `lib.rs`
@@ -192,7 +204,6 @@ These largely mirror patterns already in `camera.rs`.
 
 ## Open questions
 
-- **`Model`:** PICam defines 300+ camera models. Hand-writing a full `define_picam_enum!` list was explicitly deferred. Options include a public newtype with `Display` through `Picam_GetEnumerationString`, or generating the variant list.
 - **Intra-doc link paths:** the code currently mixes `crate::Error::X` and `crate::error::Error::X`. Since `error` is a private module, the public path `crate::Error::X` is probably the right standard.
 - **Functions that need an initialized library but don't take one:** `Library`'s docs say you can't do anything without a live `Library`, but `Camera::available_ids`, `Camera::unavailable_ids`, `Camera::available_demo_models` and `CameraId::connect_demo` take no `&Library`. They fail at run time with `Error::LibraryNotInitialized` instead of being prevented at compile time. `Camera::list_open_cameras` does take `&Library`. Decide whether all of these should take `&Library` for consistency.
 - **Acronyms in public names:** some public names copy PICam's capitalization rather than Rust's convention of treating acronyms as words (`CameraId`, not `CameraID`). Examples: `Error::InvalidCameraID`, `Error::InvalidAccessoryID`, `Parameter::ApplicableStarDefectMapID`, `Parameter::EMIccdGain`, `Parameter::AdcEMGain`. Decide whether to rename them (`InvalidCameraId`, `EmIccdGain`, and so on) before publishing, since renaming afterwards is a breaking change. `SeNsRWindowHeight` is a product name (SeNsR) and is a separate case.
