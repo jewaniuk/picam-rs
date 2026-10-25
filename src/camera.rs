@@ -729,7 +729,8 @@ pub struct CameraId {
     pub computer_interface: sys::PicamComputerInterface,
     /// The name of the camera's sensor.
     pub sensor_name: String,
-    /// The camera's serial number. PICam appends `:Demo` to a demo camera's serial number.
+    /// The camera's serial number. PICam appends `:Demo` to a demo camera's
+    /// serial number (seen with SDK 5.15).
     pub serial_number: String,
 }
 

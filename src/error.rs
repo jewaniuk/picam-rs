@@ -9,11 +9,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
     // --- General Errors ---
-    /// PICam hit an internal error it couldn't classify.
+    /// An unexpected error occurred in PICam.
     #[error("an unexpected error occurred")]
     UnexpectedError,
-    /// A null pointer turned up where a value was expected, either passed to
-    /// PICam or returned by it where this crate expected a single struct.
+    /// An unexpected null pointer was encountered. This crate also returns it
+    /// when PICam gives back a null pointer where a single struct was expected.
     #[error("an unexpected null pointer was encountered")]
     UnexpectedNullPointer,
     /// PICam was passed a pointer it considers invalid.
@@ -28,7 +28,7 @@ pub enum Error {
     /// An enumeration value isn't defined for its enumerated type.
     #[error("an enumeration value was not defined")]
     EnumerationValueNotDefined,
-    /// The operation isn't valid in PICam's current state.
+    /// The operation is invalid.
     #[error("the operation is invalid")]
     InvalidOperation,
     /// The operation was canceled before it finished.
@@ -76,7 +76,8 @@ pub enum Error {
     /// The accessory ID doesn't identify an available accessory.
     #[error("an invalid accessory ID was supplied")]
     InvalidAccessoryID,
-    /// The handle isn't one PICam currently recognizes, for example because it has been closed.
+    /// The handle is invalid. This is expected for a handle that has since been
+    /// closed, but that is not yet confirmed (see the README's "to test" list).
     #[error("an invalid handle was supplied")]
     InvalidHandle,
     /// PICam couldn't communicate with the device.

@@ -122,15 +122,17 @@ pub struct RoisConstraint {
     pub x_constraint: RangeConstraint,
     /// The constraint on [`crate::Roi::width`].
     pub width_constraint: RangeConstraint,
-    /// The allowed values of [`crate::Roi::x_binning`], or empty when there is no limit beyond the
-    /// binning dividing evenly into the width.
+    /// Extra limits on [`crate::Roi::x_binning`]: the values it may take, or
+    /// empty when there are none. Either way the binning must always divide
+    /// evenly into the width.
     pub x_binning_limits: Vec<sys::piint>,
     /// The constraint on [`crate::Roi::y`].
     pub y_constraint: RangeConstraint,
     /// The constraint on [`crate::Roi::height`].
     pub height_constraint: RangeConstraint,
-    /// The allowed values of [`crate::Roi::y_binning`], or empty when there is no limit beyond the
-    /// binning dividing evenly into the height.
+    /// Extra limits on [`crate::Roi::y_binning`]: the values it may take, or
+    /// empty when there are none. Either way the binning must always divide
+    /// evenly into the height.
     pub y_binning_limits: Vec<sys::piint>,
 }
 

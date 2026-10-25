@@ -498,13 +498,13 @@ impl_online_settable_scalar!(sys::piflt, Picam_SetParameterFloatingPointValueOnl
 pub struct Roi {
     /// The left-most column, counting from zero.
     pub x: sys::piint,
-    /// The number of columns.
+    /// How many columns the region spans.
     pub width: sys::piint,
     /// How many adjacent columns are summed into one.
     pub x_binning: sys::piint,
     /// The top-most row, counting from zero.
     pub y: sys::piint,
-    /// The number of rows.
+    /// How many rows the region spans.
     pub height: sys::piint,
     /// How many adjacent rows are summed into one.
     pub y_binning: sys::piint,

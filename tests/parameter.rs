@@ -37,11 +37,16 @@ fn scalar_values_through_camera() {
     let exposure_time: f64 = camera
         .get(Parameter::ExposureTime)
         .expect("exposure time should be read");
-    let _default_exposure_time: f64 = camera
+    let default_exposure_time: f64 = camera
         .default_value(Parameter::ExposureTime)
         .expect("default exposure time should be read");
+    assert!(
+        default_exposure_time.is_finite() && default_exposure_time >= 0.0,
+        "default exposure time should be a non-negative number, got {default_exposure_time}"
+    );
 
-    // the camera's own current value should always be acceptable to it
+    // a freshly opened demo camera accepts its own current value, seen with
+    // sdk 5.15 but not documented
     assert!(
         camera
             .can_set(Parameter::ExposureTime, exposure_time)
@@ -78,7 +83,8 @@ fn rois_through_camera() {
     let rois: Vec<Roi> = camera.get(Parameter::Rois).expect("rois should be read");
     assert!(!rois.is_empty(), "a camera should have at least one roi");
 
-    // the camera's own current value should always be acceptable to it
+    // a freshly opened demo camera accepts its own current value, seen with
+    // sdk 5.15 but not documented
     assert!(
         camera
             .can_set(Parameter::Rois, rois.clone())
