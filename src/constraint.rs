@@ -41,6 +41,57 @@ define_picam_enum!(
     /// The values suited to most uses.
     Recommended = PicamConstraintCategory_Recommended,
 );
+define_picam_enum!(
+    /// What it means for a value to break a constraint (PICam manual 5.1.3.2).
+    ConstraintSeverity,
+    sys::PicamConstraintSeverity,
+    /// The value is in error.
+    Error = PicamConstraintSeverity_Error,
+    /// The value is allowed, but deserves attention.
+    Warning = PicamConstraintSeverity_Warning,
+);
+
+bitflags::bitflags! {
+    /// The extra rules a set of regions of interest must follow, from a
+    /// [`RoisConstraint`] (PICam manual 5.1.3.4).
+    ///
+    /// No flags set means there are no extra rules. Bits this crate doesn't
+    /// recognize are kept, not dropped.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct RoisConstraintRules: i32 {
+        /// Regions that share columns must bin them the same way, and must
+        /// start on a boundary of that binning.
+        const X_BINNING_ALIGNMENT =
+            sys::PicamRoisConstraintRulesMask::PicamRoisConstraintRulesMask_XBinningAlignment.0;
+        /// Regions that share rows must bin them the same way, and must start
+        /// on a boundary of that binning.
+        const Y_BINNING_ALIGNMENT =
+            sys::PicamRoisConstraintRulesMask::PicamRoisConstraintRulesMask_YBinningAlignment.0;
+        /// Regions must be symmetric about the line between the two middle
+        /// columns.
+        const HORIZONTAL_SYMMETRY =
+            sys::PicamRoisConstraintRulesMask::PicamRoisConstraintRulesMask_HorizontalSymmetry.0;
+        /// Regions must be symmetric about the line between the two middle
+        /// rows.
+        const VERTICAL_SYMMETRY =
+            sys::PicamRoisConstraintRulesMask::PicamRoisConstraintRulesMask_VerticalSymmetry.0;
+        /// A region that straddles a line of symmetry may not bin pixels from
+        /// both sides of it together.
+        const SYMMETRY_BOUNDS_BINNING =
+            sys::PicamRoisConstraintRulesMask::PicamRoisConstraintRulesMask_SymmetryBoundsBinning.0;
+        /// Each region must bin as many columns as rows.
+        const UNIFORM_BINNING =
+            sys::PicamRoisConstraintRulesMask::PicamRoisConstraintRulesMask_UniformBinning.0;
+    }
+}
+
+impl RoisConstraintRules {
+    /// Converts a raw `PicamRoisConstraintRulesMask`, keeping any bits this
+    /// crate doesn't recognize.
+    pub(crate) fn from_raw(raw: sys::PicamRoisConstraintRulesMask) -> Self {
+        Self::from_bits_retain(raw.0)
+    }
+}
 
 /// A collection-style constraint: a parameter's value must be one of a
 /// fixed set of values.
