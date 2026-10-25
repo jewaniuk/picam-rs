@@ -47,7 +47,7 @@ define_picam_enum!(
     sys::PicamConstraintSeverity,
     /// The value is in error.
     Error = PicamConstraintSeverity_Error,
-    /// The value is allowed, but deserves attention.
+    /// Breaking the constraint is only a warning, which deserves attention.
     Warning = PicamConstraintSeverity_Warning,
 );
 
@@ -67,12 +67,12 @@ bitflags::bitflags! {
         /// on a boundary of that binning.
         const Y_BINNING_ALIGNMENT =
             sys::PicamRoisConstraintRulesMask::PicamRoisConstraintRulesMask_YBinningAlignment.0;
-        /// Regions must be symmetric about the line between the two middle
-        /// columns.
+        /// Each region must either straddle the vertical centre line of the sensor
+        /// or be mirrored by another region across it.
         const HORIZONTAL_SYMMETRY =
             sys::PicamRoisConstraintRulesMask::PicamRoisConstraintRulesMask_HorizontalSymmetry.0;
-        /// Regions must be symmetric about the line between the two middle
-        /// rows.
+        /// Each region must either straddle the horizontal centre line of the sensor
+        /// or be mirrored by another region across it.
         const VERTICAL_SYMMETRY =
             sys::PicamRoisConstraintRulesMask::PicamRoisConstraintRulesMask_VerticalSymmetry.0;
         /// A region that straddles a line of symmetry may not bin pixels from

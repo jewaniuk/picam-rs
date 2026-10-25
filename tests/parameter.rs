@@ -127,7 +127,9 @@ fn parameter_info_through_camera() {
     let camera =
         Camera::open(&id, Arc::clone(&test_library.library)).expect("demo camera should open");
 
-    // value and constraint types from the PICam manual, appendix A table A-2
+    // value and constraint types from the PICam manual, appendix A tables A-2
+    // and A-3. for rois, a-3 gives a region of interest constraint while the
+    // text of a-2 gives range, which looks like a slip in the manual
     assert_eq!(
         camera
             .value_type(Parameter::ExposureTime)

@@ -255,7 +255,10 @@ impl Camera {
         value_type(self.handle, parameter).map(ValueType::from_raw)
     }
 
-    /// Gets the enumerated type `parameter`'s value belongs to, if any.
+    /// Gets the enumerated type `parameter`'s value belongs to.
+    ///
+    /// Only parameters whose value type is [`ValueType::Enumeration`] are
+    /// valid here (PICam manual 5.4.3.6).
     ///
     /// # Errors
     ///
