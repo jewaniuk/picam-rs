@@ -108,7 +108,7 @@ pub struct CollectionConstraint {
     /// Whether a value that breaks the constraint is an error or only a warning.
     pub severity: ConstraintSeverity,
     /// The values the parameter may take.
-    pub values: Vec<sys::piflt>,
+    pub values: Vec<f64>,
 }
 
 impl CollectionConstraint {
@@ -136,16 +136,16 @@ pub struct RangeConstraint {
     /// `true` when no valid values exist, in which case only `scope` and `severity` mean anything.
     pub empty_set: bool,
     /// The smallest value in the range. `outlying_values` may hold a smaller valid value.
-    pub minimum: sys::piflt,
+    pub minimum: f64,
     /// The largest value in the range. `outlying_values` may hold a larger valid value.
-    pub maximum: sys::piflt,
+    pub maximum: f64,
     /// The step between consecutive values in the range.
-    pub increment: sys::piflt,
+    pub increment: f64,
     /// Values strictly between `minimum` and `maximum` that are not valid. Empty when every value
     /// in the range is valid.
-    pub excluded_values: Vec<sys::piflt>,
+    pub excluded_values: Vec<f64>,
     /// Valid values that lie outside the range. Empty when there are none.
-    pub outlying_values: Vec<sys::piflt>,
+    pub outlying_values: Vec<f64>,
 }
 
 impl RangeConstraint {
@@ -189,7 +189,7 @@ pub struct RoisConstraint {
     /// Extra rules the set of regions must follow, such as symmetry or uniform binning.
     pub rules: RoisConstraintRules,
     /// The largest number of regions allowed.
-    pub maximum_roi_count: sys::piint,
+    pub maximum_roi_count: i32,
     /// The constraint on [`crate::Roi::x`].
     pub x_constraint: RangeConstraint,
     /// The constraint on [`crate::Roi::width`].
@@ -197,7 +197,7 @@ pub struct RoisConstraint {
     /// Extra limits on [`crate::Roi::x_binning`]: the values it may take, or
     /// empty when there are none. Either way the binning must always divide
     /// evenly into the width.
-    pub x_binning_limits: Vec<sys::piint>,
+    pub x_binning_limits: Vec<i32>,
     /// The constraint on [`crate::Roi::y`].
     pub y_constraint: RangeConstraint,
     /// The constraint on [`crate::Roi::height`].
@@ -205,7 +205,7 @@ pub struct RoisConstraint {
     /// Extra limits on [`crate::Roi::y_binning`]: the values it may take, or
     /// empty when there are none. Either way the binning must always divide
     /// evenly into the height.
-    pub y_binning_limits: Vec<sys::piint>,
+    pub y_binning_limits: Vec<i32>,
 }
 
 impl RoisConstraint {
@@ -264,9 +264,9 @@ pub struct PulseConstraint {
     /// The constraint on [`crate::Pulse::width`].
     pub width_constraint: RangeConstraint,
     /// The smallest allowed sum of the pulse's delay and width.
-    pub minimum_duration: sys::piflt,
+    pub minimum_duration: f64,
     /// The largest allowed sum of the pulse's delay and width.
-    pub maximum_duration: sys::piflt,
+    pub maximum_duration: f64,
 }
 
 impl PulseConstraint {
@@ -297,7 +297,7 @@ pub struct ModulationsConstraint {
     /// `severity` mean anything.
     pub empty_set: bool,
     /// The largest number of points allowed in the sequence.
-    pub maximum_modulation_count: sys::piint,
+    pub maximum_modulation_count: i32,
     /// The constraint on [`crate::Modulation::duration`].
     pub duration_constraint: RangeConstraint,
     /// The constraint on [`crate::Modulation::frequency`].

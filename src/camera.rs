@@ -380,7 +380,7 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to query this.
-    pub fn status_parameter_purview(&self, parameter: Parameter) -> Result<Vec<sys::piint>> {
+    pub fn status_parameter_purview(&self, parameter: Parameter) -> Result<Vec<i32>> {
         let mut ptr: *const sys::PicamStatusPurview = std::ptr::null();
         picam_call!(sys::Picam_GetStatusParameterPurview(
             self.handle,
@@ -414,8 +414,8 @@ impl Camera {
     pub fn estimate_time_to_status_parameter_value(
         &self,
         parameter: Parameter,
-        value: sys::piint,
-    ) -> Result<sys::piint> {
+        value: i32,
+    ) -> Result<i32> {
         let mut estimated_time: sys::piint = 0;
         picam_call!(sys::Picam_EstimateTimeToStatusParameterValue(
             self.handle,
@@ -436,8 +436,8 @@ impl Camera {
     pub fn wait_for_status_parameter_value(
         &self,
         parameter: Parameter,
-        value: sys::piint,
-        timeout: sys::piint,
+        value: i32,
+        timeout: i32,
     ) -> Result<()> {
         picam_call!(sys::Picam_WaitForStatusParameterValue(
             self.handle,
