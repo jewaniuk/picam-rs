@@ -52,6 +52,45 @@ impl Library {
         })
     }
 
+    /// Reports the installed PICam runtime's version.
+    ///
+    /// It works without an initialized library (PICam manual 3.2.1), so it
+    /// takes no `&Library`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to report its version.
+    pub fn version() -> Result<Version> {
+        let (mut major, mut minor, mut distribution, mut released) = (0, 0, 0, 0);
+        picam_call!(sys::Picam_GetVersion(
+            &mut major,
+            &mut minor,
+            &mut distribution,
+            &mut released
+        ))?;
+        Ok(Version {
+            major,
+            minor,
+            distribution,
+            released,
+        })
+    }
+
+    /// Reports whether PICam is initialized in this process, whether by a
+    /// `Library` or by anything else.
+    ///
+    /// It works without an initialized library (PICam manual 3.2.2), so it
+    /// takes no `&Library`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to report it.
+    pub fn is_initialized() -> Result<bool> {
+        let mut initialized: sys::pibln = 0;
+        picam_call!(sys::Picam_IsLibraryInitialized(&mut initialized))?;
+        Ok(initialized != 0)
+    }
+
     /// Records that the demo camera `model`, `serial_number` is about to be
     /// connected, refusing a new one once `MAX_DEMO_CAMERAS` have been.
     ///
@@ -98,5 +137,73 @@ impl Drop for Library {
         if let Err(e) = picam_call!(sys::Picam_UninitializeLibrary()) {
             tracing::error!("failed to uninitialize PICam library: {e}");
         }
+    }
+}
+
+/// A PICam version, as [`Library::version`] reports it.
+///
+/// Versions compare field by field, so a later release compares greater.
+/// `Display` writes it the way PICam's manual does, as `5.15.11.2503`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Version {
+    /// The major version, raised for major features or breaking changes.
+    pub major: i32,
+    /// The minor version, raised for minor features.
+    pub minor: i32,
+    /// The distribution version, raised for bug-fix releases.
+    pub distribution: i32,
+    /// The release date as `YYMM` (2503 is March 2025), or 0 for a beta
+    /// release.
+    pub released: i32,
+}
+
+impl Version {
+    /// Reports whether this is a beta release, which PICam marks with a
+    /// release date of 0 (PICam manual 3.2.1).
+    pub fn is_beta(&self) -> bool {
+        self.released == 0
+    }
+}
+
+impl fmt::Display for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}.{}.{}.{}",
+            self.major, self.minor, self.distribution, self.released
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn version(major: i32, minor: i32, distribution: i32, released: i32) -> Version {
+        Version {
+            major,
+            minor,
+            distribution,
+            released,
+        }
+    }
+
+    #[test]
+    fn displays_like_the_manual() {
+        assert_eq!(version(5, 15, 11, 2503).to_string(), "5.15.11.2503");
+        assert_eq!(version(5, 1, 2, 0).to_string(), "5.1.2.0");
+    }
+
+    #[test]
+    fn later_versions_compare_greater() {
+        assert!(version(5, 9, 0, 2001) < version(5, 15, 0, 2001));
+        assert!(version(5, 15, 11, 2503) < version(6, 0, 0, 2601));
+        assert!(version(5, 15, 10, 2412) < version(5, 15, 11, 2503));
+    }
+
+    #[test]
+    fn zero_release_date_is_beta() {
+        assert!(version(5, 1, 2, 0).is_beta());
+        assert!(!version(5, 15, 11, 2503).is_beta());
     }
 }
