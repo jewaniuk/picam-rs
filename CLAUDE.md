@@ -64,9 +64,11 @@ Stop and ask the maintainer **before**:
 8. assuming PICam behaviour that neither the manual nor a demo-camera test settles
 9. changing a test's expectations to make it pass
 10. adding any `#[allow(...)]`
-11. editing `CLAUDE.md`, the hook or settings files in `.claude/`, or `DESIGN.md`'s settled sections
+11. editing `CLAUDE.md`, the hook or settings files in `.claude/`, the gate and hook code in `xtask/src/gate.rs` and `xtask/src/hook.rs`, or `DESIGN.md`'s settled sections
 12. going beyond the approved plan
 13. deleting files, rewriting git history, or force-pushing
+
+The rest of `xtask/` (the generator, the progress tool and their tests) is ordinary project code. Edit it as an approved plan calls for, the same as `src/`, without asking for each edit. The settings only ask before edits to the gate and hook code, because those enforce the rules above.
 
 When you stop, say which rule applies, describe the problem, list the options with your recommendation, and wait for an answer.
 
