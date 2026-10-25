@@ -21,10 +21,11 @@ use crate::sys;
 /// manual 4.1). [`Model::is_series`] tells them apart.
 ///
 /// ```no_run
-/// use picam_rs::{Camera, Model};
+/// use picam_rs::{Camera, Library, Model};
 ///
 /// # fn main() -> picam_rs::Result<()> {
-/// for model in Camera::available_demo_models()? {
+/// let library = Library::new()?;
+/// for model in Camera::available_demo_models(&library)? {
 ///     if model == Model::PIXIS_100F {
 ///         println!("a PIXIS 100F demo camera is available");
 ///     }

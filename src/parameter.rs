@@ -244,21 +244,21 @@ macro_rules! impl_picam_value {
 }
 
 impl_picam_value!(
-    sys::piint,
+    i32,
     Picam_GetParameterIntegerValue,
     Picam_SetParameterIntegerValue,
     Picam_GetParameterIntegerDefaultValue,
     Picam_CanSetParameterIntegerValue
 );
 impl_picam_value!(
-    sys::pi64s,
+    i64,
     Picam_GetParameterLargeIntegerValue,
     Picam_SetParameterLargeIntegerValue,
     Picam_GetParameterLargeIntegerDefaultValue,
     Picam_CanSetParameterLargeIntegerValue
 );
 impl_picam_value!(
-    sys::piflt,
+    f64,
     Picam_GetParameterFloatingPointValue,
     Picam_SetParameterFloatingPointValue,
     Picam_GetParameterFloatingPointDefaultValue,
@@ -331,11 +331,11 @@ macro_rules! impl_readable_value {
     };
 }
 
-impl_readable_value!(sys::piint, Picam_ReadParameterIntegerValue);
-impl_readable_value!(sys::piflt, Picam_ReadParameterFloatingPointValue);
+impl_readable_value!(i32, Picam_ReadParameterIntegerValue);
+impl_readable_value!(f64, Picam_ReadParameterFloatingPointValue);
 
 /// A value type that can be set and applied to hardware immediately,
-/// without needing [`crate::camera::Camera::commit_parameters`].
+/// without needing [`crate::Camera::commit_parameters`].
 ///
 /// This trait is sealed: it is implemented only for `i32`, `f64` and
 /// [`Pulse`], the three value types PICam supports this for, and can't be
@@ -354,8 +354,8 @@ macro_rules! impl_online_settable_scalar {
     };
 }
 
-impl_online_settable_scalar!(sys::piint, Picam_SetParameterIntegerValueOnline);
-impl_online_settable_scalar!(sys::piflt, Picam_SetParameterFloatingPointValueOnline);
+impl_online_settable_scalar!(i32, Picam_SetParameterIntegerValueOnline);
+impl_online_settable_scalar!(f64, Picam_SetParameterFloatingPointValueOnline);
 
 /// A single region of interest.
 ///
@@ -363,17 +363,17 @@ impl_online_settable_scalar!(sys::piflt, Picam_SetParameterFloatingPointValueOnl
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Roi {
     /// The left-most column, counting from zero.
-    pub x: sys::piint,
+    pub x: i32,
     /// How many columns the region spans.
-    pub width: sys::piint,
+    pub width: i32,
     /// How many adjacent columns are summed into one.
-    pub x_binning: sys::piint,
+    pub x_binning: i32,
     /// The top-most row, counting from zero.
-    pub y: sys::piint,
+    pub y: i32,
     /// How many rows the region spans.
-    pub height: sys::piint,
+    pub height: i32,
     /// How many adjacent rows are summed into one.
-    pub y_binning: sys::piint,
+    pub y_binning: i32,
 }
 
 impl Roi {
@@ -494,13 +494,13 @@ impl PicamValue for Vec<Roi> {}
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Modulation {
     /// How long the intensifier modulates for, in ms.
-    pub duration: sys::piflt,
+    pub duration: f64,
     /// The intensifier modulation frequency, in MHz.
-    pub frequency: sys::piflt,
+    pub frequency: f64,
     /// The intensifier's phase relative to the modulation output signal, in degrees.
-    pub phase: sys::piflt,
+    pub phase: f64,
     /// The frequency of the RF output signal, in MHz.
-    pub output_signal_frequency: sys::piflt,
+    pub output_signal_frequency: f64,
 }
 
 impl Modulation {
@@ -627,9 +627,9 @@ impl PicamValue for Vec<Modulation> {}
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Pulse {
     /// The delay before the gate pulse starts, in ns.
-    pub delay: sys::piflt,
+    pub delay: f64,
     /// The width of the gate pulse, in ns.
-    pub width: sys::piflt,
+    pub width: f64,
 }
 
 impl Pulse {

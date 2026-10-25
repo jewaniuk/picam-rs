@@ -16,7 +16,8 @@ fn demo_camera_round_trip() {
 
     let test_library = common::library();
 
-    let models = Camera::available_demo_models().expect("demo models should be listed");
+    let models =
+        Camera::available_demo_models(&test_library.library).expect("demo models should be listed");
     let model = *models
         .first()
         .expect("PICam should offer at least one demo model");
@@ -29,8 +30,24 @@ fn demo_camera_round_trip() {
         "demo model name should not be empty"
     );
 
-    let id = CameraId::connect_demo(model, SERIAL_NUMBER).expect("demo camera should connect");
-    assert!(id.is_demo().expect("demo status should be queried"));
+    let id = CameraId::connect_demo(&test_library.library, model, SERIAL_NUMBER)
+        .expect("demo camera should connect");
+    assert!(
+        id.is_demo(&test_library.library)
+            .expect("demo status should be queried")
+    );
+
+    // connecting a demo camera establishes its connection (picam manual 4.3.4.3)
+    assert!(
+        id.is_connected(&test_library.library)
+            .expect("connection status should be queried")
+    );
+    // the manual doesn't say what these report for a demo camera, so only
+    // check that picam answers
+    id.is_open_elsewhere(&test_library.library)
+        .expect("open-elsewhere status should be queried");
+    id.firmware_details(&test_library.library)
+        .expect("firmware details should be listed");
 
     let camera =
         Camera::open(&id, Arc::clone(&test_library.library)).expect("demo camera should open");
@@ -57,5 +74,6 @@ fn demo_camera_round_trip() {
     assert!(width > 0, "sensor width should be positive, got {width}");
 
     drop(camera);
-    id.disconnect_demo().expect("demo camera should disconnect");
+    id.disconnect_demo(&test_library.library)
+        .expect("demo camera should disconnect");
 }

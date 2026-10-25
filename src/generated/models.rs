@@ -295,44 +295,44 @@ define_models! {
         PRO_EM_PLUS_1600XX_4B_EXCELON = PicamModel_ProEMPlus1600xx4BExcelon,
         /// PICam's `PicamModel_ProEMHSSeries` series: a family of models rather than
         /// a single model.
-        PRO_EMHS_SERIES = PicamModel_ProEMHSSeries,
+        PRO_EM_HS_SERIES = PicamModel_ProEMHSSeries,
         /// PICam's `PicamModel_ProEMHS512Series` series: a family of models rather than
         /// a single model.
-        PRO_EMHS_512_SERIES = PicamModel_ProEMHS512Series,
+        PRO_EM_HS_512_SERIES = PicamModel_ProEMHS512Series,
         /// PICam's `PicamModel_ProEMHS512B` model.
-        PRO_EMHS_512B = PicamModel_ProEMHS512B,
+        PRO_EM_HS_512B = PicamModel_ProEMHS512B,
         /// PICam's `PicamModel_ProEMHS512BK` model.
-        PRO_EMHS_512BK = PicamModel_ProEMHS512BK,
+        PRO_EM_HS_512BK = PicamModel_ProEMHS512BK,
         /// PICam's `PicamModel_ProEMHS512BExcelon` model.
-        PRO_EMHS_512B_EXCELON = PicamModel_ProEMHS512BExcelon,
+        PRO_EM_HS_512B_EXCELON = PicamModel_ProEMHS512BExcelon,
         /// PICam's `PicamModel_ProEMHS512BKExcelon` model.
-        PRO_EMHS_512BK_EXCELON = PicamModel_ProEMHS512BKExcelon,
+        PRO_EM_HS_512BK_EXCELON = PicamModel_ProEMHS512BKExcelon,
         /// PICam's `PicamModel_ProEMHS512B_2` model.
-        PRO_EMHS_512B_2 = PicamModel_ProEMHS512B_2,
+        PRO_EM_HS_512B_2 = PicamModel_ProEMHS512B_2,
         /// PICam's `PicamModel_ProEMHS512BExcelon_2` model.
-        PRO_EMHS_512B_EXCELON_2 = PicamModel_ProEMHS512BExcelon_2,
+        PRO_EM_HS_512B_EXCELON_2 = PicamModel_ProEMHS512BExcelon_2,
         /// PICam's `PicamModel_ProEMHS1024Series` series: a family of models rather than
         /// a single model.
-        PRO_EMHS_1024_SERIES = PicamModel_ProEMHS1024Series,
+        PRO_EM_HS_1024_SERIES = PicamModel_ProEMHS1024Series,
         /// PICam's `PicamModel_ProEMHS1024B` model.
-        PRO_EMHS_1024B = PicamModel_ProEMHS1024B,
+        PRO_EM_HS_1024B = PicamModel_ProEMHS1024B,
         /// PICam's `PicamModel_ProEMHS1024BExcelon` model.
-        PRO_EMHS_1024B_EXCELON = PicamModel_ProEMHS1024BExcelon,
+        PRO_EM_HS_1024B_EXCELON = PicamModel_ProEMHS1024BExcelon,
         /// PICam's `PicamModel_ProEMHS1024B_2` model.
-        PRO_EMHS_1024B_2 = PicamModel_ProEMHS1024B_2,
+        PRO_EM_HS_1024B_2 = PicamModel_ProEMHS1024B_2,
         /// PICam's `PicamModel_ProEMHS1024BExcelon_2` model.
-        PRO_EMHS_1024B_EXCELON_2 = PicamModel_ProEMHS1024BExcelon_2,
+        PRO_EM_HS_1024B_EXCELON_2 = PicamModel_ProEMHS1024BExcelon_2,
         /// PICam's `PicamModel_ProEMHS1024B_3` model.
-        PRO_EMHS_1024B_3 = PicamModel_ProEMHS1024B_3,
+        PRO_EM_HS_1024B_3 = PicamModel_ProEMHS1024B_3,
         /// PICam's `PicamModel_ProEMHS1024BExcelon_3` model.
-        PRO_EMHS_1024B_EXCELON_3 = PicamModel_ProEMHS1024BExcelon_3,
+        PRO_EM_HS_1024B_EXCELON_3 = PicamModel_ProEMHS1024BExcelon_3,
         /// PICam's `PicamModel_ProEMHS1K10Series` series: a family of models rather than
         /// a single model.
-        PRO_EMHS_1K_10_SERIES = PicamModel_ProEMHS1K10Series,
+        PRO_EM_HS_1K_10_SERIES = PicamModel_ProEMHS1K10Series,
         /// PICam's `PicamModel_ProEMHS1KB10` model.
-        PRO_EMHS_1KB_10 = PicamModel_ProEMHS1KB10,
+        PRO_EM_HS_1KB_10 = PicamModel_ProEMHS1KB10,
         /// PICam's `PicamModel_ProEMHS1KB10Excelon` model.
-        PRO_EMHS_1KB_10_EXCELON = PicamModel_ProEMHS1KB10Excelon,
+        PRO_EM_HS_1KB_10_EXCELON = PicamModel_ProEMHS1KB10Excelon,
         /// PICam's `PicamModel_PIMax3Series` series: a family of models rather than
         /// a single model.
         PI_MAX3_SERIES = PicamModel_PIMax3Series,
@@ -777,10 +777,10 @@ define_models! {
         PRO_EM_PLUS_512_SERIES,
         PRO_EM_PLUS_1024_SERIES,
         PRO_EM_PLUS_1600_SERIES,
-        PRO_EMHS_SERIES,
-        PRO_EMHS_512_SERIES,
-        PRO_EMHS_1024_SERIES,
-        PRO_EMHS_1K_10_SERIES,
+        PRO_EM_HS_SERIES,
+        PRO_EM_HS_512_SERIES,
+        PRO_EM_HS_1024_SERIES,
+        PRO_EM_HS_1K_10_SERIES,
         PI_MAX3_SERIES,
         PI_MAX4_SERIES,
         PI_MAX4_1024I_SERIES,

@@ -21,7 +21,7 @@ impl Library {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::error::Error::LibraryAlreadyInitialized`] if a `Library` is
+    /// Returns [`crate::Error::LibraryAlreadyInitialized`] if a `Library` is
     /// already active elsewhere in the process.
     pub fn new() -> Result<Self> {
         tracing::debug!("initializing PICam library");

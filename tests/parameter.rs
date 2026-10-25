@@ -9,16 +9,16 @@ use std::sync::Arc;
 
 use picam_rs::{
     Camera, CameraId, ConstraintCategory, ConstraintScope, ConstraintSeverity, ConstraintType,
-    Parameter, Roi, ValueAccess, ValueType,
+    Library, Parameter, Roi, ValueAccess, ValueType,
 };
 
 /// Connects a demo camera of the first model PICam offers.
-fn connect_demo(serial_number: &str) -> CameraId {
-    let models = Camera::available_demo_models().expect("demo models should be listed");
+fn connect_demo(library: &Library, serial_number: &str) -> CameraId {
+    let models = Camera::available_demo_models(library).expect("demo models should be listed");
     let model = *models
         .first()
         .expect("PICam should offer at least one demo model");
-    CameraId::connect_demo(model, serial_number).expect("demo camera should connect")
+    CameraId::connect_demo(library, model, serial_number).expect("demo camera should connect")
 }
 
 /// Gets, checks and sets integer and floating-point values, and commits the
@@ -29,7 +29,7 @@ fn scalar_values_through_camera() {
     const SERIAL_NUMBER: &str = "PARAM0001";
 
     let test_library = common::library();
-    let id = connect_demo(SERIAL_NUMBER);
+    let id = connect_demo(&test_library.library, SERIAL_NUMBER);
     let camera =
         Camera::open(&id, Arc::clone(&test_library.library)).expect("demo camera should open");
 
@@ -69,7 +69,8 @@ fn scalar_values_through_camera() {
     );
 
     drop(camera);
-    id.disconnect_demo().expect("demo camera should disconnect");
+    id.disconnect_demo(&test_library.library)
+        .expect("demo camera should disconnect");
 }
 
 /// Gets, checks and sets the regions of interest, commits them and reads
@@ -80,7 +81,7 @@ fn rois_through_camera() {
     const SERIAL_NUMBER: &str = "PARAM0002";
 
     let test_library = common::library();
-    let id = connect_demo(SERIAL_NUMBER);
+    let id = connect_demo(&test_library.library, SERIAL_NUMBER);
     let camera =
         Camera::open(&id, Arc::clone(&test_library.library)).expect("demo camera should open");
 
@@ -112,7 +113,8 @@ fn rois_through_camera() {
     assert_eq!(committed, rois);
 
     drop(camera);
-    id.disconnect_demo().expect("demo camera should disconnect");
+    id.disconnect_demo(&test_library.library)
+        .expect("demo camera should disconnect");
 }
 
 /// Queries value types, constraint types, access and constraints, which all
@@ -123,7 +125,7 @@ fn parameter_info_through_camera() {
     const SERIAL_NUMBER: &str = "PARAM0003";
 
     let test_library = common::library();
-    let id = connect_demo(SERIAL_NUMBER);
+    let id = connect_demo(&test_library.library, SERIAL_NUMBER);
     let camera =
         Camera::open(&id, Arc::clone(&test_library.library)).expect("demo camera should open");
 
@@ -194,5 +196,6 @@ fn parameter_info_through_camera() {
     );
 
     drop(camera);
-    id.disconnect_demo().expect("demo camera should disconnect");
+    id.disconnect_demo(&test_library.library)
+        .expect("demo camera should disconnect");
 }
