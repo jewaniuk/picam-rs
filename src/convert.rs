@@ -92,7 +92,9 @@ pub(crate) unsafe fn collect_raw_array<T, U>(
 /// reported by a camera or accessory.
 #[derive(Debug, Clone)]
 pub struct FirmwareDetail {
+    /// The name of the firmware component.
     pub name: String,
+    /// The component's version or other detail.
     pub detail: String,
 }
 
