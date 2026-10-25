@@ -10,6 +10,7 @@ use crate::convert::{
 };
 use crate::error::{Result, picam_call};
 use crate::library::Library;
+use crate::parameter::sealed::RawHandle;
 use crate::parameter::{
     OnlineSettablePicamValue, Parameter, PicamValue, ReadablePicamValue, can_read, can_set_online,
     can_wait_for_status, constraint_type, enumerated_type, is_relevant, value_access, value_type,
@@ -171,7 +172,7 @@ impl Camera {
     /// `parameter` doesn't apply to this camera, or an error if
     /// PICam is unable to read it.
     pub fn get<T: PicamValue>(&self, parameter: Parameter) -> Result<T> {
-        T::get(self.handle, parameter)
+        T::get(RawHandle(self.handle), parameter)
     }
 
     /// Sets `parameter` to `value`.
@@ -182,7 +183,7 @@ impl Camera {
     /// `parameter` can't be set, [`crate::error::Error::InvalidParameterValue`]
     /// if `value` is out of range, or an error if PICam is unable to set it.
     pub fn set<T: PicamValue>(&self, parameter: Parameter, value: T) -> Result<()> {
-        T::set(self.handle, parameter, value)
+        T::set(RawHandle(self.handle), parameter, value)
     }
 
     /// Gets the factory default value of `parameter`.
@@ -191,7 +192,7 @@ impl Camera {
     ///
     /// Returns an error if PICam is unable to read the default value.
     pub fn default_value<T: PicamValue>(&self, parameter: Parameter) -> Result<T> {
-        T::default_value(self.handle, parameter)
+        T::default_value(RawHandle(self.handle), parameter)
     }
 
     /// Reports whether `value` could currently be set for `parameter`,
@@ -201,7 +202,7 @@ impl Camera {
     ///
     /// Returns an error if PICam is unable to check this.
     pub fn can_set<T: PicamValue>(&self, parameter: Parameter, value: T) -> Result<bool> {
-        T::can_set(self.handle, parameter, value)
+        T::can_set(RawHandle(self.handle), parameter, value)
     }
 
     /// Reports whether `parameter` can be set online (without committing).
@@ -446,7 +447,7 @@ impl Camera {
     ///
     /// Returns an error if PICam is unable to read it.
     pub fn read<T: ReadablePicamValue>(&self, parameter: Parameter) -> Result<T> {
-        T::read(self.handle, parameter)
+        T::read(RawHandle(self.handle), parameter)
     }
 
     /// Sets `parameter` to `value` and applies it immediately, without
@@ -460,7 +461,7 @@ impl Camera {
         parameter: Parameter,
         value: T,
     ) -> Result<()> {
-        T::set_online(self.handle, parameter, value)
+        T::set_online(RawHandle(self.handle), parameter, value)
     }
 
     /// Gets the collection constraint on `parameter`'s value, if any.

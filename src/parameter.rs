@@ -236,49 +236,132 @@ define_parameters! {
     LifeExpectancy = PicamParameter_LifeExpectancy,
 }
 
-/// A value type PICam can get or set for a parameter.
-pub trait PicamValue: Sized {
-    /// Gets the current value of `parameter` on `handle`.
-    fn get(handle: sys::PicamHandle, parameter: Parameter) -> Result<Self>;
+/// The crate-private halves of the value traits, which seal them.
+///
+/// The public traits ([`PicamValue`], [`ReadablePicamValue`] and
+/// [`OnlineSettablePicamValue`]) have no methods of their own, they only
+/// require the supertraits here. Users can't name these supertraits, so they
+/// can't implement the public traits for their own types:
+///
+/// ```compile_fail
+/// struct Mine;
+/// impl picam_rs::PicamValue for Mine {}
+/// ```
+///
+/// A generic bound still makes the supertrait methods visible, but they take a
+/// [`RawHandle`], which only this crate can construct, so users can't call
+/// them with an arbitrary pointer either:
+///
+/// ```compile_fail
+/// fn get<T: picam_rs::PicamValue>() -> picam_rs::Result<T> {
+///     T::get(std::ptr::null_mut(), picam_rs::Parameter::ExposureTime)
+/// }
+/// ```
+pub(crate) mod sealed {
+    use super::Parameter;
+    use crate::error::Result;
+    use crate::sys;
 
-    /// Sets `parameter` on `handle` to `value`.
-    fn set(handle: sys::PicamHandle, parameter: Parameter, value: Self) -> Result<()>;
+    /// A raw camera handle that only this crate can construct.
+    ///
+    /// Taking this instead of a bare `sys::PicamHandle` keeps the supertrait
+    /// methods below from being called outside the crate.
+    #[derive(Debug, Clone, Copy)]
+    pub struct RawHandle(pub(crate) sys::PicamHandle);
 
-    /// Gets the factor default value of `parameter` on `handle`.
-    fn default_value(handle: sys::PicamHandle, parameter: Parameter) -> Result<Self>;
+    /// The handle-taking half of [`super::PicamValue`].
+    pub trait RawPicamValue: Sized {
+        /// Gets the current value of `parameter` on `handle`.
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if PICam is unable to get the value.
+        fn get(handle: RawHandle, parameter: Parameter) -> Result<Self>;
 
-    /// Reports whether `value` could currently be set for `parameter` on
-    /// `handle`, without actually setting it.
-    fn can_set(handle: sys::PicamHandle, parameter: Parameter, value: Self) -> Result<bool>;
+        /// Sets `parameter` on `handle` to `value`.
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if PICam is unable to set the value.
+        fn set(handle: RawHandle, parameter: Parameter, value: Self) -> Result<()>;
+
+        /// Gets the factory default value of `parameter` on `handle`.
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if PICam is unable to get the default value.
+        fn default_value(handle: RawHandle, parameter: Parameter) -> Result<Self>;
+
+        /// Reports whether `value` could currently be set for `parameter` on
+        /// `handle`, without actually setting it.
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if PICam is unable to check this.
+        fn can_set(handle: RawHandle, parameter: Parameter, value: Self) -> Result<bool>;
+    }
+
+    /// The handle-taking half of [`super::ReadablePicamValue`].
+    pub trait RawReadablePicamValue: RawPicamValue {
+        /// Reads the current value of `parameter` directly from hardware.
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if PICam is unable to read the value.
+        fn read(handle: RawHandle, parameter: Parameter) -> Result<Self>;
+    }
+
+    /// The handle-taking half of [`super::OnlineSettablePicamValue`].
+    pub trait RawOnlineSettablePicamValue: RawPicamValue {
+        /// Sets `parameter` to `value` and applies it immediately.
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if PICam is unable to set the value online.
+        fn set_online(handle: RawHandle, parameter: Parameter, value: Self) -> Result<()>;
+    }
 }
+
+use sealed::RawHandle;
+
+/// A value type PICam can get or set for a parameter.
+///
+/// This trait is sealed: it is implemented for `i32`, `i64`, `f64`,
+/// `Vec<Roi>`, `Vec<Modulation>` and [`Pulse`], and can't be implemented
+/// outside this crate. It is meant to be used as a bound:
+///
+/// ```no_run
+/// use picam_rs::{Camera, Parameter, PicamValue, Result};
+///
+/// fn current<T: PicamValue>(camera: &Camera, parameter: Parameter) -> Result<T> {
+///     camera.get(parameter)
+/// }
+/// ```
+pub trait PicamValue: sealed::RawPicamValue {}
 
 macro_rules! impl_picam_value {
     ($ty:ty, $get:ident, $set:ident, $default:ident, $can_set:ident) => {
-        impl PicamValue for $ty {
-            fn get(handle: sys::PicamHandle, parameter: Parameter) -> Result<Self> {
+        impl sealed::RawPicamValue for $ty {
+            fn get(handle: RawHandle, parameter: Parameter) -> Result<Self> {
                 let mut value: $ty = Default::default();
-                picam_call!(sys::$get(handle, parameter.to_raw(), &mut value))?;
+                picam_call!(sys::$get(handle.0, parameter.to_raw(), &mut value))?;
                 Ok(value)
             }
 
-            fn set(handle: sys::PicamHandle, parameter: Parameter, value: Self) -> Result<()> {
-                picam_call!(sys::$set(handle, parameter.to_raw(), value))
+            fn set(handle: RawHandle, parameter: Parameter, value: Self) -> Result<()> {
+                picam_call!(sys::$set(handle.0, parameter.to_raw(), value))
             }
 
-            fn default_value(handle: sys::PicamHandle, parameter: Parameter) -> Result<Self> {
+            fn default_value(handle: RawHandle, parameter: Parameter) -> Result<Self> {
                 let mut value: $ty = Default::default();
-                picam_call!(sys::$default(handle, parameter.to_raw(), &mut value))?;
+                picam_call!(sys::$default(handle.0, parameter.to_raw(), &mut value))?;
                 Ok(value)
             }
 
-            fn can_set(
-                handle: sys::PicamHandle,
-                parameter: Parameter,
-                value: Self,
-            ) -> Result<bool> {
+            fn can_set(handle: RawHandle, parameter: Parameter, value: Self) -> Result<bool> {
                 let mut settable: sys::pibln = 0;
                 picam_call!(sys::$can_set(
-                    handle,
+                    handle.0,
                     parameter.to_raw(),
                     value,
                     &mut settable
@@ -286,6 +369,8 @@ macro_rules! impl_picam_value {
                 Ok(settable != 0)
             }
         }
+
+        impl PicamValue for $ty {}
     };
 }
 
@@ -356,22 +441,24 @@ impl_parameter_info!(
 );
 
 /// A value type that can be read directly from hardware, bypassing PICam's
-/// committed-value cache. Implemented only for the two value types PICam
-/// supports this for.
-pub trait ReadablePicamValue: PicamValue {
-    /// Reads the current value of `parameter` directly from hardware.
-    fn read(handle: sys::PicamHandle, parameter: Parameter) -> Result<Self>;
-}
+/// committed-value cache.
+///
+/// This trait is sealed: it is implemented only for `i32` and `f64`, the two
+/// value types PICam supports this for, and can't be implemented outside this
+/// crate.
+pub trait ReadablePicamValue: PicamValue + sealed::RawReadablePicamValue {}
 
 macro_rules! impl_readable_value {
     ($ty:ty, $read:ident) => {
-        impl ReadablePicamValue for $ty {
-            fn read(handle: sys::PicamHandle, parameter: Parameter) -> Result<Self> {
+        impl sealed::RawReadablePicamValue for $ty {
+            fn read(handle: RawHandle, parameter: Parameter) -> Result<Self> {
                 let mut value: $ty = Default::default();
-                picam_call!(sys::$read(handle, parameter.to_raw(), &mut value))?;
+                picam_call!(sys::$read(handle.0, parameter.to_raw(), &mut value))?;
                 Ok(value)
             }
         }
+
+        impl ReadablePicamValue for $ty {}
     };
 }
 
@@ -380,24 +467,21 @@ impl_readable_value!(sys::piflt, Picam_ReadParameterFloatingPointValue);
 
 /// A value type that can be set and applied to hardware immediately,
 /// without needing [`crate::camera::Camera::commit_parameters`].
-/// Implemented only for the three value types Picam supports this for.
-pub trait OnlineSettablePicamValue: PicamValue {
-    /// Sets `parameter` to `value` and applies it immediately.
-
-    fn set_online(handle: sys::PicamHandle, parameter: Parameter, value: Self) -> Result<()>;
-}
+///
+/// This trait is sealed: it is implemented only for `i32`, `f64` and
+/// [`Pulse`], the three value types PICam supports this for, and can't be
+/// implemented outside this crate.
+pub trait OnlineSettablePicamValue: PicamValue + sealed::RawOnlineSettablePicamValue {}
 
 macro_rules! impl_online_settable_scalar {
     ($ty:ty, $set_online:ident) => {
-        impl OnlineSettablePicamValue for $ty {
-            fn set_online(
-                handle: sys::PicamHandle,
-                parameter: Parameter,
-                value: Self,
-            ) -> Result<()> {
-                picam_call!(sys::$set_online(handle, parameter.to_raw(), value))
+        impl sealed::RawOnlineSettablePicamValue for $ty {
+            fn set_online(handle: RawHandle, parameter: Parameter, value: Self) -> Result<()> {
+                picam_call!(sys::$set_online(handle.0, parameter.to_raw(), value))
             }
         }
+
+        impl OnlineSettablePicamValue for $ty {}
     };
 }
 
@@ -439,11 +523,11 @@ impl Roi {
     }
 }
 
-impl PicamValue for Vec<Roi> {
-    fn get(handle: sys::PicamHandle, parameter: Parameter) -> Result<Self> {
+impl sealed::RawPicamValue for Vec<Roi> {
+    fn get(handle: RawHandle, parameter: Parameter) -> Result<Self> {
         let mut ptr: *const sys::PicamRois = std::ptr::null();
         picam_call!(sys::Picam_GetParameterRoisValue(
-            handle,
+            handle.0,
             parameter.to_raw(),
             &mut ptr
         ))?;
@@ -465,7 +549,7 @@ impl PicamValue for Vec<Roi> {
         Ok(rois)
     }
 
-    fn set(handle: sys::PicamHandle, parameter: Parameter, value: Self) -> Result<()> {
+    fn set(handle: RawHandle, parameter: Parameter, value: Self) -> Result<()> {
         // `raw` holds a pointer into the buffer for `raw_rois` via `.as_mut_ptr()`,
         // which the borrow checker can't see through; `raw_rois` must stay alive
         // and unmodified (no push/reallocation, which would invalidate the
@@ -477,16 +561,16 @@ impl PicamValue for Vec<Roi> {
             roi_count: raw_rois.len() as sys::piint,
         };
         picam_call!(sys::Picam_SetParameterRoisValue(
-            handle,
+            handle.0,
             parameter.to_raw(),
             &raw
         ))
     }
 
-    fn default_value(handle: sys::PicamHandle, parameter: Parameter) -> Result<Self> {
+    fn default_value(handle: RawHandle, parameter: Parameter) -> Result<Self> {
         let mut ptr: *const sys::PicamRois = std::ptr::null();
         picam_call!(sys::Picam_GetParameterRoisDefaultValue(
-            handle,
+            handle.0,
             parameter.to_raw(),
             &mut ptr
         ))?;
@@ -508,7 +592,7 @@ impl PicamValue for Vec<Roi> {
         Ok(rois)
     }
 
-    fn can_set(handle: sys::PicamHandle, parameter: Parameter, value: Self) -> Result<bool> {
+    fn can_set(handle: RawHandle, parameter: Parameter, value: Self) -> Result<bool> {
         let mut raw_rois: Vec<sys::PicamRoi> = value.iter().map(|roi| roi.to_raw()).collect();
         let raw = sys::PicamRois {
             roi_array: raw_rois.as_mut_ptr(),
@@ -516,7 +600,7 @@ impl PicamValue for Vec<Roi> {
         };
         let mut settable: sys::pibln = 0;
         picam_call!(sys::Picam_CanSetParameterRoisValue(
-            handle,
+            handle.0,
             parameter.to_raw(),
             &raw,
             &mut settable
@@ -524,6 +608,8 @@ impl PicamValue for Vec<Roi> {
         Ok(settable != 0)
     }
 }
+
+impl PicamValue for Vec<Roi> {}
 
 /// A single step in a custom intensifier modulation sequence.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -554,11 +640,11 @@ impl Modulation {
     }
 }
 
-impl PicamValue for Vec<Modulation> {
-    fn get(handle: sys::PicamHandle, parameter: Parameter) -> Result<Self> {
+impl sealed::RawPicamValue for Vec<Modulation> {
+    fn get(handle: RawHandle, parameter: Parameter) -> Result<Self> {
         let mut ptr: *const sys::PicamModulations = std::ptr::null();
         picam_call!(sys::Picam_GetParameterModulationsValue(
-            handle,
+            handle.0,
             parameter.to_raw(),
             &mut ptr
         ))?;
@@ -584,7 +670,7 @@ impl PicamValue for Vec<Modulation> {
         Ok(modulations)
     }
 
-    fn set(handle: sys::PicamHandle, parameter: Parameter, value: Self) -> Result<()> {
+    fn set(handle: RawHandle, parameter: Parameter, value: Self) -> Result<()> {
         // `raw` holds a pointer into the buffer for `raw_modulations` via `.as_mut_ptr()`,
         // which the borrow checker can't see through; `raw_modulations` must stay alive
         // and unmodified (no push/reallocation, which would invalidate the
@@ -597,16 +683,16 @@ impl PicamValue for Vec<Modulation> {
             modulation_count: raw_modulations.len() as sys::piint,
         };
         picam_call!(sys::Picam_SetParameterModulationsValue(
-            handle,
+            handle.0,
             parameter.to_raw(),
             &raw
         ))
     }
 
-    fn default_value(handle: sys::PicamHandle, parameter: Parameter) -> Result<Self> {
+    fn default_value(handle: RawHandle, parameter: Parameter) -> Result<Self> {
         let mut ptr: *const sys::PicamModulations = std::ptr::null();
         picam_call!(sys::Picam_GetParameterModulationsDefaultValue(
-            handle,
+            handle.0,
             parameter.to_raw(),
             &mut ptr
         ))?;
@@ -632,7 +718,7 @@ impl PicamValue for Vec<Modulation> {
         Ok(modulations)
     }
 
-    fn can_set(handle: sys::PicamHandle, parameter: Parameter, value: Self) -> Result<bool> {
+    fn can_set(handle: RawHandle, parameter: Parameter, value: Self) -> Result<bool> {
         let mut raw_modulations: Vec<sys::PicamModulation> =
             value.iter().map(|m| m.to_raw()).collect();
         let raw = sys::PicamModulations {
@@ -641,7 +727,7 @@ impl PicamValue for Vec<Modulation> {
         };
         let mut settable: sys::pibln = 0;
         picam_call!(sys::Picam_CanSetParameterModulationsValue(
-            handle,
+            handle.0,
             parameter.to_raw(),
             &raw,
             &mut settable
@@ -649,6 +735,8 @@ impl PicamValue for Vec<Modulation> {
         Ok(settable != 0)
     }
 }
+
+impl PicamValue for Vec<Modulation> {}
 
 /// A single pulse's delay and width.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -673,11 +761,11 @@ impl Pulse {
     }
 }
 
-impl PicamValue for Pulse {
-    fn get(handle: sys::PicamHandle, parameter: Parameter) -> Result<Self> {
+impl sealed::RawPicamValue for Pulse {
+    fn get(handle: RawHandle, parameter: Parameter) -> Result<Self> {
         let mut ptr: *const sys::PicamPulse = std::ptr::null();
         picam_call!(sys::Picam_GetParameterPulseValue(
-            handle,
+            handle.0,
             parameter.to_raw(),
             &mut ptr
         ))?;
@@ -694,19 +782,19 @@ impl PicamValue for Pulse {
         Ok(value)
     }
 
-    fn set(handle: sys::PicamHandle, parameter: Parameter, value: Self) -> Result<()> {
+    fn set(handle: RawHandle, parameter: Parameter, value: Self) -> Result<()> {
         let raw = value.to_raw();
         picam_call!(sys::Picam_SetParameterPulseValue(
-            handle,
+            handle.0,
             parameter.to_raw(),
             &raw
         ))
     }
 
-    fn default_value(handle: sys::PicamHandle, parameter: Parameter) -> Result<Self> {
+    fn default_value(handle: RawHandle, parameter: Parameter) -> Result<Self> {
         let mut ptr: *const sys::PicamPulse = std::ptr::null();
         picam_call!(sys::Picam_GetParameterPulseDefaultValue(
-            handle,
+            handle.0,
             parameter.to_raw(),
             &mut ptr
         ))?;
@@ -723,11 +811,11 @@ impl PicamValue for Pulse {
         Ok(value)
     }
 
-    fn can_set(handle: sys::PicamHandle, parameter: Parameter, value: Self) -> Result<bool> {
+    fn can_set(handle: RawHandle, parameter: Parameter, value: Self) -> Result<bool> {
         let raw = value.to_raw();
         let mut settable: sys::pibln = 0;
         picam_call!(sys::Picam_CanSetParameterPulseValue(
-            handle,
+            handle.0,
             parameter.to_raw(),
             &raw,
             &mut settable
@@ -736,13 +824,17 @@ impl PicamValue for Pulse {
     }
 }
 
-impl OnlineSettablePicamValue for Pulse {
-    fn set_online(handle: sys::PicamHandle, parameter: Parameter, value: Self) -> Result<()> {
+impl PicamValue for Pulse {}
+
+impl sealed::RawOnlineSettablePicamValue for Pulse {
+    fn set_online(handle: RawHandle, parameter: Parameter, value: Self) -> Result<()> {
         let raw = value.to_raw();
         picam_call!(sys::Picam_SetParameterPulseValueOnline(
-            handle,
+            handle.0,
             parameter.to_raw(),
             &raw
         ))
     }
 }
+
+impl OnlineSettablePicamValue for Pulse {}
