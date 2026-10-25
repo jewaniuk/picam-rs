@@ -59,7 +59,7 @@ Stop and ask the maintainer **before**:
 3. adding or changing a dependency
 4. editing `build.rs`, beyond adding `newtype_enum`/`bitfield_enum` lines
 5. writing an `unsafe` pattern not already used in the crate, or any `unsafe impl Send` or `unsafe impl Sync`
-6. touching callbacks at all, or writing acquisition code before its design discussion (below) has ended with the maintainer's approval
+6. writing acquisition or callback code before its design discussion (below) has ended with the maintainer's approval
 7. using a new pattern because the existing ones don't fit cleanly
 8. assuming PICam behaviour that neither the manual nor a demo-camera test settles
 9. changing a test's expectations to make it pass
@@ -72,9 +72,9 @@ The rest of `xtask/` (the generator, the progress tool and their tests) is ordin
 
 When you stop, say which rule applies, describe the problem, list the options with your recommendation, and wait for an answer.
 
-The maintainer writes callbacks and any `Send`/`Sync` decision personally. For those, your job is to research and explain, not to write the code.
+The maintainer makes any `Send`/`Sync` decision personally. For those, your job is to research and explain, not to write the code.
 
-You may write acquisition, but only after a **design discussion**, longer than a normal plan:
+You may write acquisition and callbacks, but only after a **design discussion**, longer than a normal plan:
 
 1. In plan mode, before the plan itself, present the design in rounds rather than all at once. Each round covers a few decisions, each with its options, trade-offs and your recommendation.
 2. Show the code that will actually be added, not a description of it:
@@ -86,7 +86,7 @@ You may write acquisition, but only after a **design discussion**, longer than a
 4. Then write the plan as usual. It includes the approved code, and the agreed design goes into `DESIGN.md` as settled.
 5. The implementation matches the approved code. Fixing a typo, a lint or a compile error is fine. Any change to a signature, a type, an `unsafe` block or the behaviour means stopping to ask (rule 12). The report lists every difference from the approved code under Deviations.
 
-Any `Send`/`Sync` question that acquisition raises, such as stopping an acquisition from another thread, is still the maintainer's to decide. Lay out the options in the discussion.
+Any `Send`/`Sync` question that acquisition or callbacks raise, such as stopping an acquisition from another thread, or which threads PICam calls callbacks on, is still the maintainer's to decide. Lay out the options in the discussion.
 
 ## Coding standards
 

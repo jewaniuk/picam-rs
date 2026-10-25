@@ -226,7 +226,7 @@ Decided with the maintainer on 2026-10-25. Two chunks, after stage 1, because th
 
 ### 4. `picam_advanced.h` (76 functions)
 
-Callback registration (`Register*`/`Unregister*` pairs), parameter validation, camera devices, defect maps, user-supplied acquisition buffers and camera discovery. It is very repetitive and well suited to macros, but callbacks across the FFI boundary are the hardest part of the crate to get right and should be designed with the maintainer.
+Callback registration (`Register*`/`Unregister*` pairs), parameter validation, camera devices, defect maps, user-supplied acquisition buffers and camera discovery. It is very repetitive and well suited to macros, but callbacks across the FFI boundary are the hardest part of the crate to get right, so they go through the design discussion in `CLAUDE.md`, with the actual code shown and approved first (decided with the maintainer on 2026-10-25).
 
 ### 5. `picam_accessory.h` (18), `picam_em_calibration.h` (11), `picam_special.h` (2)
 
