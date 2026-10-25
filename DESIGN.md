@@ -131,7 +131,7 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 **Settled:**
 
 - No `sys` type may appear in a public signature or a public field. `sys` is private, so users can't even name those types. Use the `define_picam_enum!` wrappers and Rust primitives (`i32`, `i64`, `f64`, `bool`) instead of `sys::piint`, `sys::pi64s`, `sys::piflt` or `sys::pibln`.
-- Public names treat acronyms as words, following Rust convention: `CameraId`, `Error::InvalidCameraId`, `Parameter::EmIccdGain`, not PICam's `CameraID` or `EMIccdGain`. Generated names get this from `type_case` in `xtask/src/generate.rs`, with an override table for names it can't convert (such as the SeNsR product name, `Parameter::SensrWindowHeight`). Enum variants renamed from PICam's acronym spelling carry `#[doc(alias = "...")]` with PICam's spelling, so rustdoc search still finds them.
+- Public names treat acronyms as words, following Rust convention: `CameraId`, `Error::InvalidCameraId`, `Parameter::EmIccdGain`, not PICam's `CameraID` or `EMIccdGain`. Generated names get this from `type_case` in `xtask/src/generate.rs`, with an override table for names it can't convert (such as the SeNsR product name, `Parameter::SensrWindowHeight`). Enum variants whose name differs from PICam's carry `#[doc(alias = "...")]` with PICam's spelling, so rustdoc search still finds them.
 - Every public type is re-exported from `lib.rs`. Modules themselves stay private.
 - Follow Rust API conventions (the Rust API Guidelines) wherever possible: idiomatic names, `Result` for anything fallible, owned return types, and RAII for resources.
 
