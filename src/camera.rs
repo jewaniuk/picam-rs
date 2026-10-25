@@ -49,9 +49,9 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::error::Error::InvalidCameraID`] if `id` doesn't
+    /// Returns [`crate::Error::InvalidCameraID`] if `id` doesn't
     /// match a currently available camera, or
-    /// [`crate::error::Error::CameraAlreadyOpened`] if it's already open
+    /// [`crate::Error::CameraAlreadyOpened`] if it's already open
     /// elsewhere in this process.
     pub fn open(id: &CameraId, library: Arc<Library>) -> Result<Self> {
         tracing::debug!("opening camera: {}", id.serial_number);
@@ -175,7 +175,7 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::error::Error::ParameterDoesNotExist`] if
+    /// Returns [`crate::Error::ParameterDoesNotExist`] if
     /// `parameter` doesn't apply to this camera, or an error if
     /// PICam is unable to read it.
     pub fn get<T: PicamValue>(&self, parameter: Parameter) -> Result<T> {
@@ -186,8 +186,8 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::error::Error::ParameterValueIsReadOnly`] if
-    /// `parameter` can't be set, [`crate::error::Error::InvalidParameterValue`]
+    /// Returns [`crate::Error::ParameterValueIsReadOnly`] if
+    /// `parameter` can't be set, [`crate::Error::InvalidParameterValue`]
     /// if `value` is out of range, or an error if PICam is unable to set it.
     pub fn set<T: PicamValue>(&self, parameter: Parameter, value: T) -> Result<()> {
         T::set(RawHandle(self.handle), parameter, value)
@@ -434,7 +434,7 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::error::Error::TimeOutOccurred`] if `timeout`
+    /// Returns [`crate::Error::TimeOutOccurred`] if `timeout`
     /// elapses first, or an error if PICam is unable to wait for this.
     pub fn wait_for_status_parameter_value(
         &self,
@@ -482,7 +482,7 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::error::Error::ParameterHasInvalidConstraintType`]
+    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
     /// if `parameter` isn't collection-constrained, or an error if PICam
     /// is unable to query this.
     pub fn collection_constraint(
@@ -517,7 +517,7 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::error::Error::ParameterHasInvalidConstraintType`]
+    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
     /// if `parameter` isn't range-constrained, or an error if PICam
     /// is unable to query this.
     pub fn range_constraint(
@@ -552,7 +552,7 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::error::Error::ParameterHasInvalidConstraintType`]
+    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
     /// if `parameter` isn't ROI-constrained, or an error if PICam is
     /// unable to query this.
     pub fn rois_constraint(
@@ -587,7 +587,7 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::error::Error::ParameterHasInvalidConstraintType`]
+    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
     /// if `parameter` isn't pulse-constrained, or an error if PICam is
     /// unable to query this.
     pub fn pulse_constraint(
@@ -622,7 +622,7 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::error::Error::ParameterHasInvalidConstraintType`]
+    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
     /// if `parameter` isn't modulations-constrained, or an error if PICam is
     /// unable to query this.
     pub fn modulations_constraint(
@@ -668,7 +668,7 @@ impl Drop for Camera {
 /// which is the only guarantee PICam actually gives us here: the handle
 /// cannot outlive the library, though its true owner may still close it
 /// earlier. A call on an already-closed handle fails with
-/// [`crate::error::Error::InvalidHandle`] rather than being unsound, since
+/// [`crate::Error::InvalidHandle`] rather than being unsound, since
 /// PICam validates handles against its own internal table before using them.
 #[derive(Debug, Clone, Copy)]
 pub struct CameraHandle<'a> {
@@ -759,7 +759,7 @@ impl CameraId {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::error::Error::ValueTooLong`] if `sensor_name` or
+    /// Returns [`crate::Error::ValueTooLong`] if `sensor_name` or
     /// `serial_number` (plus its nul terminator) doesn't fit in PICam's
     /// fixed-size buffers.
     fn to_raw(&self) -> Result<sys::PicamCameraID> {
@@ -775,7 +775,7 @@ impl CameraId {
     /// without opening it.
     ///
     /// # Errors
-    /// Returns [`crate::error::Error::ValueTooLong`] if this ID's fields
+    /// Returns [`crate::Error::ValueTooLong`] if this ID's fields
     /// don't fit in PICam's fixed-size buffers, or an error if PICam is unable
     /// to query connection status.
     pub fn is_connected(&self, library: &Library) -> Result<bool> {
@@ -791,7 +791,7 @@ impl CameraId {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::error::Error::ValueTooLong`] if this ID's fields
+    /// Returns [`crate::Error::ValueTooLong`] if this ID's fields
     /// don't fit in PICam's fixed-size buffers, or an error if PICam is
     /// unable to query this.
     pub fn is_open_elsewhere(&self, library: &Library) -> Result<bool> {
@@ -813,10 +813,10 @@ impl CameraId {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::error::Error::InvalidString`] if `serial_number`
-    /// contains an embedded null byte, [`crate::error::Error::InvalidDemoModel`]
+    /// Returns [`crate::Error::InvalidString`] if `serial_number`
+    /// contains an embedded null byte, [`crate::Error::InvalidDemoModel`]
     /// if `model` isn't a valid demo model, or
-    /// [`crate::error::Error::DemoAlreadyConnected`] if a demo camera with this
+    /// [`crate::Error::DemoAlreadyConnected`] if a demo camera with this
     /// serial number is already connected.
     pub fn connect_demo(library: &Library, model: Model, serial_number: &str) -> Result<CameraId> {
         let _ = library; // only taken to prove picam is initialized
@@ -844,7 +844,7 @@ impl CameraId {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::error::Error::ValueTooLong`] if this ID's fields
+    /// Returns [`crate::Error::ValueTooLong`] if this ID's fields
     /// don't fit in PICam's fixed-size buffers, or an error if this isn't
     /// a currently connected demo camera.
     pub fn disconnect_demo(&self, library: &Library) -> Result<()> {
@@ -858,7 +858,7 @@ impl CameraId {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::error::Error::ValueTooLong`] if this ID's fields
+    /// Returns [`crate::Error::ValueTooLong`] if this ID's fields
     /// don't fit in PICam's fixed-size buffers, or an error if PICam is
     /// unable to query this.
     pub fn is_demo(&self, library: &Library) -> Result<bool> {
@@ -873,7 +873,7 @@ impl CameraId {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::error::Error::ValueTooLong`] if this ID's fields
+    /// Returns [`crate::Error::ValueTooLong`] if this ID's fields
     /// don't fit in PICam's fixed-size buffers, or an error if PICam is
     /// unable to query firmware details.
     pub fn firmware_details(&self, library: &Library) -> Result<Vec<FirmwareDetail>> {

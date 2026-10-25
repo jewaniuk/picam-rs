@@ -335,7 +335,7 @@ impl_readable_value!(i32, Picam_ReadParameterIntegerValue);
 impl_readable_value!(f64, Picam_ReadParameterFloatingPointValue);
 
 /// A value type that can be set and applied to hardware immediately,
-/// without needing [`crate::camera::Camera::commit_parameters`].
+/// without needing [`crate::Camera::commit_parameters`].
 ///
 /// This trait is sealed: it is implemented only for `i32`, `f64` and
 /// [`Pulse`], the three value types PICam supports this for, and can't be
