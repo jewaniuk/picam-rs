@@ -48,7 +48,7 @@ The crate only runs on Windows, the only platform the lab uses. The SDK also shi
 | `error` | `Error`, `Result`, `picam_call!` | done |
 | `library` | `Library` (initialize/uninitialize lifecycle) | done |
 | `camera` | `Camera`, `CameraId`, `CameraHandle`, discovery, demo cameras, parameter/constraint methods | done apart from acquisition |
-| `parameter` | `Parameter`, value traits, `Roi`/`Pulse`/`Modulation`, parameter info queries | done |
+| `parameter` | `Parameter`, `TypedParameter` and the generated `params` handles, value traits, `Roi`/`Pulse`/`Modulation`, parameter info queries | done |
 | `constraint` | constraint structs and their enums | done |
 | `model` | `Model`, with a constant per camera or accessory model from `src/generated/models.rs` | done |
 | `convert` | shared FFI helpers (string/array conversion, `define_picam_enum!`, `FirmwareDetail`, enum names through `Picam_GetEnumerationString`) | done |
@@ -104,7 +104,9 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 
 ### Parameters (settled)
 
-- `Camera::get::<T>()`, `set`, `default_value` and `can_set` are generic over the `PicamValue` trait. It is implemented for `i32` (`piint`), `i64` (`pi64s`), `f64` (`piflt`), `Vec<Roi>`, `Vec<Modulation>` and `Pulse`.
+- Parameters are typed. Every parameter has a generated handle in the public `params` module, a `TypedParameter<T>` whose `T` comes from the value type in the parameter's `PI_V` definition (`params::EXPOSURE_TIME: TypedParameter<f64>`). Handles can't be made any other way, so none claims the wrong type.
+- `Camera::get`, `set`, `default_value`, `can_set`, `read` and `set_online` take a handle, so a wrong value type, or an operation PICam doesn't support for that type, doesn't compile. Their `_untyped` twins (`get_untyped::<T>(Parameter)` and so on) are the explicit fallback for parameters with no handle, such as `Parameter::Unknown` values from `Camera::parameters`. The methods that only describe a parameter (`value_type`, the constraints and so on) take `impl Into<Parameter>`, so either works.
+- The value methods are generic over the `PicamValue` trait. It is implemented for `i32`, `bool`, `i64`, `f64`, `Vec<Roi>`, `Vec<Modulation>` and `Pulse`. `bool` goes through PICam's integer calls as 0 or 1 (manual 5.1.1.42), and isn't online-settable because PICam only sets integer parameters online (5.4.1.20). Enum parameters are `i32` until their enums are wrapped (roadmap stage 2).
 - `ReadablePicamValue` (`Camera::read`) and `OnlineSettablePicamValue` (`Camera::set_online`) are sub-traits implemented only for the types PICam supports those operations for.
 - The value traits are sealed. Their methods that take a handle live on supertraits in the private `parameter::sealed` module (`RawPicamValue`, `RawReadablePicamValue`, `RawOnlineSettablePicamValue`) and take a `RawHandle`, a wrapper around the raw handle that only the crate can construct. So users can neither implement the traits nor call those methods. A plain sealed supertrait (a `pub trait` in a private module) is not enough on its own, because its methods can still be called through a generic bound (`T::get(ptr, ...)` with `T: PicamValue`), and the raw handle is just `*mut c_void`. A truly `pub(crate)` supertrait would need `#[allow(private_bounds)]`. Any future public trait whose methods need a PICam handle (accessory parameters, for example) follows the same pattern.
 - Changes made with `set` are pending until `Camera::commit_parameters`, which returns the parameters that failed validation (an empty `Vec` means all were accepted).
@@ -132,7 +134,7 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 
 - No `sys` type may appear in a public signature or a public field. `sys` is private, so users can't even name those types. Use the `define_picam_enum!` wrappers and Rust primitives (`i32`, `i64`, `f64`, `bool`) instead of `sys::piint`, `sys::pi64s`, `sys::piflt` or `sys::pibln`.
 - Public names treat acronyms as words, following Rust convention: `CameraId`, `Error::InvalidCameraId`, `Parameter::EmIccdGain`, not PICam's `CameraID` or `EMIccdGain`. Generated names get this from `type_case` in `xtask/src/generate.rs`, with an override table for names it can't convert (such as the SeNsR product name, `Parameter::SensrWindowHeight`). Enum variants whose name differs from PICam's carry `#[doc(alias = "...")]` with PICam's spelling, so rustdoc search still finds them.
-- Every public type is re-exported from `lib.rs`. Modules themselves stay private.
+- Every public type is re-exported from `lib.rs`. Modules themselves stay private, except `params`, a generated set of typed parameter handles that would crowd the crate root.
 - Follow Rust API conventions (the Rust API Guidelines) wherever possible: idiomatic names, `Result` for anything fallible, owned return types, and RAII for resources.
 
 ## Documentation standards
@@ -195,7 +197,7 @@ As of 2026-10-25: 84 / 199 functions wrapped.
 
 Decided with the maintainer on 2026-10-25. Two chunks, after stage 1, because the generated handles copy stage 1's renamed parameter names.
 
-- [ ] **typed parameter handles:**
+- [x] **typed parameter handles:**
   - Each parameter gets a generated handle that carries its Rust value type, so `camera.get(…)` infers the type and a wrong type doesn't compile.
   - The type comes from the value type in the parameter's `PI_V` code, and on/off parameters become `bool`.
   - `get`, `set`, `default_value`, `can_set`, `read` and `set_online` take a handle.
@@ -230,6 +232,6 @@ These largely mirror patterns already in `camera.rs`.
 
 ## Open questions
 
-- **Naming the typed parameter handles** (stage 2): constants on `Parameter` (`Parameter::EXPOSURE_TIME` next to the variant `Parameter::ExposureTime`), which keeps everything in one place and matches `Model`'s constants but spells each parameter two ways side by side, or a public `params` module, which reads cleanly but would be an exception to modules staying private. To settle when planning that chunk.
+- **Connecting many demo models corrupts PICam's heap:** with SDK 5.15, the 65th `Picam_ConnectDemoCamera` call for a distinct demo model in one library session corrupts PICam's heap and kills the process (`STATUS_HEAP_CORRUPTION`). Reusing one model, or starting a fresh library, avoids it. This was reproduced with raw calls and no wrapper code, so it is a PICam bug, but it means safe code can trigger memory corruption through `CameraId::connect_demo`. Options: document it, or have `Library` count the distinct demo models connected and return an error before the 65th. `tests/handles.rs` works around it with a fresh library per 32 models.
 - **Acquisition API design:** blocking versus non-blocking, buffer ownership, and how frames are handed to the user.
 - **Callback design** for `picam_advanced.h`.
