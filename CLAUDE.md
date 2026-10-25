@@ -38,8 +38,13 @@ Work is done one **chunk** at a time: one coherent group of roughly 10 to 20 fun
 3. **Branch.** Create a branch from an up-to-date `main`, named `stage-<n>/<short-topic>`, e.g. `stage-1/seal-value-traits`.
 4. **Implement** exactly the approved plan, committing as you go.
 5. **Test and check.** Run the gate and the progress tool. Fix what fails, within the rules below.
-6. **Open a PR** against `main` with `gh pr create`, using the [report format](#report-format) as its description.
-7. **Stop.** Report the PR link and end. Don't start the next chunk.
+6. **Review.** Run the `reviewer` subagent, giving it the branch name and the approved plan. Then:
+   - fix every **blocking** finding, or stop and ask if you disagree with it or can't fix it within the plan
+   - fix every **should fix** finding, or explain in the report why not
+   - nits are optional
+   - if you fixed anything blocking, run the gate and the reviewer once more
+7. **Open a PR** against `main` with `gh pr create`, using the [report format](#report-format) as its description.
+8. **Stop.** Report the PR link and end. Don't start the next chunk.
 
 Stopping to ask is always acceptable and never counts as failure. Guessing past one of the rules below does.
 
@@ -133,7 +138,8 @@ The PR description, with these sections in order:
 4. **New `unsafe` blocks:** file and line for each, with one line on why it is sound.
 5. **Deviations:** anything that doesn't follow `DESIGN.md` or the reference implementations exactly, and why.
 6. **Tests:** what was added, the results, and what couldn't be tested and why.
-7. **Assumptions to check on hardware:** each one is also added to the README's "to test" list.
-8. **Open questions.**
+7. **Review:** each reviewer finding with its severity, and what was done about it (fixed, or why not). Nits that were skipped can be summarized in one line.
+8. **Assumptions to check on hardware:** each one is also added to the README's "to test" list.
+9. **Open questions.**
 
 Write "none" under a section rather than leaving it out.
