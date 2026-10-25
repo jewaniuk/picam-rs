@@ -23,14 +23,15 @@ pub struct Library {
 }
 
 impl Library {
-    /// The most different demo cameras one `Library` connects, where a demo
-    /// camera is a model and serial number pair.
+    /// The most different demo cameras one `Library` tries to connect, where
+    /// a demo camera is a model and serial number pair, counting attempts
+    /// that fail.
     ///
     /// With PICam 5.15, connecting a 65th different pair in one library
     /// session corrupts PICam's heap inside `Picam_ConnectDemoCamera` and
     /// kills the process, whether the pairs differ by model, serial number or
-    /// both, and even if each was disconnected before the next. Reconnecting
-    /// a pair already used doesn't count again, and uninitializing and
+    /// both, and even if each was disconnected before the next. Trying a pair
+    /// already tried doesn't count again, and uninitializing and
     /// reinitializing the library resets the count. This was found with demo
     /// cameras and reproduced with raw PICam calls, not documented, so
     /// [`CameraId::connect_demo`](crate::CameraId::connect_demo) returns

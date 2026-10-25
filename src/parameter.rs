@@ -360,7 +360,8 @@ use sealed::RawHandle;
 /// This trait is sealed: it is implemented for `i32`, `bool`, `i64`, `f64`,
 /// `Vec<Roi>`, `Vec<Modulation>`, [`Pulse`] and the value enums of PICam's
 /// enum parameters (such as [`ShutterTimingMode`](crate::ShutterTimingMode)),
-/// and can't be implemented outside this crate. It is meant to be used as a bound:
+/// and can't be implemented outside this crate. It is meant to be used as a
+/// bound:
 ///
 /// ```no_run
 /// use picam_rs::{Camera, PicamValue, Result, TypedParameter};

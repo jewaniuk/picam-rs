@@ -588,13 +588,9 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
-    /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool` share
-    /// PICam's integer calls, so either is accepted for integer, on/off and
-    /// enum parameters) or `T` is an enum and `parameter` isn't an enum
-    /// parameter, [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum
-    /// other than the one `parameter`'s values belong to, or an error if PICam
-    /// is unable to set it.
+    /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's online
+    /// call for `T` doesn't accept `parameter`'s value type, or an error if
+    /// PICam is unable to set it.
     pub fn set_online_untyped<T: OnlineSettablePicamValue>(
         &self,
         parameter: Parameter,

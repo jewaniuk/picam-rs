@@ -240,16 +240,15 @@ fn untyped_enum_is_checked() {
         ),
         "reading a shutter timing mode as an adc quality should be refused, got {wrong:?}"
     );
-    // integer and floating-point parameters have no enum, and picam's
-    // enumerated type query refuses them (seen with sdk 5.15, the manual only
-    // says enum parameters are valid there)
-    for parameter in [Parameter::SensorActiveWidth, Parameter::ExposureTime] {
-        let not_enum = camera.get_untyped::<AdcQuality>(parameter);
-        assert!(
-            matches!(not_enum, Err(Error::ParameterHasInvalidValueType)),
-            "reading {parameter:?} as an enum should be refused, got {not_enum:?}"
-        );
-    }
+    // an integer parameter has no enum, and picam's enumerated type query
+    // refuses it (seen with sdk 5.15, PICam manual 5.4.3.6 only says enum
+    // parameters are valid there). its integer call would have accepted it,
+    // so this is the check that catches it
+    let not_enum = camera.get_untyped::<AdcQuality>(Parameter::SensorActiveWidth);
+    assert!(
+        matches!(not_enum, Err(Error::ParameterHasInvalidValueType)),
+        "reading an integer parameter as an enum should be refused, got {not_enum:?}"
+    );
     let right = camera.get_untyped::<ShutterTimingMode>(Parameter::ShutterTimingMode);
     assert!(
         right.is_ok(),

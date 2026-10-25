@@ -1024,10 +1024,9 @@ mod tests {
         ";
         for value_enum in ["Clash", "ClashMask"] {
             let parameter_enums = [("Clash".to_string(), value_enum.to_string())];
-            assert!(
-                render_value_enums(header, &parameter_enums).is_err(),
-                "{value_enum} should fail on a name collision"
-            );
+            let error = render_value_enums(header, &parameter_enums)
+                .expect_err("a name collision should fail");
+            assert!(error.contains("would both be"), "{value_enum}: {error}");
         }
     }
 
