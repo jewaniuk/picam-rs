@@ -78,7 +78,7 @@ fn check<T: PicamValue>(
 macro_rules! define_parameters {
     ($(
         $(#[$meta:meta])*
-        $name:ident = $raw:ident, $handle:ident: $ty:ty, $value_type:ident;
+        $name:ident = $raw:ident, $handle:ident: $ty:ty, $value_type:ident $(($enumerated:ident))?;
     )*) => {
         /// Checks every handle on `camera`.
         fn check_all(camera: &Camera, findings: &mut Findings) {

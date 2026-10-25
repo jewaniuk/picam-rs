@@ -1,5 +1,6 @@
 //! Error types for `picam-rs`
 
+use crate::parameter::EnumeratedType;
 use crate::sys;
 
 /// Result type used throughout `picam-rs`.
@@ -209,6 +210,18 @@ pub enum Error {
     /// instead. Dropping the `Library` and making a new one resets the count.
     #[error("too many different demo cameras connected with this library")]
     TooManyDemoCameras,
+    /// An untyped call such as
+    /// [`Camera::get_untyped`](crate::Camera::get_untyped) asked for an enum
+    /// parameter's value as a different enum from the one PICam says its
+    /// values belong to. PICam reads every enum through the same integer
+    /// call, so it can't catch this itself.
+    #[error("the parameter's values are {found:?}, not {expected:?}")]
+    EnumeratedTypeMismatch {
+        /// The enum the call asked for.
+        expected: EnumeratedType,
+        /// The enum PICam says the parameter's values belong to.
+        found: EnumeratedType,
+    },
 }
 
 impl Error {

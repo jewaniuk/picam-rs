@@ -35,8 +35,9 @@ define_picam_enum!(
     Integer = PicamValueType_Integer,
     /// A true/false value, used as `bool`.
     Boolean = PicamValueType_Boolean,
-    /// One value of a PICam enum, used as `i32`. [`crate::Camera::enumerated_type`]
-    /// says which enum.
+    /// One value of a PICam enum, used as that enum's own type, such as
+    /// [`ShutterTimingMode`](crate::ShutterTimingMode).
+    /// [`crate::Camera::enumerated_type`] says which enum.
     Enumeration = PicamValueType_Enumeration,
     /// A 64-bit whole number, used as `i64`.
     LargeInteger = PicamValueType_LargeInteger,
@@ -65,11 +66,12 @@ include!("generated/enumerated_types.rs");
 
 /// Defines `Parameter` and the typed handles in `params`. Each entry gives
 /// the variant, its raw name, its handle's name and value type, and PICam's
-/// value type (unused here, but tests compare it with PICam's).
+/// value type, plus for an enum parameter its `EnumeratedType` variant. The
+/// last two are only used in docs here, but tests compare them with PICam's.
 macro_rules! define_parameters {
     ($(
         $(#[$meta:meta])*
-        $name:ident = $raw:ident, $handle:ident: $ty:ty, $value_type:ident;
+        $name:ident = $raw:ident, $handle:ident: $ty:ty, $value_type:ident $(($enumerated:ident))?;
     )*) => {
         /// Identifies a specific camera parameter (exposure time, ROI,
         /// gain, and so on).
@@ -122,6 +124,7 @@ macro_rules! define_parameters {
         /// the other `_untyped` methods.
         pub mod params {
             use super::{Modulation, Parameter, Pulse, Roi, TypedParameter};
+            use crate::enums::*;
 
             $(
                 #[doc = concat!(
@@ -142,7 +145,7 @@ include!("generated/parameters.rs");
 /// [`params`], and none can be made any other way.
 ///
 /// ```no_run
-/// use picam_rs::{Camera, Result, params};
+/// use picam_rs::{Camera, Result, ShutterTimingMode, params};
 ///
 /// fn exposure_time(camera: &Camera) -> Result<f64> {
 ///     camera.get(params::EXPOSURE_TIME)
@@ -151,6 +154,7 @@ include!("generated/parameters.rs");
 /// fn set_up(camera: &Camera) -> Result<()> {
 ///     camera.set(params::EXPOSURE_TIME, 5.0)?;
 ///     camera.set(params::ENABLE_INTENSIFIER, true)?;
+///     camera.set(params::SHUTTER_TIMING_MODE, ShutterTimingMode::AlwaysOpen)?;
 ///     camera.set_online(params::EXPOSURE_TIME, 5.0)
 /// }
 /// ```
@@ -174,16 +178,21 @@ include!("generated/parameters.rs");
 /// ```
 ///
 /// Neither does an operation PICam doesn't support for the parameter's type,
-/// such as setting an on/off parameter online. Enum parameters are the
-/// exception for now: they are `i32` until their enums are wrapped, so an
-/// operation PICam supports only for integer parameters still compiles for
-/// them and fails at run time instead:
+/// such as setting an on/off or enum parameter online:
 ///
 /// ```compile_fail,E0277
 /// use picam_rs::{Camera, Result, params};
 ///
 /// fn enable_intensifier(camera: &Camera) -> Result<()> {
 ///     camera.set_online(params::ENABLE_INTENSIFIER, true)
+/// }
+/// ```
+///
+/// ```compile_fail,E0277
+/// use picam_rs::{Camera, Result, ShutterTimingMode, params};
+///
+/// fn open_shutter(camera: &Camera) -> Result<()> {
+///     camera.set_online(params::SHUTTER_TIMING_MODE, ShutterTimingMode::AlwaysOpen)
 /// }
 /// ```
 pub struct TypedParameter<T> {
@@ -308,6 +317,19 @@ pub(crate) mod sealed {
         ///
         /// Returns an error if PICam is unable to check this.
         fn can_set(handle: RawHandle, parameter: Parameter, value: Self) -> Result<bool>;
+
+        /// Checks, before an untyped call, that `parameter`'s values can be
+        /// this type where PICam itself wouldn't notice a mismatch. Only enums
+        /// need this, since PICam reads every enum through the same integer
+        /// call. Typed handles skip it, their type is already right.
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if the values can't be this type, or PICam is
+        /// unable to check.
+        fn check_type(_handle: RawHandle, _parameter: Parameter) -> Result<()> {
+            Ok(())
+        }
     }
 
     /// The handle-taking half of [`super::ReadablePicamValue`].

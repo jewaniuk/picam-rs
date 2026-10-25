@@ -180,7 +180,7 @@ impl Camera {
     /// `parameter` doesn't apply to this camera, or an error if
     /// PICam is unable to read it.
     pub fn get<T: PicamValue>(&self, parameter: TypedParameter<T>) -> Result<T> {
-        self.get_untyped(parameter.parameter())
+        T::get(RawHandle(self.handle), parameter.parameter())
     }
 
     /// Gets the current value of `parameter` as a `T` the caller chooses.
@@ -194,10 +194,12 @@ impl Camera {
     /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
     /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
     /// share PICam's integer calls, so either is accepted for integer, on/off
-    /// and enum parameters), [`crate::Error::ParameterDoesNotExist`]
+    /// and enum parameters), [`crate::Error::EnumeratedTypeMismatch`] if `T` is
+    /// an enum other than the one `parameter`'s values belong to, [`crate::Error::ParameterDoesNotExist`]
     /// if `parameter` doesn't apply to this camera, or an error if PICam is
     /// unable to read it.
     pub fn get_untyped<T: PicamValue>(&self, parameter: Parameter) -> Result<T> {
+        T::check_type(RawHandle(self.handle), parameter)?;
         T::get(RawHandle(self.handle), parameter)
     }
 
@@ -209,7 +211,7 @@ impl Camera {
     /// `parameter` can't be set, [`crate::Error::InvalidParameterValue`]
     /// if `value` is out of range, or an error if PICam is unable to set it.
     pub fn set<T: PicamValue>(&self, parameter: TypedParameter<T>, value: T) -> Result<()> {
-        self.set_untyped(parameter.parameter(), value)
+        T::set(RawHandle(self.handle), parameter.parameter(), value)
     }
 
     /// Sets `parameter` to a `value` of a type the caller chooses.
@@ -222,10 +224,12 @@ impl Camera {
     /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
     /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
     /// share PICam's integer calls, so either is accepted for integer, on/off
-    /// and enum parameters), [`crate::Error::ParameterValueIsReadOnly`]
+    /// and enum parameters), [`crate::Error::EnumeratedTypeMismatch`] if `T` is
+    /// an enum other than the one `parameter`'s values belong to, [`crate::Error::ParameterValueIsReadOnly`]
     /// if `parameter` can't be set, [`crate::Error::InvalidParameterValue`] if
     /// `value` is out of range, or an error if PICam is unable to set it.
     pub fn set_untyped<T: PicamValue>(&self, parameter: Parameter, value: T) -> Result<()> {
+        T::check_type(RawHandle(self.handle), parameter)?;
         T::set(RawHandle(self.handle), parameter, value)
     }
 
@@ -236,7 +240,7 @@ impl Camera {
     ///
     /// Returns an error if PICam is unable to read the default value.
     pub fn default_value<T: PicamValue>(&self, parameter: TypedParameter<T>) -> Result<T> {
-        self.default_value_untyped(parameter.parameter())
+        T::default_value(RawHandle(self.handle), parameter.parameter())
     }
 
     /// Gets the factory default value of `parameter` as a `T` the caller
@@ -250,9 +254,11 @@ impl Camera {
     /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
     /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
     /// share PICam's integer calls, so either is accepted for integer, on/off
-    /// and enum parameters), or an error if PICam is unable to read
+    /// and enum parameters), [`crate::Error::EnumeratedTypeMismatch`] if `T` is
+    /// an enum other than the one `parameter`'s values belong to, or an error if PICam is unable to read
     /// the default value.
     pub fn default_value_untyped<T: PicamValue>(&self, parameter: Parameter) -> Result<T> {
+        T::check_type(RawHandle(self.handle), parameter)?;
         T::default_value(RawHandle(self.handle), parameter)
     }
 
@@ -263,7 +269,7 @@ impl Camera {
     ///
     /// Returns an error if PICam is unable to check this.
     pub fn can_set<T: PicamValue>(&self, parameter: TypedParameter<T>, value: T) -> Result<bool> {
-        self.can_set_untyped(parameter.parameter(), value)
+        T::can_set(RawHandle(self.handle), parameter.parameter(), value)
     }
 
     /// Reports whether a `value` of a type the caller chooses could currently
@@ -277,9 +283,11 @@ impl Camera {
     /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
     /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
     /// share PICam's integer calls, so either is accepted for integer, on/off
-    /// and enum parameters), or an error if PICam is unable to check
+    /// and enum parameters), [`crate::Error::EnumeratedTypeMismatch`] if `T` is
+    /// an enum other than the one `parameter`'s values belong to, or an error if PICam is unable to check
     /// this.
     pub fn can_set_untyped<T: PicamValue>(&self, parameter: Parameter, value: T) -> Result<bool> {
+        T::check_type(RawHandle(self.handle), parameter)?;
         T::can_set(RawHandle(self.handle), parameter, value)
     }
 
@@ -529,7 +537,7 @@ impl Camera {
     ///
     /// Returns an error if PICam is unable to read it.
     pub fn read<T: ReadablePicamValue>(&self, parameter: TypedParameter<T>) -> Result<T> {
-        self.read_untyped(parameter.parameter())
+        T::read(RawHandle(self.handle), parameter.parameter())
     }
 
     /// Reads the current value of `parameter` directly from hardware as a `T`
@@ -543,9 +551,11 @@ impl Camera {
     /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
     /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
     /// share PICam's integer calls, so either is accepted for integer, on/off
-    /// and enum parameters), or an error if PICam is unable to read
+    /// and enum parameters), [`crate::Error::EnumeratedTypeMismatch`] if `T` is
+    /// an enum other than the one `parameter`'s values belong to, or an error if PICam is unable to read
     /// it.
     pub fn read_untyped<T: ReadablePicamValue>(&self, parameter: Parameter) -> Result<T> {
+        T::check_type(RawHandle(self.handle), parameter)?;
         T::read(RawHandle(self.handle), parameter)
     }
 
@@ -561,7 +571,7 @@ impl Camera {
         parameter: TypedParameter<T>,
         value: T,
     ) -> Result<()> {
-        self.set_online_untyped(parameter.parameter(), value)
+        T::set_online(RawHandle(self.handle), parameter.parameter(), value)
     }
 
     /// Sets `parameter` to a `value` of a type the caller chooses and applies
@@ -575,13 +585,15 @@ impl Camera {
     /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
     /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool`
     /// share PICam's integer calls, so either is accepted for integer, on/off
-    /// and enum parameters), or an error if PICam is unable to set
+    /// and enum parameters), [`crate::Error::EnumeratedTypeMismatch`] if `T` is
+    /// an enum other than the one `parameter`'s values belong to, or an error if PICam is unable to set
     /// it.
     pub fn set_online_untyped<T: OnlineSettablePicamValue>(
         &self,
         parameter: Parameter,
         value: T,
     ) -> Result<()> {
+        T::check_type(RawHandle(self.handle), parameter)?;
         T::set_online(RawHandle(self.handle), parameter, value)
     }
 
