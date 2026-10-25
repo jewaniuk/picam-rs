@@ -6,6 +6,7 @@ define_picam_enum!(
     /// `Camera::*_constraint` method reads it (PICam manual 5.1.1.6).
     ConstraintType,
     sys::PicamConstraintType,
+    PicamEnumeratedType_ConstraintType,
     /// No constraint, because the value is read-only.
     None = PicamConstraintType_None,
     /// A numeric range, read with [`crate::Camera::range_constraint`].
@@ -25,6 +26,7 @@ define_picam_enum!(
     /// (PICam manual 5.1.3.1).
     ConstraintScope,
     sys::PicamConstraintScope,
+    PicamEnumeratedType_ConstraintScope,
     /// The constraint never changes.
     Independent = PicamConstraintScope_Independent,
     /// The constraint can change with other parameters' values.
@@ -34,6 +36,7 @@ define_picam_enum!(
     /// Which set of values a constraint query describes (PICam manual 5.1.3.3).
     ConstraintCategory,
     sys::PicamConstraintCategory,
+    PicamEnumeratedType_ConstraintCategory,
     /// Every value the camera could ever accept.
     Capable = PicamConstraintCategory_Capable,
     /// The values allowed right now, given the other parameters.
@@ -45,6 +48,7 @@ define_picam_enum!(
     /// What it means for a value to break a constraint (PICam manual 5.1.3.2).
     ConstraintSeverity,
     sys::PicamConstraintSeverity,
+    PicamEnumeratedType_ConstraintSeverity,
     /// The value is in error.
     Error = PicamConstraintSeverity_Error,
     /// Breaking the constraint is only a warning, which deserves attention.
