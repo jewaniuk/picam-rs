@@ -66,7 +66,8 @@ pub enum Error {
     CameraAlreadyOpened,
     /// The camera ID doesn't identify an available camera.
     #[error("an invalid camera ID was supplied")]
-    InvalidCameraID,
+    #[doc(alias = "InvalidCameraID")]
+    InvalidCameraId,
     /// No accessories are available to open.
     #[error("no accessories are available")]
     NoAccessoriesAvailable,
@@ -75,7 +76,8 @@ pub enum Error {
     AccessoryAlreadyOpened,
     /// The accessory ID doesn't identify an available accessory.
     #[error("an invalid accessory ID was supplied")]
-    InvalidAccessoryID,
+    #[doc(alias = "InvalidAccessoryID")]
+    InvalidAccessoryId,
     /// The handle is invalid. This is expected for a handle that has since been
     /// closed, but that is not yet confirmed (see the README's "to test" list).
     #[error("an invalid handle was supplied")]
@@ -232,10 +234,10 @@ impl Error {
             }
             sys::PicamError::PicamError_NoCamerasAvailable => Error::NoCamerasAvailable,
             sys::PicamError::PicamError_CameraAlreadyOpened => Error::CameraAlreadyOpened,
-            sys::PicamError::PicamError_InvalidCameraID => Error::InvalidCameraID,
+            sys::PicamError::PicamError_InvalidCameraID => Error::InvalidCameraId,
             sys::PicamError::PicamError_NoAccessoriesAvailable => Error::NoAccessoriesAvailable,
             sys::PicamError::PicamError_AccessoryAlreadyOpened => Error::AccessoryAlreadyOpened,
-            sys::PicamError::PicamError_InvalidAccessoryID => Error::InvalidAccessoryID,
+            sys::PicamError::PicamError_InvalidAccessoryID => Error::InvalidAccessoryId,
             sys::PicamError::PicamError_InvalidHandle => Error::InvalidHandle,
             sys::PicamError::PicamError_DeviceCommunicationFailed => {
                 Error::DeviceCommunicationFailed

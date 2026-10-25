@@ -96,11 +96,13 @@ define_parameters! {
     /// PICam's `PicamParameter_EMIccdGainControlMode` parameter.
     ///
     /// Value type [`ValueType::Enumeration`](crate::ValueType::Enumeration), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
-    EMIccdGainControlMode = PicamParameter_EMIccdGainControlMode,
+    #[doc(alias = "EMIccdGainControlMode")]
+    EmIccdGainControlMode = PicamParameter_EMIccdGainControlMode,
     /// PICam's `PicamParameter_EMIccdGain` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    EMIccdGain = PicamParameter_EMIccdGain,
+    #[doc(alias = "EMIccdGain")]
+    EmIccdGain = PicamParameter_EMIccdGain,
     /// PICam's `PicamParameter_PhosphorDecayDelay` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
@@ -180,7 +182,8 @@ define_parameters! {
     /// PICam's `PicamParameter_AdcEMGain` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    AdcEMGain = PicamParameter_AdcEMGain,
+    #[doc(alias = "AdcEMGain")]
+    AdcEmGain = PicamParameter_AdcEMGain,
     /// PICam's `PicamParameter_CorrectPixelBias` parameter.
     ///
     /// Value type [`ValueType::Boolean`](crate::ValueType::Boolean), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
@@ -292,7 +295,8 @@ define_parameters! {
     /// PICam's `PicamParameter_SeNsRWindowHeight` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).
-    SeNsRWindowHeight = PicamParameter_SeNsRWindowHeight,
+    #[doc(alias = "SeNsRWindowHeight")]
+    SensrWindowHeight = PicamParameter_SeNsRWindowHeight,
     /// PICam's `PicamParameter_VerticalShiftRate` parameter.
     ///
     /// Value type [`ValueType::FloatingPoint`](crate::ValueType::FloatingPoint), constraint type [`ConstraintType::Collection`](crate::ConstraintType::Collection).
@@ -500,7 +504,8 @@ define_parameters! {
     /// PICam's `PicamParameter_ApplicableStarDefectMapID` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::None`](crate::ConstraintType::None).
-    ApplicableStarDefectMapID = PicamParameter_ApplicableStarDefectMapID,
+    #[doc(alias = "ApplicableStarDefectMapID")]
+    ApplicableStarDefectMapId = PicamParameter_ApplicableStarDefectMapID,
     /// PICam's `PicamParameter_ActiveWidth` parameter.
     ///
     /// Value type [`ValueType::Integer`](crate::ValueType::Integer), constraint type [`ConstraintType::Range`](crate::ConstraintType::Range).

@@ -49,7 +49,7 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::InvalidCameraID`] if `id` doesn't
+    /// Returns [`crate::Error::InvalidCameraId`] if `id` doesn't
     /// match a currently available camera, or
     /// [`crate::Error::CameraAlreadyOpened`] if it's already open
     /// elsewhere in this process.

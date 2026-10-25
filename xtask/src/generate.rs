@@ -37,6 +37,10 @@ const HAND_WRITTEN: [(&str, &str); 9] = [
 /// name would repeat the enum's own name, which clippy rejects.
 const ENUMERATED_TYPE_RENAMES: [(&str, &str); 1] = [("EnumeratedType", "Enumerated")];
 
+/// `Parameter` variants whose PICam name `type_case` can't convert well,
+/// such as product names with their own capitalization.
+const PARAMETER_RENAMES: [(&str, &str); 1] = [("SeNsRWindowHeight", "SensrWindowHeight")];
+
 /// Models whose whole PICam name converts badly to a constant name.
 const MODEL_NAME_OVERRIDES: [(&str, &str); 1] = [("RetigaE7", "RETIGA_E7")];
 
@@ -44,7 +48,8 @@ const MODEL_NAME_OVERRIDES: [(&str, &str); 1] = [("RetigaE7", "RETIGA_E7")];
 /// together, e.g. `PIMax41024I` for the PI-MAX4 1024i, so the automatic
 /// conversion can't tell where one ends. The rest of the name is still
 /// converted automatically.
-const MODEL_PREFIX_OVERRIDES: [(&str, &str); 7] = [
+const MODEL_PREFIX_OVERRIDES: [(&str, &str); 8] = [
+    ("ProEMHS", "PRO_EM_HS"),
     ("PIMax3", "PI_MAX3"),
     ("PIMax4", "PI_MAX4"),
     ("PIMte3", "PI_MTE3"),
@@ -309,13 +314,15 @@ fn render_parameters(enumerators: &[Enumerator]) -> Result<String, String> {
     let mut out = format!("{GENERATED_NOTICE}\n\ndefine_parameters! {{\n");
     for enumerator in enumerators {
         let name = &enumerator.name;
+        let variant = rust_name(name, &PARAMETER_RENAMES);
+        let alias = doc_alias(name, &variant);
         let (value_type, constraint_type) = pi_v_types(&enumerator.value)?;
         out.push_str(&format!(
             "    /// PICam's `PicamParameter_{name}` parameter.\n    \
              ///\n    \
              /// Value type [`ValueType::{value_type}`](crate::ValueType::{value_type}), \
-             constraint type [`ConstraintType::{constraint_type}`](crate::ConstraintType::{constraint_type}).\n    \
-             {name} = PicamParameter_{name},\n"
+             constraint type [`ConstraintType::{constraint_type}`](crate::ConstraintType::{constraint_type}).\n\
+             {alias}    {variant} = PicamParameter_{name},\n"
         ));
     }
     out.push_str("}\n");
@@ -335,16 +342,33 @@ fn render_enumerated_types(enumerators: &[Enumerator]) -> String {
     );
     for enumerator in enumerators {
         let name = &enumerator.name;
-        let variant = ENUMERATED_TYPE_RENAMES
-            .iter()
-            .find(|(from, _)| from == name)
-            .map_or(name.as_str(), |(_, to)| to);
+        let variant = rust_name(name, &ENUMERATED_TYPE_RENAMES);
+        let alias = doc_alias(name, &variant);
         out.push_str(&format!(
-            "    /// PICam's `Picam{name}` enum.\n    {variant} = PicamEnumeratedType_{name},\n"
+            "    /// PICam's `Picam{name}` enum.\n{alias}    {variant} = PicamEnumeratedType_{name},\n"
         ));
     }
     out.push_str(");\n");
     out
+}
+
+/// Converts a PICam name to its Rust variant name, using `renames` first and
+/// `type_case` otherwise.
+fn rust_name(name: &str, renames: &[(&str, &str)]) -> String {
+    renames
+        .iter()
+        .find(|(from, _)| *from == name)
+        .map_or_else(|| type_case(name), |(_, to)| (*to).to_string())
+}
+
+/// Returns a `#[doc(alias)]` line giving PICam's spelling when the Rust name
+/// differs from it, so rustdoc search still finds it, or nothing otherwise.
+fn doc_alias(picam_name: &str, rust_name: &str) -> String {
+    if picam_name == rust_name {
+        String::new()
+    } else {
+        format!("    #[doc(alias = \"{picam_name}\")]\n")
+    }
 }
 
 /// Renders the `define_models!` list: every model as a documented constant,
@@ -408,38 +432,57 @@ fn model_constant_name(name: &str) -> String {
 }
 
 /// Converts a camel-case name with embedded numbers to upper snake case,
-/// keeping any underscores it already has.
+/// keeping any underscores it already has, e.g. `ProEM512B` -> `PRO_EM_512B`.
+fn screaming_snake_case(name: &str) -> String {
+    name.split('_')
+        .map(|segment| words(segment).join("_").to_ascii_uppercase())
+        .collect::<Vec<_>>()
+        .join("_")
+}
+
+/// Converts a PICam name to a Rust type or variant name, treating acronyms
+/// as words, e.g. `EMIccdGain` -> `EmIccdGain`.
+fn type_case(name: &str) -> String {
+    name.split('_')
+        .flat_map(words)
+        .map(|word| {
+            let mut chars = word.chars();
+            chars.next().map_or_else(String::new, |first| {
+                first.to_ascii_uppercase().to_string() + &chars.as_str().to_ascii_lowercase()
+            })
+        })
+        .collect()
+}
+
+/// Splits a camel-case name with embedded numbers into words.
 ///
 /// A word boundary is placed:
-/// - between a lowercase and an uppercase letter (`ProEM` -> `PRO_EM`)
-/// - before the last capital of an acronym followed by a word (`BRExcelon` -> `BR_EXCELON`)
-/// - between a letter and a digit (`Pixis100` -> `PIXIS_100`), except after a
-///   lowercase `x` that follows a digit (`1024x256` -> `1024X256`)
-/// - between a digit and a word (`1024Series` -> `1024_SERIES`)
-fn screaming_snake_case(name: &str) -> String {
-    let mut segments = Vec::new();
-    for segment in name.split('_') {
-        let chars: Vec<char> = segment.chars().collect();
-        let mut out = String::new();
-        for (index, &c) in chars.iter().enumerate() {
-            if index > 0 {
-                let prev = chars[index - 1];
-                let next_is_lower = chars.get(index + 1).is_some_and(char::is_ascii_lowercase);
-                let after_dimension_x =
-                    prev == 'x' && index >= 2 && chars[index - 2].is_ascii_digit();
-                let boundary = (prev.is_ascii_lowercase() && c.is_ascii_uppercase())
-                    || (prev.is_ascii_uppercase() && c.is_ascii_uppercase() && next_is_lower)
-                    || (prev.is_ascii_alphabetic() && c.is_ascii_digit() && !after_dimension_x)
-                    || (prev.is_ascii_digit() && c.is_ascii_uppercase() && next_is_lower);
-                if boundary {
-                    out.push('_');
-                }
+/// - between a lowercase and an uppercase letter (`ProEM` -> `Pro`, `EM`)
+/// - before the last capital of an acronym followed by a word (`BRExcelon` -> `BR`, `Excelon`)
+/// - between a letter and a digit (`Pixis100` -> `Pixis`, `100`), except after a
+///   lowercase `x` that follows a digit (`1024x256` stays one word)
+/// - between a digit and a word (`1024Series` -> `1024`, `Series`)
+fn words(segment: &str) -> Vec<String> {
+    let chars: Vec<char> = segment.chars().collect();
+    let mut words = Vec::new();
+    let mut word = String::new();
+    for (index, &c) in chars.iter().enumerate() {
+        if index > 0 {
+            let prev = chars[index - 1];
+            let next_is_lower = chars.get(index + 1).is_some_and(char::is_ascii_lowercase);
+            let after_dimension_x = prev == 'x' && index >= 2 && chars[index - 2].is_ascii_digit();
+            let boundary = (prev.is_ascii_lowercase() && c.is_ascii_uppercase())
+                || (prev.is_ascii_uppercase() && c.is_ascii_uppercase() && next_is_lower)
+                || (prev.is_ascii_alphabetic() && c.is_ascii_digit() && !after_dimension_x)
+                || (prev.is_ascii_digit() && c.is_ascii_uppercase() && next_is_lower);
+            if boundary {
+                words.push(std::mem::take(&mut word));
             }
-            out.push(c.to_ascii_uppercase());
         }
-        segments.push(out);
+        word.push(c);
     }
-    segments.join("_")
+    words.push(word);
+    words
 }
 
 /// Whether `source` contains `identifier` as a whole identifier, not as part
@@ -510,6 +553,8 @@ mod tests {
             ("PixisSeries", "PIXIS_SERIES"),
             ("Pixis1024Series", "PIXIS_1024_SERIES"),
             ("ProEM512B", "PRO_EM_512B"),
+            ("ProEMHS512B", "PRO_EM_HS_512B"),
+            ("ProEMHS1KB10", "PRO_EM_HS_1KB_10"),
             ("Pixis2048BRExcelon", "PIXIS_2048BR_EXCELON"),
             ("Sophia2048B135Excelon_2", "SOPHIA_2048B_135_EXCELON_2"),
             ("PIMax41024x256", "PI_MAX4_1024X256"),
@@ -519,6 +564,45 @@ mod tests {
         ] {
             assert_eq!(model_constant_name(name), constant, "converting {name}");
         }
+    }
+
+    #[test]
+    fn converts_type_names() {
+        for (name, rust) in [
+            ("EMIccdGain", "EmIccdGain"),
+            ("EMIccdGainControlMode", "EmIccdGainControlMode"),
+            ("AdcEMGain", "AdcEmGain"),
+            ("ApplicableStarDefectMapID", "ApplicableStarDefectMapId"),
+            ("ExposureTime", "ExposureTime"),
+            ("OutputSignal2", "OutputSignal2"),
+        ] {
+            assert_eq!(type_case(name), rust, "converting {name}");
+        }
+        assert_eq!(
+            rust_name("SeNsRWindowHeight", &PARAMETER_RENAMES),
+            "SensrWindowHeight"
+        );
+        assert_eq!(
+            rust_name("EnumeratedType", &ENUMERATED_TYPE_RENAMES),
+            "Enumerated"
+        );
+    }
+
+    #[test]
+    fn renamed_parameters_get_a_doc_alias() {
+        let enumerators = [
+            ("EMIccdGain", "PI_V(Integer, Range, 1)"),
+            ("ExposureTime", "PI_V(FloatingPoint, Range, 2)"),
+        ]
+        .map(|(name, value)| Enumerator {
+            name: name.to_string(),
+            value: value.to_string(),
+        });
+        let rendered = render_parameters(&enumerators).expect("parameters should render");
+        assert!(rendered.contains(
+            "    #[doc(alias = \"EMIccdGain\")]\n    EmIccdGain = PicamParameter_EMIccdGain,"
+        ));
+        assert!(!rendered.contains("alias = \"ExposureTime\""));
     }
 
     #[test]

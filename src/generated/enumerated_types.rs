@@ -9,6 +9,7 @@ define_picam_enum!(
     /// PICam's `PicamError` enum.
     Error = PicamEnumeratedType_Error,
     /// PICam's `PicamEnumeratedType` enum.
+    #[doc(alias = "EnumeratedType")]
     Enumerated = PicamEnumeratedType_EnumeratedType,
     /// PICam's `PicamModel` enum.
     Model = PicamEnumeratedType_Model,
@@ -37,7 +38,8 @@ define_picam_enum!(
     /// PICam's `PicamCoolingFanStatus` enum.
     CoolingFanStatus = PicamEnumeratedType_CoolingFanStatus,
     /// PICam's `PicamEMIccdGainControlMode` enum.
-    EMIccdGainControlMode = PicamEnumeratedType_EMIccdGainControlMode,
+    #[doc(alias = "EMIccdGainControlMode")]
+    EmIccdGainControlMode = PicamEnumeratedType_EMIccdGainControlMode,
     /// PICam's `PicamGateTrackingMask` enum.
     GateTrackingMask = PicamEnumeratedType_GateTrackingMask,
     /// PICam's `PicamGatingMode` enum.
