@@ -31,6 +31,7 @@ The crate only runs on Windows, the only platform the lab uses. The SDK also shi
 | macOS dev laptop | `cargo check` only (no linking) | `vendor/`, via `PICAM_DIR` set in `.cargo/config.toml` |
 | Windows lab computers | `cargo build`, `cargo test`, demo cameras, real hardware | default SDK install path |
 
+- [`LAB_SETUP.md`](LAB_SETUP.md) is the checklist for preparing a lab computer for development.
 - `build.rs` reads the headers from `PICAM_DIR`, falling back to `C:\Program Files\Princeton Instruments\PICam\Includes`, and links `Picam.lib` from the sibling `Libraries` directory on Windows only.
 - `.cargo/` and `vendor/` are gitignored, so a fresh clone on a lab computer uses the default path with no setup.
 - bindgen needs LLVM/libclang installed (`choco install llvm`).
