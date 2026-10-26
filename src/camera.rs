@@ -446,7 +446,7 @@ pub struct CameraId {
 
 impl CameraId {
     /// Converts a raw `PicamCameraID` into an owned `CameraId`.
-    fn from_raw(raw: &sys::PicamCameraID) -> Self {
+    pub(crate) fn from_raw(raw: &sys::PicamCameraID) -> Self {
         Self {
             model: Model::from_raw(raw.model),
             computer_interface: ComputerInterface::from_raw(raw.computer_interface),
@@ -463,7 +463,7 @@ impl CameraId {
     /// Returns [`crate::Error::ValueTooLong`] if `sensor_name` or
     /// `serial_number` (plus its nul terminator) doesn't fit in PICam's
     /// fixed-size buffers.
-    fn to_raw(&self) -> Result<sys::PicamCameraID> {
+    pub(crate) fn to_raw(&self) -> Result<sys::PicamCameraID> {
         Ok(sys::PicamCameraID {
             model: self.model.to_raw(),
             computer_interface: self.computer_interface.to_raw(),

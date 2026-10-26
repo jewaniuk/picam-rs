@@ -31,6 +31,7 @@ mod camera;
 mod constraint;
 mod convert;
 mod device;
+mod em_calibration;
 mod enums;
 mod error;
 mod library;
@@ -48,6 +49,7 @@ pub use constraint::{
     ModulationsConstraint, PulseConstraint, RangeConstraint, RoisConstraint, RoisConstraintRules,
 };
 pub use convert::FirmwareDetail;
+pub use em_calibration::{EmCalibration, EmCalibrationDate, EmCalibrationHandle};
 pub use enums::*;
 pub use error::{Error, Result};
 pub use library::{Library, Version};
