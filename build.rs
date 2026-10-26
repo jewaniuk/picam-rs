@@ -110,6 +110,7 @@ fn main() {
         .newtype_enum("^PicamTriggerTermination$") // a hardware value enum, same reason
         .newtype_enum("^PicamVacuumStatus$") // a hardware value enum, same reason
         .bitfield_enum("^PicamRoisConstraintRulesMask$")
+        .bitfield_enum("^PicamAcquisitionErrorsMask$")
         .bitfield_enum("^PicamCcdCharacteristicsMask$")
         .bitfield_enum("^PicamGateTrackingMask$")
         .bitfield_enum("^PicamIntensifierOptionsMask$")

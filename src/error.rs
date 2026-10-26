@@ -1,5 +1,6 @@
 //! Error types for `picam-rs`
 
+use crate::acquisition::AcquisitionErrors;
 use crate::parameter::EnumeratedType;
 use crate::sys;
 
@@ -223,6 +224,15 @@ pub enum Error {
         /// The enum PICam says the parameter's values belong to.
         found: EnumeratedType,
     },
+    /// PICam reported errors during an acquisition, which halted it (PICam
+    /// manual 6.2.1.1).
+    #[error("acquisition failed: {0:?}")]
+    AcquisitionFailed(AcquisitionErrors),
+    /// The camera's data layout parameters (strides, frame size, regions of
+    /// interest, pixel bit depth) don't fit together, so its data can't be
+    /// read safely.
+    #[error("the camera's data layout parameters don't fit together")]
+    InconsistentDataLayout,
 }
 
 impl Error {

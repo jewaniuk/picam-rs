@@ -412,6 +412,11 @@ impl Camera {
         Ok(exists != 0)
     }
 
+    /// The raw PICam handle, for other modules' calls.
+    pub(crate) fn raw_handle(&self) -> sys::PicamHandle {
+        self.handle
+    }
+
     /// Reports whether all pending parameter changes have been committed.
     ///
     /// # Errors

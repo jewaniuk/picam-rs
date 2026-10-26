@@ -25,6 +25,7 @@
 //! # }
 //! ```
 
+mod acquisition;
 mod camera;
 mod constraint;
 mod convert;
@@ -35,6 +36,9 @@ mod model;
 mod parameter;
 mod sys;
 
+pub use acquisition::{
+    Acquisition, AcquisitionErrors, Frame, Pixels, Readout, Readouts, RoiData, Update,
+};
 pub use camera::{Camera, CameraHandle, CameraId};
 pub use constraint::{
     CollectionConstraint, ConstraintCategory, ConstraintScope, ConstraintSeverity, ConstraintType,
