@@ -16,7 +16,6 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::marker::PhantomData;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Mutex, MutexGuard, PoisonError};
@@ -92,35 +91,31 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// A watch on a parameter, which ends when dropped.
+/// A watch on a parameter, which ends when dropped, or when the camera or
+/// accessory it watches closes.
 ///
 /// The `watch_*` methods of [`Camera`](crate::Camera),
 /// [`CameraDevice`](crate::CameraDevice) and [`Accessory`](crate::Accessory)
-/// return one with the [`Receiver`] its events arrive on. It borrows what it
-/// watches, so it can't outlive it, while the receiver can move to any
-/// thread. Keep it for as long as you want events, as in
-/// `let (_watch, events) = ...`. Writing `let (_, events) = ...` drops it at
-/// once, and the receiver reports the channel disconnected.
-///
-/// Since it borrows what it watches, no watch can be alive while the camera
-/// acquires: [`Camera::acquire`](crate::Camera::acquire),
-/// [`Camera::start_acquisition`](crate::Camera::start_acquisition) and
-/// [`Acquisition::wait`](crate::Acquisition::wait) need the camera or the
-/// acquisition mutably.
+/// return one with the [`Receiver`] its events arrive on. It doesn't borrow
+/// what it watches, so it can be kept during an acquisition, for example to
+/// follow the sensor temperature, and the receiver can move to any thread.
+/// Keep it for as long as you want events, as in `let (_watch, events) = ...`.
+/// Writing `let (_, events) = ...` drops it at once, and the receiver reports
+/// the channel disconnected.
 ///
 /// Dropping it unregisters PICam's callback once no other watch on the same
-/// parameter needs it. Events already sent stay readable. Leaking one with
-/// [`std::mem::forget`] is safe, but its registration is then never removed.
-/// A later watch on a camera that happens to reuse the same handle might get
-/// no events.
-pub struct Watch<'a> {
+/// parameter needs it. When the camera or accessory closes first, it clears
+/// its watches itself, and their receivers report the channel disconnected.
+/// Dropping a watch after that does nothing. Events already sent stay
+/// readable either way, and leaking a watch with [`std::mem::forget`] leaves
+/// nothing behind once its camera closes.
+pub struct Watch {
     key: Key,
     id: u64,
     handle: sys::PicamHandle,
-    _borrow: PhantomData<&'a ()>,
 }
 
-impl Watch<'_> {
+impl Watch {
     /// Adds `sink` for `kind` callbacks on `handle`'s `parameter`, and
     /// registers PICam's callback if no other watch has.
     fn new(handle: sys::PicamHandle, parameter: Parameter, kind: Kind, sink: Sink) -> Result<Self> {
@@ -139,18 +134,18 @@ impl Watch<'_> {
             return Err(e);
         }
         registrations.insert(key, count + 1);
-        Ok(Self {
-            key,
-            id,
-            handle,
-            _borrow: PhantomData,
-        })
+        Ok(Self { key, id, handle })
     }
 }
 
-impl Drop for Watch<'_> {
+impl Drop for Watch {
     fn drop(&mut self) {
         let mut registrations = lock(&REGISTRATIONS);
+        // gone already if the camera closed first, and its handle may since
+        // belong to another camera, so it mustn't be touched
+        if !remove_sink(self.key, self.id) {
+            return;
+        }
         let count = registrations.get(&self.key).copied().unwrap_or(1);
         if count <= 1 {
             registrations.remove(&self.key);
@@ -161,11 +156,10 @@ impl Drop for Watch<'_> {
         } else {
             registrations.insert(self.key, count - 1);
         }
-        remove_sink(self.key, self.id);
     }
 }
 
-impl fmt::Debug for Watch<'_> {
+impl fmt::Debug for Watch {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Watch")
             .field(
@@ -177,15 +171,42 @@ impl fmt::Debug for Watch<'_> {
     }
 }
 
-/// Removes watch `id`'s sink from `key`, dropping its sender.
-fn remove_sink(key: Key, id: u64) {
+/// Removes watch `id`'s sink from `key`, dropping its sender. Returns whether
+/// it was there.
+fn remove_sink(key: Key, id: u64) -> bool {
     let mut sinks = lock(&SINKS);
-    if let Some(list) = sinks.get_mut(&key) {
-        list.retain(|(sink_id, _)| *sink_id != id);
-        if list.is_empty() {
-            sinks.remove(&key);
+    let Some(list) = sinks.get_mut(&key) else {
+        return false;
+    };
+    let before = list.len();
+    list.retain(|(sink_id, _)| *sink_id != id);
+    let removed = list.len() < before;
+    if list.is_empty() {
+        sinks.remove(&key);
+    }
+    removed
+}
+
+/// Unregisters every callback registered on `handle` and removes its watches'
+/// sinks, so their receivers report the channel disconnected. A camera or
+/// accessory calls this just before it closes, while `handle` is still
+/// valid. The watches themselves then do nothing when dropped.
+pub(crate) fn release(handle: sys::PicamHandle) {
+    let address = handle as usize;
+    let mut registrations = lock(&REGISTRATIONS);
+    let keys: Vec<Key> = registrations
+        .keys()
+        .filter(|key| key.handle == address)
+        .copied()
+        .collect();
+    for key in keys {
+        registrations.remove(&key);
+        let parameter = sys::PicamParameter(key.parameter);
+        if let Err(e) = unregister(handle, parameter, key.kind) {
+            tracing::error!("failed to unregister a PICam callback: {e}");
         }
     }
+    lock(&SINKS).retain(|key, _| key.handle != address);
 }
 
 /// Watches `parameter` on `handle` through `kind` callbacks, sending each
@@ -194,12 +215,12 @@ fn remove_sink(key: Key, id: u64) {
 /// # Errors
 ///
 /// Returns an error if PICam is unable to register the callback.
-pub(crate) fn subscribe<'a, T: Send + 'static>(
+pub(crate) fn subscribe<T: Send + 'static>(
     handle: sys::PicamHandle,
     parameter: Parameter,
     kind: Kind,
     convert: fn(&Event) -> Option<T>,
-) -> Result<(Watch<'a>, Receiver<T>)> {
+) -> Result<(Watch, Receiver<T>)> {
     let (sender, receiver) = mpsc::channel();
     let sink: Sink = Box::new(move |event| {
         if let Some(value) = convert(event) {
@@ -553,10 +574,10 @@ mod tests {
         assert_eq!(extrinsic_values.try_recv(), Err(TryRecvError::Empty));
         assert_eq!(unrelated_values.try_recv(), Err(TryRecvError::Empty));
 
-        remove_sink(key, first);
-        remove_sink(key, second);
-        remove_sink(extrinsic_key, extrinsic);
-        remove_sink(other_key, unrelated);
+        assert!(remove_sink(key, first));
+        assert!(remove_sink(key, second));
+        assert!(remove_sink(extrinsic_key, extrinsic));
+        assert!(remove_sink(other_key, unrelated));
     }
 
     #[test]
@@ -608,7 +629,7 @@ mod tests {
         unsafe { rois_changed(handle, parameter, std::ptr::null()) };
         assert_eq!(values.try_recv(), Ok(vec![]));
 
-        remove_sink(key, id);
+        assert!(remove_sink(key, id));
     }
 
     #[test]
@@ -617,8 +638,34 @@ mod tests {
         let key = Key::new(handle, Parameter::ExposureTime.to_raw(), Kind::Integer);
         let (id, values) = add_sink(key, integer);
 
-        remove_sink(key, id);
+        assert!(remove_sink(key, id));
         assert_eq!(values.try_recv(), Err(TryRecvError::Disconnected));
         assert!(!lock(&SINKS).contains_key(&key));
+        assert!(!remove_sink(key, id));
+    }
+
+    #[test]
+    fn releasing_a_handle_disconnects_its_receivers_only() {
+        let released = fake_handle(0x1004);
+        let kept = fake_handle(0x1005);
+        let exposure = Parameter::ExposureTime.to_raw();
+        let count = Parameter::ReadoutCount.to_raw();
+        let first_key = Key::new(released, exposure, Kind::Integer);
+        let second_key = Key::new(released, count, Kind::ExtrinsicInteger);
+        let kept_key = Key::new(kept, exposure, Kind::Integer);
+        let (first, first_values) = add_sink(first_key, integer);
+        let (second, second_values) = add_sink(second_key, integer);
+        let (other, kept_values) = add_sink(kept_key, integer);
+
+        // no registration was made with picam, so this calls no picam function
+        release(released);
+        assert_eq!(first_values.try_recv(), Err(TryRecvError::Disconnected));
+        assert_eq!(second_values.try_recv(), Err(TryRecvError::Disconnected));
+        assert_eq!(kept_values.try_recv(), Err(TryRecvError::Empty));
+        // a watch dropped after its camera closed finds nothing to remove
+        assert!(!remove_sink(first_key, first));
+        assert!(!remove_sink(second_key, second));
+
+        assert!(remove_sink(kept_key, other));
     }
 }

@@ -16,6 +16,7 @@ use crate::model::Model;
 use crate::parameter::sealed::RawHandle;
 use crate::parameter::{ComputerInterface, OnlineSettablePicamValue, Parameter, TypedParameter};
 use crate::sys;
+use crate::watch;
 
 /// An open connection to a PICam camera.
 #[derive(Debug)]
@@ -509,6 +510,13 @@ impl_parameter_methods!(Camera, "camera");
 
 impl Drop for Camera {
     fn drop(&mut self) {
+        // watches on the device (extrinsic ones, and those made through
+        // `CameraDevice`) are registered on its handle, so both are cleared
+        match self.device_handle() {
+            Ok(device) => watch::release(device),
+            Err(e) => tracing::error!("failed to find the camera device to clear its watches: {e}"),
+        }
+        watch::release(self.handle);
         if let Err(e) = picam_call!(sys::Picam_CloseCamera(self.handle)) {
             tracing::error!("failed to close PICam camera: {e}");
         }

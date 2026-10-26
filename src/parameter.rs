@@ -342,10 +342,7 @@ pub(crate) mod sealed {
         /// # Errors
         ///
         /// Returns an error if PICam is unable to register the callback.
-        fn watch<'a>(
-            handle: RawHandle,
-            parameter: Parameter,
-        ) -> Result<(Watch<'a>, Receiver<Self>)>;
+        fn watch(handle: RawHandle, parameter: Parameter) -> Result<(Watch, Receiver<Self>)>;
     }
 
     /// The handle-taking half of [`super::ReadablePicamValue`].
@@ -363,10 +360,10 @@ pub(crate) mod sealed {
         /// # Errors
         ///
         /// Returns an error if PICam is unable to register the callback.
-        fn watch_extrinsic<'a>(
+        fn watch_extrinsic(
             handle: RawHandle,
             parameter: Parameter,
-        ) -> Result<(Watch<'a>, Receiver<Self>)>;
+        ) -> Result<(Watch, Receiver<Self>)>;
     }
 
     /// The handle-taking half of [`super::OnlineSettablePicamValue`].
@@ -429,10 +426,7 @@ macro_rules! impl_picam_value {
                 Ok(settable != 0)
             }
 
-            fn watch<'a>(
-                handle: RawHandle,
-                parameter: Parameter,
-            ) -> Result<(Watch<'a>, Receiver<Self>)> {
+            fn watch(handle: RawHandle, parameter: Parameter) -> Result<(Watch, Receiver<Self>)> {
                 watch::subscribe(handle.0, parameter, Kind::$kind, |event| match event {
                     Event::$event(value) => Some(*value),
                     _ => None,
@@ -533,10 +527,10 @@ macro_rules! impl_readable_value {
                 Ok(value)
             }
 
-            fn watch_extrinsic<'a>(
+            fn watch_extrinsic(
                 handle: RawHandle,
                 parameter: Parameter,
-            ) -> Result<(Watch<'a>, Receiver<Self>)> {
+            ) -> Result<(Watch, Receiver<Self>)> {
                 watch::subscribe(handle.0, parameter, Kind::$kind, |event| match event {
                     Event::$event(value) => Some(*value),
                     _ => None,
@@ -583,7 +577,7 @@ impl sealed::RawPicamValue for bool {
         <i32 as sealed::RawPicamValue>::can_set(handle, parameter, i32::from(value))
     }
 
-    fn watch<'a>(handle: RawHandle, parameter: Parameter) -> Result<(Watch<'a>, Receiver<Self>)> {
+    fn watch(handle: RawHandle, parameter: Parameter) -> Result<(Watch, Receiver<Self>)> {
         watch::subscribe(handle.0, parameter, Kind::Integer, |event| match event {
             Event::Integer(value) => Some(*value != 0),
             _ => None,
@@ -598,10 +592,7 @@ impl sealed::RawReadablePicamValue for bool {
         <i32 as sealed::RawReadablePicamValue>::read(handle, parameter).map(|value| value != 0)
     }
 
-    fn watch_extrinsic<'a>(
-        handle: RawHandle,
-        parameter: Parameter,
-    ) -> Result<(Watch<'a>, Receiver<Self>)> {
+    fn watch_extrinsic(handle: RawHandle, parameter: Parameter) -> Result<(Watch, Receiver<Self>)> {
         watch::subscribe(
             handle.0,
             parameter,
@@ -768,7 +759,7 @@ impl sealed::RawPicamValue for Vec<Roi> {
         Ok(settable != 0)
     }
 
-    fn watch<'a>(handle: RawHandle, parameter: Parameter) -> Result<(Watch<'a>, Receiver<Self>)> {
+    fn watch(handle: RawHandle, parameter: Parameter) -> Result<(Watch, Receiver<Self>)> {
         watch::subscribe(handle.0, parameter, Kind::Rois, |event| match event {
             Event::Rois(rois) => Some(rois.clone()),
             _ => None,
@@ -908,7 +899,7 @@ impl sealed::RawPicamValue for Vec<Modulation> {
         Ok(settable != 0)
     }
 
-    fn watch<'a>(handle: RawHandle, parameter: Parameter) -> Result<(Watch<'a>, Receiver<Self>)> {
+    fn watch(handle: RawHandle, parameter: Parameter) -> Result<(Watch, Receiver<Self>)> {
         watch::subscribe(
             handle.0,
             parameter,
@@ -1012,7 +1003,7 @@ impl sealed::RawPicamValue for Pulse {
         Ok(settable != 0)
     }
 
-    fn watch<'a>(handle: RawHandle, parameter: Parameter) -> Result<(Watch<'a>, Receiver<Self>)> {
+    fn watch(handle: RawHandle, parameter: Parameter) -> Result<(Watch, Receiver<Self>)> {
         watch::subscribe(handle.0, parameter, Kind::Pulse, |event| match event {
             Event::Pulse(pulse) => Some(*pulse),
             _ => None,

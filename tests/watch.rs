@@ -389,3 +389,104 @@ fn watch_errors() {
     id.disconnect_demo(library)
         .expect("demo camera should disconnect");
 }
+
+/// Checks that a watch can outlive its camera: closing the camera clears it,
+/// so its receiver disconnects and dropping it afterwards is harmless, and a
+/// watch on the reopened camera gets each value once. The same holds for a
+/// watch leaked with `mem::forget`.
+#[test]
+fn watch_outlives_its_camera() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "WATCH0011";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, camera) = open(library, Model::PIXIS_100F, SERIAL_NUMBER);
+    let (exposure_watch, exposures) = camera
+        .watch_value(params::EXPOSURE_TIME)
+        .expect("exposure time should be watched");
+    let (reading_watch, readings) = camera
+        .watch_extrinsic_value(params::SENSOR_TEMPERATURE_READING)
+        .expect("the temperature reading should be watched");
+    drop(camera);
+    assert_eq!(exposures.try_recv(), Err(TryRecvError::Disconnected));
+    assert_eq!(readings.try_recv(), Err(TryRecvError::Disconnected));
+    drop((exposure_watch, reading_watch));
+
+    let camera = Camera::open(&id, Arc::clone(library)).expect("demo camera should reopen");
+    let (leaked_watch, leaked) = camera
+        .watch_value(params::EXPOSURE_TIME)
+        .expect("exposure time should be watched");
+    std::mem::forget(leaked_watch);
+    drop(camera);
+    assert_eq!(leaked.try_recv(), Err(TryRecvError::Disconnected));
+
+    let camera = Camera::open(&id, Arc::clone(library)).expect("demo camera should reopen");
+    let (again_watch, again) = camera
+        .watch_value(params::EXPOSURE_TIME)
+        .expect("exposure time should be watched again");
+    camera
+        .set(params::EXPOSURE_TIME, 45.0)
+        .expect("exposure time should be set");
+    assert_eq!(again.try_recv(), Ok(45.0));
+    assert_eq!(again.try_recv(), Err(TryRecvError::Empty));
+
+    drop(again_watch);
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that watches can stay alive through an acquisition, and still
+/// work after it. The demo camera sends no temperature readings (seen with
+/// sdk 5.15).
+#[test]
+fn extrinsic_watch_lives_through_an_acquisition() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "WATCH0012";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, mut camera) = open(library, Model::PIXIS_100F, SERIAL_NUMBER);
+    camera
+        .set(params::READOUT_COUNT, 2)
+        .expect("readout count should be set");
+    camera
+        .set(params::EXPOSURE_TIME, 20.0)
+        .expect("exposure time should be set");
+    assert_eq!(camera.commit_parameters(), Ok(vec![]));
+
+    let (reading_watch, readings) = camera
+        .watch_extrinsic_value(params::SENSOR_TEMPERATURE_READING)
+        .expect("the temperature reading should be watched");
+    let (exposure_watch, exposures) = camera
+        .watch_value(params::EXPOSURE_TIME)
+        .expect("exposure time should be watched");
+
+    let mut acquisition = camera
+        .start_acquisition()
+        .expect("acquisition should start");
+    loop {
+        let update = acquisition
+            .wait(Some(Duration::from_secs(10)))
+            .expect("wait should work")
+            .expect("a demo readout should arrive within the timeout");
+        if !update.running() {
+            break;
+        }
+    }
+    acquisition
+        .finish()
+        .expect("an ended acquisition should finish cleanly");
+    assert_eq!(readings.try_recv(), Err(TryRecvError::Empty));
+
+    camera
+        .set(params::EXPOSURE_TIME, 30.0)
+        .expect("exposure time should be set");
+    assert_eq!(exposures.try_recv(), Ok(30.0));
+
+    drop((reading_watch, exposure_watch));
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}

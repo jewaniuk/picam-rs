@@ -12,6 +12,7 @@ use crate::library::Library;
 use crate::model::Model;
 use crate::parameter::ComputerInterface;
 use crate::sys;
+use crate::watch;
 
 /// An open connection to a PICam accessory, such as a light source.
 ///
@@ -217,6 +218,7 @@ impl_parameter_methods!(Accessory, "accessory");
 
 impl Drop for Accessory {
     fn drop(&mut self) {
+        watch::release(self.handle);
         // nowhere to hand a `Result` back to from `Drop`, so just report it
         if let Err(e) = picam_call!(sys::PicamAccessory_CloseAccessory(self.handle)) {
             tracing::error!("failed to close PICam accessory: {e}");

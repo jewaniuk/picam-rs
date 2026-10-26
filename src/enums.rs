@@ -68,10 +68,7 @@ macro_rules! impl_value_via_i32 {
                 check_enumerated_type(handle, parameter, sys::PicamEnumeratedType::$enumerated)
             }
 
-            fn watch<'a>(
-                handle: RawHandle,
-                parameter: Parameter,
-            ) -> Result<(Watch<'a>, Receiver<Self>)> {
+            fn watch(handle: RawHandle, parameter: Parameter) -> Result<(Watch, Receiver<Self>)> {
                 watch::subscribe(handle.0, parameter, Kind::Integer, |event| match event {
                     Event::Integer(code) => Some(($from)(*code)),
                     _ => None,
@@ -86,10 +83,10 @@ macro_rules! impl_value_via_i32 {
                 <i32 as sealed::RawReadablePicamValue>::read(handle, parameter).map($from)
             }
 
-            fn watch_extrinsic<'a>(
+            fn watch_extrinsic(
                 handle: RawHandle,
                 parameter: Parameter,
-            ) -> Result<(Watch<'a>, Receiver<Self>)> {
+            ) -> Result<(Watch, Receiver<Self>)> {
                 watch::subscribe(
                     handle.0,
                     parameter,

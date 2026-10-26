@@ -652,7 +652,7 @@ macro_rules! impl_parameter_methods {
                 pub fn watch_value<T: PicamValue>(
                     &self,
                     parameter: TypedParameter<T>,
-                ) -> Result<(Watch<'_>, Receiver<T>)> {
+                ) -> Result<(Watch, Receiver<T>)> {
                     T::watch(RawHandle(self.handle), parameter.parameter())
                 }
 
@@ -668,7 +668,7 @@ macro_rules! impl_parameter_methods {
                 pub fn watch_value_untyped<T: PicamValue>(
                     &self,
                     parameter: Parameter,
-                ) -> Result<(Watch<'_>, Receiver<T>)> {
+                ) -> Result<(Watch, Receiver<T>)> {
                     T::check_type(RawHandle(self.handle), parameter)?;
                     T::watch(RawHandle(self.handle), parameter)
                 }
@@ -686,7 +686,7 @@ macro_rules! impl_parameter_methods {
                 pub fn watch_extrinsic_value<T: ReadablePicamValue>(
                     &self,
                     parameter: TypedParameter<T>,
-                ) -> Result<(Watch<'_>, Receiver<T>)> {
+                ) -> Result<(Watch, Receiver<T>)> {
                     T::watch_extrinsic(RawHandle(self.extrinsic_handle()?), parameter.parameter())
                 }
 
@@ -702,7 +702,7 @@ macro_rules! impl_parameter_methods {
                 pub fn watch_extrinsic_value_untyped<T: ReadablePicamValue>(
                     &self,
                     parameter: Parameter,
-                ) -> Result<(Watch<'_>, Receiver<T>)> {
+                ) -> Result<(Watch, Receiver<T>)> {
                     T::check_type(RawHandle(self.handle), parameter)?;
                     T::watch_extrinsic(RawHandle(self.extrinsic_handle()?), parameter)
                 }
@@ -717,7 +717,7 @@ macro_rules! impl_parameter_methods {
                 pub fn watch_relevance(
                     &self,
                     parameter: impl Into<Parameter>,
-                ) -> Result<(Watch<'_>, Receiver<bool>)> {
+                ) -> Result<(Watch, Receiver<bool>)> {
                     watch::subscribe(self.handle, parameter.into(), Kind::IsRelevant, |event| match event {
                         Event::IsRelevant(relevant) => Some(*relevant),
                         _ => None,
@@ -734,7 +734,7 @@ macro_rules! impl_parameter_methods {
                 pub fn watch_value_access(
                     &self,
                     parameter: impl Into<Parameter>,
-                ) -> Result<(Watch<'_>, Receiver<ValueAccess>)> {
+                ) -> Result<(Watch, Receiver<ValueAccess>)> {
                     watch::subscribe(self.handle, parameter.into(), Kind::ValueAccess, |event| match event {
                         Event::ValueAccess(access) => Some(*access),
                         _ => None,
