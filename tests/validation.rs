@@ -8,9 +8,9 @@ use std::sync::Arc;
 
 use picam_rs::{Camera, CameraId, ConstraintScope, Model, Parameter, ReadoutControlMode, params};
 
-/// Checks that validation passes on a freshly opened camera, then reports a
-/// pending readout mode that the camera's regions don't fit, from all three
-/// calls.
+/// Checks that validation passes on a freshly opened camera, with nothing
+/// pending, then reports a pending readout mode that the camera's regions
+/// don't fit, from all three calls.
 #[test]
 fn validation_reports_an_invalid_combination() {
     // each test uses its own serial number so demo cameras never collide
@@ -56,6 +56,17 @@ fn validation_reports_an_invalid_combination() {
         rois.error_constraining_parameters
             .contains(&Parameter::ReadoutControlMode),
         "the readout mode should constrain the regions: {rois:?}"
+    );
+
+    let one = camera
+        .validate_parameter(Parameter::Rois)
+        .expect("the regions should be validated");
+    assert!(!one.is_valid);
+    assert_eq!(one.failed_parameter, Some(Parameter::Rois));
+    assert!(
+        one.error_constraining_parameters
+            .contains(&Parameter::ReadoutControlMode),
+        "the readout mode should constrain the regions: {one:?}"
     );
 
     let dependent = camera

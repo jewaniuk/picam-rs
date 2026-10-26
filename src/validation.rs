@@ -42,7 +42,7 @@ pub struct ValidationResult {
 }
 
 impl ValidationResult {
-    pub(crate) fn from_raw(raw: &sys::PicamValidationResult) -> Self {
+    fn from_raw(raw: &sys::PicamValidationResult) -> Self {
         // SAFETY: PICam guarantees each pointer is null or points to one
         // valid value, and that each array has its count of valid, contiguous
         // entries whenever this struct is valid (manual 7.2.2.1)

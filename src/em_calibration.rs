@@ -30,7 +30,8 @@ impl EmCalibration {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::ValueTooLong`] if `id`'s fields don't fit in
+    /// Returns [`crate::Error::DemoNotSupported`] for a demo camera (seen with
+    /// SDK 5.15), [`crate::Error::ValueTooLong`] if `id`'s fields don't fit in
     /// PICam's fixed-size buffers, or an error if PICam is unable to open it,
     /// for example because the camera is already open.
     pub fn open(id: &CameraId, library: Arc<Library>) -> Result<Self> {
@@ -122,7 +123,7 @@ impl EmCalibration {
         Ok(value)
     }
 
-    /// Reads whether the sensor temperature is locked to its set point,
+    /// Reads the sensor temperature status (unlocked, locked or faulted)
     /// directly from the hardware.
     ///
     /// # Errors
@@ -185,6 +186,9 @@ impl EmCalibration {
         // SAFETY: just checked `ptr` is non-null; PICam guarantees a valid
         // `PicamRangeConstraint`.
         let constraint = RangeConstraint::from_raw(unsafe { &*ptr });
+        // manual 8.4.3.1 says to free this with
+        // `Picam_DestroyCollectionConstraints`, but the header returns a
+        // `PicamRangeConstraint`, which only the range destroy takes
         picam_call!(sys::Picam_DestroyRangeConstraints(ptr))?;
         Ok(constraint)
     }

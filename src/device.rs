@@ -527,8 +527,10 @@ macro_rules! impl_parameter_methods {
                     picam_call!(sys::Picam_DestroyRangeConstraints(ptr))?;
                     Ok(constraint)
                 }
-                /// Reports which of `parameter`'s attributes may change as other
-                /// parameters change (PICam manual 7.4.10.5).
+
+                /// Reports which of `parameter`'s attributes may change (PICam
+                /// manual 7.4.10.5). [`Self::extrinsic_dynamics`] narrows this to
+                /// the changes from outside the software.
                 ///
                 /// # Errors
                 ///

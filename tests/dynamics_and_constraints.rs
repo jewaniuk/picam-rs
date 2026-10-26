@@ -6,7 +6,7 @@ mod common;
 
 use std::sync::Arc;
 
-use picam_rs::{Camera, CameraId, ConstraintCategory, Dynamics, Library, Model, Parameter};
+use picam_rs::{Camera, CameraId, ConstraintCategory, Dynamics, Error, Library, Model, Parameter};
 
 /// Connects and opens a demo camera of `model`.
 fn open(library: &Arc<Library>, model: Model, serial_number: &str) -> (CameraId, Camera) {
@@ -52,6 +52,15 @@ fn dynamics_are_reported() {
         camera.extrinsic_dynamics(Parameter::SensorTemperatureReading),
         Ok(Dynamics::VALUE)
     );
+    // a parameter the camera doesn't have (seen with sdk 5.15)
+    assert_eq!(
+        camera.dynamics(Parameter::AuxOutput),
+        Err(Error::ParameterDoesNotExist)
+    );
+    assert_eq!(
+        camera.extrinsic_dynamics(Parameter::AuxOutput),
+        Err(Error::ParameterDoesNotExist)
+    );
 
     drop(camera);
     id.disconnect_demo(library)
@@ -66,6 +75,7 @@ fn constraint_lists_hold_the_capable_constraint() {
     let library = &test_library.library;
     let capable = ConstraintCategory::Capable;
 
+    // each camera uses its own serial number so demo cameras never collide
     let (id, camera) = open(library, Model::PIXIS_100F, "CONSTR01");
     let collection = camera
         .collection_constraints(Parameter::AdcQuality)
@@ -93,6 +103,32 @@ fn constraint_lists_hold_the_capable_constraint() {
         .rois_constraint(Parameter::Rois, capable)
         .expect("the capable rois constraint should be read");
     assert!(rois.contains(&one), "{rois:?} should hold {one:?}");
+
+    // a parameter constrained another way is refused, not given an empty
+    // list (seen with sdk 5.15)
+    let invalid = Some(Error::ParameterHasInvalidConstraintType);
+    assert_eq!(
+        camera.collection_constraints(Parameter::ExposureTime).err(),
+        invalid
+    );
+    assert_eq!(
+        camera.range_constraints(Parameter::AdcQuality).err(),
+        invalid
+    );
+    assert_eq!(
+        camera.rois_constraints(Parameter::ExposureTime).err(),
+        invalid
+    );
+    assert_eq!(
+        camera.pulse_constraints(Parameter::ExposureTime).err(),
+        invalid
+    );
+    assert_eq!(
+        camera
+            .modulations_constraints(Parameter::ExposureTime)
+            .err(),
+        invalid
+    );
     drop(camera);
     id.disconnect_demo(library)
         .expect("demo camera should disconnect");

@@ -348,7 +348,7 @@ impl Camera {
         Ok(constraint)
     }
 
-    /// Gets every rois constraint on `parameter`'s value (PICam manual
+    /// Gets every ROI constraint on `parameter`'s value (PICam manual
     /// 7.4.11.1).
     ///
     /// # Errors
@@ -405,7 +405,7 @@ impl Camera {
         Ok(constraints)
     }
 
-    /// Gets every modulations constraint on `parameter`'s value (PICam manual
+    /// Gets every modulation constraint on `parameter`'s value (PICam manual
     /// 7.4.11.7).
     ///
     /// # Errors
