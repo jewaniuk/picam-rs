@@ -10,3 +10,4 @@ library for interfacing with teledyne princeton instruments cameras, written in 
 - [ ] dropping or finishing an `Acquisition` on a camera that stops responding should give up after about 10 s, need to check on hardware, and what the next `start_acquisition` returns
 - [ ] `Acquisition::stop` from the waiting thread, between bounded waits, was only tried on demo cameras, need to check it ends a real camera's acquisition promptly
 - [ ] frame metadata sits between `FrameSize` and `FrameStride` (seen on a PIXIS 100F demo camera with time stamps on), need to check on hardware with time stamps and frame tracking on
+- [ ] PICam refusing to set or commit parameters while an acquisition runs (`AcquisitionInProgress`) was seen on a demo camera only, need to check on hardware, since the acquisition views rely on the layout not changing mid-acquisition

@@ -10,7 +10,7 @@ mod common;
 use std::sync::Arc;
 use std::time::Duration;
 
-use picam_rs::{Camera, CameraId, Error, Library, Model, Pixels, TimeStamps, params};
+use picam_rs::{Camera, CameraId, Error, Library, Model, Pixels, Roi, TimeStamps, params};
 
 /// How long any test waits for one readout, far longer than a demo camera
 /// takes.
@@ -59,11 +59,28 @@ fn acquire_returns_requested_readouts() {
     )
     .expect("frames per readout should be positive");
     let rois = camera.get(params::ROIS).expect("regions should be read");
+    let readout_stride = usize::try_from(
+        camera
+            .get(params::READOUT_STRIDE)
+            .expect("readout stride should be read"),
+    )
+    .expect("readout stride should be positive");
+    let frame_stride = usize::try_from(
+        camera
+            .get(params::FRAME_STRIDE)
+            .expect("frame stride should be read"),
+    )
+    .expect("frame stride should be positive");
 
     let readouts = camera
         .acquire(3, Some(TIMEOUT))
         .expect("demo camera should acquire");
     assert_eq!(readouts.len(), 3);
+    // three readouts, without padding after the last frame (manual 6.1)
+    assert_eq!(
+        readouts.bytes().len(),
+        2 * readout_stride + frames_per_readout * frame_stride
+    );
     for readout in readouts.iter() {
         assert_eq!(readout.frame_count(), frames_per_readout);
         for frame in readout.frames() {
@@ -269,18 +286,17 @@ fn metadata_follows_the_pixels() {
     let library = &test_library.library;
     let (id, mut camera) = open(library, SERIAL_NUMBER);
 
-    {
-        let readouts = camera
-            .acquire(1, Some(TIMEOUT))
-            .expect("demo camera should acquire");
-        let readout = readouts.get(0).expect("one readout should arrive");
-        let frame = readout.frame(0).expect("the readout should hold a frame");
-        assert!(
-            frame.metadata().is_empty(),
-            "nothing is tracked, so there should be no metadata, got {} bytes",
-            frame.metadata().len()
-        );
-    }
+    let readouts = camera
+        .acquire(1, Some(TIMEOUT))
+        .expect("demo camera should acquire");
+    let readout = readouts.get(0).expect("one readout should arrive");
+    let frame = readout.frame(0).expect("the readout should hold a frame");
+    assert!(
+        frame.metadata().is_empty(),
+        "nothing is tracked, so there should be no metadata, got {} bytes",
+        frame.metadata().len()
+    );
+    drop(readouts);
 
     camera
         .set(
@@ -311,6 +327,64 @@ fn metadata_follows_the_pixels() {
     assert_eq!(frame.metadata().len(), 2 * bit_depth.div_ceil(8));
 
     drop(readouts);
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that PICam refuses to commit parameter changes while an
+/// acquisition runs, which the views rely on: they slice every update with
+/// the layout read when the acquisition started.
+#[test]
+fn commit_is_refused_while_acquiring() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "ACQ0008";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, mut camera) = open(library, SERIAL_NUMBER);
+    configure(&camera, 3, 20.0);
+    let readout_stride = usize::try_from(
+        camera
+            .get(params::READOUT_STRIDE)
+            .expect("readout stride should be read"),
+    )
+    .expect("readout stride should be positive");
+    let rois = camera.get(params::ROIS).expect("regions should be read");
+    let smaller = vec![Roi {
+        height: rois[0].height / 2,
+        ..rois[0]
+    }];
+
+    let mut acquisition = camera
+        .start_acquisition()
+        .expect("acquisition should start");
+    // picam refuses the change itself, not just the commit (seen with sdk
+    // 5.15), so nothing can be pending to commit
+    assert_eq!(
+        acquisition.camera().set(params::ROIS, smaller).err(),
+        Some(Error::AcquisitionInProgress)
+    );
+    assert_eq!(
+        acquisition.camera().commit_parameters().err(),
+        Some(Error::AcquisitionInProgress)
+    );
+    loop {
+        let update = acquisition
+            .wait(Some(TIMEOUT))
+            .expect("wait should work")
+            .expect("a demo readout should arrive within the timeout");
+        for readout in update.readouts().iter() {
+            assert_eq!(readout.bytes().len(), readout_stride);
+        }
+        if !update.running() {
+            break;
+        }
+    }
+    acquisition
+        .finish()
+        .expect("an ended acquisition should finish cleanly");
+
     drop(camera);
     id.disconnect_demo(library)
         .expect("demo camera should disconnect");

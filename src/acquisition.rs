@@ -145,8 +145,8 @@ impl Camera {
 ///
 /// [`finish`](Self::finish) stops it early and waits for it to end.
 /// Dropping it does the same, but can only log errors. Either one gives up
-/// after 10 waits of 1 second in a row bring nothing, rather than hang on a
-/// camera that has stopped responding. In that case PICam may still think
+/// after 10 waits in a row bring no data, each waiting up to 1 second,
+/// rather than hang on a camera that has stopped responding. In that case PICam may still think
 /// the acquisition is running, and the next one fails with
 /// [`crate::Error::AcquisitionInProgress`].
 ///
@@ -282,7 +282,7 @@ impl Acquisition<'_> {
     ///
     /// Returns the first error met while stopping or waiting, or
     /// [`crate::Error::TimeOutOccurred`] if it still hadn't ended after 10
-    /// waits of 1 second in a row brought nothing.
+    /// waits in a row brought no data, each waiting up to 1 second.
     pub fn finish(mut self) -> Result<()> {
         self.drain()
     }
@@ -884,6 +884,43 @@ mod tests {
     }
 
     #[test]
+    fn from_raw_views_picam_data() {
+        let mut storage = [0u8; 72 + 8];
+        let start = storage.as_ptr().align_offset(align_of::<u32>());
+        fill(&mut storage[start..start + 72]);
+        let data = |initial_readout: *mut u8, readout_count| sys::PicamAvailableData {
+            initial_readout: initial_readout.cast(),
+            readout_count,
+        };
+        let pointer = storage[start..].as_mut_ptr();
+
+        // SAFETY: `pointer` starts 72 bytes laid out as `test_layout`
+        // describes two readouts, and `storage` outlives `readouts`
+        let readouts = unsafe { Readouts::from_raw(&data(pointer, 2), Arc::new(test_layout())) }
+            .expect("two readouts should be viewed");
+        // two readouts, without padding after the last frame
+        assert_eq!(readouts.bytes().len(), 72);
+        assert_eq!(readouts.len(), 2);
+        assert_eq!(readouts.bytes().as_ptr(), pointer.cast_const());
+
+        // SAFETY: neither pointer is read, since a null pointer or no
+        // readouts give an empty view
+        let empty = [
+            unsafe { Readouts::from_raw(&data(ptr::null_mut(), 2), Arc::new(test_layout())) },
+            unsafe { Readouts::from_raw(&data(pointer, 0), Arc::new(test_layout())) },
+        ];
+        for readouts in empty {
+            let readouts = readouts.expect("no data should be an empty view");
+            assert!(readouts.is_empty());
+            assert!(readouts.bytes().is_empty());
+        }
+
+        // SAFETY: a negative count is refused before the pointer is used
+        let negative = unsafe { Readouts::from_raw(&data(pointer, -1), Arc::new(test_layout())) };
+        assert!(matches!(negative, Err(Error::InconsistentDataLayout)));
+    }
+
+    #[test]
     fn misaligned_pixels_are_copied() {
         let values: [u16; 4] = [1, 0x0203, 0xfffe, 7];
         let mut storage = [0u8; 8 + 8];
@@ -932,15 +969,15 @@ mod tests {
             Layout::new(-40, 1, 20, 16, mono16, 16, vec![roi(2, 1, 1, 1)]),
             // zero frames per readout
             Layout::new(40, 0, 20, 16, mono16, 16, vec![roi(2, 1, 1, 1)]),
-            // an overflowing size
+            // a region whose size overflows
             Layout::new(
                 i32::MAX,
-                i32::MAX,
+                1,
                 i32::MAX,
                 i32::MAX,
                 mono16,
-                16,
-                vec![roi(2, 1, 1, 1)],
+                i32::MAX - 7,
+                vec![roi(i32::MAX, i32::MAX, 1, 1)],
             ),
         ];
         for (index, case) in cases.into_iter().enumerate() {
