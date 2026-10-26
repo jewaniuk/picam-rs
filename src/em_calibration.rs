@@ -242,8 +242,8 @@ fn handle_camera_id(handle: sys::PicamHandle) -> Result<CameraId> {
 pub struct EmCalibrationDate {
     /// The year.
     pub year: i32,
-    /// The month, as a number.
+    /// The month, from 1 (January) to 12.
     pub month: i32,
-    /// The day of the month.
+    /// The day of the month, from 1 to 31.
     pub day: i32,
 }

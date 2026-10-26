@@ -529,8 +529,9 @@ macro_rules! impl_parameter_methods {
                 }
 
                 /// Reports which of `parameter`'s attributes may change (PICam
-                /// manual 7.4.10.5). [`Self::extrinsic_dynamics`] narrows this to
-                /// the changes from outside the software.
+                /// manual 7.4.10.5). [`Self::extrinsic_dynamics`] reports the
+                /// attributes that may change because of something outside the
+                /// software.
                 ///
                 /// # Errors
                 ///
