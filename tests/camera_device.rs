@@ -212,14 +212,16 @@ fn commit_to_device() {
 }
 
 /// A value `parameter` can take other than its current one, from its capable
-/// constraint, for the parameters set through a plain number. `None` for
-/// parameters that can't be set or have no such value.
+/// constraint, for the parameters set through a plain number. A range gives
+/// only its minimum, so a long exposure never slows the acquisition. `None`
+/// for parameters that can't be set or have no such value.
 fn other_value(camera: &Camera, parameter: Parameter) -> Option<f64> {
     if camera.value_access(parameter).ok()? == ValueAccess::ReadOnly {
         return None;
     }
     let current = match camera.value_type(parameter).ok()? {
         ValueType::FloatingPoint => camera.get_untyped::<f64>(parameter).ok()?,
+        ValueType::LargeInteger => camera.get_untyped::<i64>(parameter).ok()? as f64,
         ValueType::Integer | ValueType::Boolean | ValueType::Enumeration => {
             f64::from(camera.get_untyped::<i32>(parameter).ok()?)
         }
@@ -236,7 +238,7 @@ fn other_value(camera: &Camera, parameter: Parameter) -> Option<f64> {
             let range = camera
                 .range_constraint(parameter, ConstraintCategory::Capable)
                 .ok()?;
-            vec![range.minimum, range.maximum]
+            vec![range.minimum]
         }
         _ => return None,
     };
@@ -293,17 +295,23 @@ fn device_changes_are_refused_while_acquiring() {
         let device = during.device().expect("the device should be found");
         // seen with sdk 5.15, on this and two other demo models
         let refused = Some(Error::AcquisitionInProgress);
+        let (mut accepted, mut refusals) = (0, 0);
         for (parameter, value_type, value) in changes {
             let result = match value_type {
                 ValueType::FloatingPoint => device.set_untyped::<f64>(parameter, value),
+                ValueType::LargeInteger => device.set_untyped::<i64>(parameter, value as i64),
                 _ => device.set_untyped::<i32>(parameter, value as i32),
             };
             if during.can_set_online(parameter) == Ok(true) {
                 assert_eq!(result, Ok(()), "{parameter:?} can be set online");
+                accepted += 1;
             } else {
                 assert_eq!(result.err(), refused, "{parameter:?} can't be set online");
+                refusals += 1;
             }
         }
+        // both kinds were tried, exposure time is online-settable here
+        assert!(accepted > 0 && refusals > 0);
         assert_eq!(device.set(params::ROIS, smaller).err(), refused);
         assert_eq!(device.commit_parameters().err(), refused);
         assert_eq!(device.restore_parameters_to_default_values().err(), refused);
