@@ -52,10 +52,11 @@ The crate only runs on Windows, the only platform the lab uses. The SDK also shi
 | `constraint` | constraint structs and their enums | done |
 | `model` | `Model`, with a constant per camera or accessory model from `src/generated/models.rs` | done |
 | `enums` | the 39 generated value enums of PICam's enum parameters, from `src/generated/enums.rs` | done |
+| `device` | `impl_parameter_methods!`, the parameter methods `Camera` and `Accessory` share | done |
 | `convert` | shared FFI helpers (string/array conversion, `define_picam_enum!`, `FirmwareDetail`, enum names through `Picam_GetEnumerationString`) | done |
 | `acquisition` | `Camera::acquire`, `Camera::start_acquisition` and the `Acquisition` guard, the borrowed data views (`Readouts`, `Readout`, `Frame`, `RoiData`, `Pixels`), `AcquisitionErrors` | done |
 | advanced | `picam_advanced.h` | not started, apart from `PicamAdvanced_GetCameraDevice`, used privately by `Camera` |
-| `accessory` | `Accessory`, `AccessoryId`, `AccessoryHandle`, `CalibrationPoint`: identifying, opening and querying accessories, and the light source reference | done apart from parameters and discovery |
+| `accessory` | `Accessory`, `AccessoryId`, `AccessoryHandle`, `CalibrationPoint`: identifying, opening and querying accessories, the light source reference, and the parameter methods shared with `Camera` | done apart from discovery |
 | EM calibration | `picam_em_calibration.h` | not started |
 | special | `picam_special.h`: residual erasure, as `Camera` methods in `camera` | done |
 
@@ -112,12 +113,13 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 ### Parameters (settled)
 
 - Parameters are typed. Every parameter has a generated handle in the public `params` module, a `TypedParameter<T>` whose `T` comes from the value type in the parameter's `PI_V` definition (`params::EXPOSURE_TIME: TypedParameter<f64>`). Handles can't be made any other way, so none claims the wrong type.
-- `Camera::get`, `set`, `default_value`, `can_set`, `read` and `set_online` take a handle, so a wrong value type, or an operation PICam doesn't support for that type, doesn't compile. Their `_untyped` twins (`get_untyped::<T>(Parameter)` and so on) are the explicit fallback for parameters with no handle, such as `Parameter::Unknown` values from `Camera::parameters`. For an enum type they first check PICam's enumerated type for the parameter and return `Error::EnumeratedTypeMismatch` if it differs, since PICam reads every enum through the same integer call and can't catch that itself. The typed methods skip the check, since a handle's type is already right. The methods that only describe a parameter (`value_type`, the constraints and so on) take `impl Into<Parameter>`, so either works.
+- `Camera` and `Accessory`'s `get`, `set`, `default_value`, `can_set` and `read`, and `Camera::set_online`, take a handle, so a wrong value type, or an operation PICam doesn't support for that type, doesn't compile. Their `_untyped` twins (`get_untyped::<T>(Parameter)` and so on) are the explicit fallback for parameters with no handle, such as `Parameter::Unknown` values from `Camera::parameters`. For an enum type they first check PICam's enumerated type for the parameter and return `Error::EnumeratedTypeMismatch` if it differs, since PICam reads every enum through the same integer call and can't catch that itself. The typed methods skip the check, since a handle's type is already right. The methods that only describe a parameter (`value_type`, the constraints and so on) take `impl Into<Parameter>`, so either works.
 - The value methods are generic over the `PicamValue` trait. It is implemented for `i32`, `bool`, `i64`, `f64`, `Vec<Roi>`, `Vec<Modulation>`, `Pulse` and the generated value enums. `bool` and the enums go through PICam's integer calls, `bool` as 0 or 1 (manual 5.1.1.42), and neither is online-settable because PICam only sets integer parameters online (5.4.1.20).
 - `ReadablePicamValue` (`Camera::read`) and `OnlineSettablePicamValue` (`Camera::set_online`) are sub-traits implemented only for the types PICam supports those operations for.
 - The value traits are sealed. Their methods that take a handle live on supertraits in the private `parameter::sealed` module (`RawPicamValue`, `RawReadablePicamValue`, `RawOnlineSettablePicamValue`) and take a `RawHandle`, a wrapper around the raw handle that only the crate can construct. So users can neither implement the traits nor call those methods. A plain sealed supertrait (a `pub trait` in a private module) is not enough on its own, because its methods can still be called through a generic bound (`T::get(ptr, ...)` with `T: PicamValue`), and the raw handle is just `*mut c_void`. A truly `pub(crate)` supertrait would need `#[allow(private_bounds)]`. Any future public trait whose methods need a PICam handle (accessory parameters, for example) follows the same pattern.
 - Changes made with `set` are pending until `Camera::commit_parameters`, which returns the parameters that failed validation (an empty `Vec` means all were accepted).
-- Repetitive per-type wrappers are generated by macros (`impl_picam_value!`, `impl_bool_query!`, `impl_parameter_info!`, `impl_readable_value!`, `impl_online_settable_scalar!`). Macros live in the module that uses them; `convert.rs` holds the ones shared across modules.
+- Accessories are configured through the same parameter calls as cameras. `impl_parameter_methods!` (in `src/device.rs`) generates the same inherent methods on `Camera` and `Accessory`: every call `picam_accessory.h` lists for accessories (the value methods and their `_untyped` twins, `read`, the information and commit methods, status waiting, and the collection and range constraints). `set_online` and the ROI, pulse and modulation constraints stay `Camera`-only, since accessories don't support them. The value methods stay generic over `PicamValue`, so an accessory call with a value type it doesn't use compiles and PICam refuses it.
+- Repetitive per-type wrappers are generated by macros (`impl_picam_value!`, `impl_bool_query!`, `impl_parameter_info!`, `impl_readable_value!`, `impl_online_settable_scalar!`, `impl_parameter_methods!`). Macros live in the module that uses them; `convert.rs` holds the small helpers shared across modules, and `device.rs` the parameter methods `Camera` and `Accessory` share.
 
 ### Acquisition (settled)
 
@@ -249,7 +251,7 @@ These largely mirror patterns already in `camera.rs`.
 
 - [x] accessory identification and access (`Accessory`, `AccessoryId`, `AccessoryHandle`), firmware details and the light source reference, with `Picam_DestroyCalibrations` from `picam.h`, which frees the reference
 - [x] `picam_special.h`: `Camera::can_erase_residual` and `Camera::erase_residual`, through the camera's device handle (wrapping `PicamAdvanced_GetCameraDevice` privately)
-- [ ] accessory parameters: share `Camera`'s parameter methods with `Accessory` (no new functions)
+- [x] accessory parameters: `Accessory` shares `Camera`'s parameter methods through `impl_parameter_methods!` (no new functions)
 - [ ] `picam_em_calibration.h`, apart from the calibration progress callback
 - accessory discovery (`DiscoverAccessories`, `StopDiscoveringAccessories`, `IsDiscoveringAccessories`) moved to stage 4's callbacks, with the discovery callback its results arrive through
 
