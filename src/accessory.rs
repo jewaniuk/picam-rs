@@ -6,6 +6,7 @@ use std::sync::Arc;
 use crate::convert::{
     FirmwareDetail, c_char_array_to_string, collect_raw_array, string_to_c_char_array,
 };
+use crate::device::impl_parameter_methods;
 use crate::error::{Error, Result, picam_call};
 use crate::library::Library;
 use crate::model::Model;
@@ -14,7 +15,29 @@ use crate::sys;
 
 /// An open connection to a PICam accessory, such as a light source.
 ///
-/// It closes the accessory on drop.
+/// It closes the accessory on drop. Accessories are configured through the
+/// same parameter methods as [`Camera`](crate::Camera): those
+/// `picam_accessory.h` lists for accessories, which take integer, on/off,
+/// enum and floating-point values. The rest compile, since the methods are
+/// generic, but PICam refuses them.
+///
+/// ```no_run
+/// use std::sync::Arc;
+///
+/// use picam_rs::{Accessory, LightSource, Library, params};
+///
+/// # fn main() -> picam_rs::Result<()> {
+/// let library = Arc::new(Library::new()?);
+/// let lamp = Accessory::open_first(library)?;
+/// if lamp.does_parameter_exist(params::LIGHT_SOURCE)? {
+///     lamp.set(params::LIGHT_SOURCE, LightSource::Qth)?;
+///     let failed = lamp.commit_parameters()?;
+///     assert!(failed.is_empty());
+///     println!("status: {:?}", lamp.get(params::LIGHT_SOURCE_STATUS)?);
+/// }
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct Accessory {
     handle: sys::PicamHandle,
@@ -175,6 +198,8 @@ impl Accessory {
         Ok(points)
     }
 }
+
+impl_parameter_methods!(Accessory, "accessory");
 
 impl Drop for Accessory {
     fn drop(&mut self) {
