@@ -30,13 +30,16 @@ mod acquisition;
 mod camera;
 mod constraint;
 mod convert;
+mod defect;
 mod device;
+mod em_calibration;
 mod enums;
 mod error;
 mod library;
 mod model;
 mod parameter;
 mod sys;
+mod validation;
 
 pub use accessory::{Accessory, AccessoryHandle, AccessoryId, CalibrationPoint};
 pub use acquisition::{
@@ -48,11 +51,18 @@ pub use constraint::{
     ModulationsConstraint, PulseConstraint, RangeConstraint, RoisConstraint, RoisConstraintRules,
 };
 pub use convert::FirmwareDetail;
+pub use defect::{
+    ColumnDefect, PixelDefectMap, PixelLocation, RowDefect, StarDefect, StarDefectMap,
+};
+pub use em_calibration::{EmCalibration, EmCalibrationDate, EmCalibrationHandle};
 pub use enums::*;
 pub use error::{Error, Result};
 pub use library::{Library, Version};
 pub use model::Model;
 pub use parameter::{
-    ComputerInterface, EnumeratedType, Modulation, OnlineSettablePicamValue, Parameter, PicamValue,
-    Pulse, ReadablePicamValue, Roi, TypedParameter, ValueAccess, ValueType, params,
+    ComputerInterface, Dynamics, EnumeratedType, Modulation, OnlineSettablePicamValue, Parameter,
+    PicamValue, Pulse, ReadablePicamValue, Roi, TypedParameter, ValueAccess, ValueType, params,
+};
+pub use validation::{
+    DependentValidationResult, FailedDependentParameter, ValidationResult, ValidationResults,
 };

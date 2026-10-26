@@ -924,10 +924,40 @@ impl sealed::RawOnlineSettablePicamValue for Pulse {
 
 impl OnlineSettablePicamValue for Pulse {}
 
+bitflags::bitflags! {
+    /// Which of a parameter's attributes may change, from `dynamics` and
+    /// `extrinsic_dynamics` on [`Camera`](crate::Camera) and
+    /// [`Accessory`](crate::Accessory) (PICam manual 7.1.3.1).
+    ///
+    /// No flags set means none of them may change. Bits this crate doesn't
+    /// recognize are kept, not dropped.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct Dynamics: i32 {
+        /// The parameter's value may change.
+        const VALUE = sys::PicamDynamicsMask::PicamDynamicsMask_Value.0;
+        /// The parameter's value access may change.
+        const VALUE_ACCESS = sys::PicamDynamicsMask::PicamDynamicsMask_ValueAccess.0;
+        /// Whether the parameter is relevant may change.
+        const IS_RELEVANT = sys::PicamDynamicsMask::PicamDynamicsMask_IsRelevant.0;
+        /// The parameter's dependent constraints may change.
+        const CONSTRAINT = sys::PicamDynamicsMask::PicamDynamicsMask_Constraint.0;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::convert::assert_round_trips;
+
+    #[test]
+    fn dynamics_keep_unknown_bits() {
+        let none = sys::PicamDynamicsMask::PicamDynamicsMask_None;
+        assert!(Dynamics::from_bits_retain(none.0).is_empty());
+        let raw = Dynamics::VALUE.bits() | Dynamics::CONSTRAINT.bits() | 0x40;
+        let dynamics = Dynamics::from_bits_retain(raw);
+        assert!(dynamics.contains(Dynamics::VALUE | Dynamics::CONSTRAINT));
+        assert_eq!(dynamics.bits(), raw);
+    }
 
     #[test]
     fn parameter_enums_round_trip() {

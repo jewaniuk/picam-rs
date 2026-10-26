@@ -21,7 +21,7 @@ const GENERATED_NOTICE: &str =
 
 /// Hand-written wrappers that `check` verifies are complete: the C enum, and
 /// the source file that must name every one of its values.
-const HAND_WRITTEN: [(&str, &str); 10] = [
+const HAND_WRITTEN: [(&str, &str); 11] = [
     ("PicamError", "src/error.rs"),
     ("PicamComputerInterface", "src/parameter.rs"),
     ("PicamValueType", "src/parameter.rs"),
@@ -32,6 +32,7 @@ const HAND_WRITTEN: [(&str, &str); 10] = [
     ("PicamConstraintSeverity", "src/constraint.rs"),
     ("PicamRoisConstraintRulesMask", "src/constraint.rs"),
     ("PicamAcquisitionErrorsMask", "src/acquisition.rs"),
+    ("PicamDynamicsMask", "src/parameter.rs"),
 ];
 
 /// `EnumeratedType` variants whose PICam name can't be used as is: the plain
