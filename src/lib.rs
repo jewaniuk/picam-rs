@@ -38,6 +38,7 @@ mod library;
 mod model;
 mod parameter;
 mod sys;
+mod validation;
 
 pub use accessory::{Accessory, AccessoryHandle, AccessoryId, CalibrationPoint};
 pub use acquisition::{
@@ -57,4 +58,7 @@ pub use model::Model;
 pub use parameter::{
     ComputerInterface, Dynamics, EnumeratedType, Modulation, OnlineSettablePicamValue, Parameter,
     PicamValue, Pulse, ReadablePicamValue, Roi, TypedParameter, ValueAccess, ValueType, params,
+};
+pub use validation::{
+    DependentValidationResult, FailedDependentParameter, ValidationResult, ValidationResults,
 };
