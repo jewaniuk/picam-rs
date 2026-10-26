@@ -155,11 +155,9 @@ impl Camera {
     ///
     /// Returns an error if PICam is unable to check this.
     pub fn can_erase_residual(&self) -> Result<bool> {
+        let device = self.device_handle()?;
         let mut erasable: sys::pibln = 0;
-        picam_call!(sys::PicamSpecial_CanEraseResidual(
-            self.handle,
-            &mut erasable
-        ))?;
+        picam_call!(sys::PicamSpecial_CanEraseResidual(device, &mut erasable))?;
         Ok(erasable != 0)
     }
 
@@ -171,7 +169,17 @@ impl Camera {
     ///
     /// Returns an error if PICam is unable to erase it.
     pub fn erase_residual(&self) -> Result<()> {
-        picam_call!(sys::PicamSpecial_EraseResidual(self.handle))
+        let device = self.device_handle()?;
+        picam_call!(sys::PicamSpecial_EraseResidual(device))
+    }
+
+    /// The handle of the camera's device, which some calls need instead of
+    /// the camera model handle `Picam_OpenCamera` gives (PICam manual
+    /// 7.4.3.4 and 7.4.3.5). It's only used within one call, never stored.
+    fn device_handle(&self) -> Result<sys::PicamHandle> {
+        let mut device: sys::PicamHandle = std::ptr::null_mut();
+        picam_call!(sys::PicamAdvanced_GetCameraDevice(self.handle, &mut device))?;
+        Ok(device)
     }
 
     /// Lists the camera models available for use with [`CameraId::connect_demo`].
