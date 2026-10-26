@@ -16,7 +16,7 @@ macro_rules! impl_parameter_methods {
             use $crate::error::{Error, Result, picam_call};
             use $crate::parameter::sealed::RawHandle;
             use $crate::parameter::{
-                EnumeratedType, Parameter, PicamValue, ReadablePicamValue, TypedParameter,
+                Dynamics, EnumeratedType, Parameter, PicamValue, ReadablePicamValue, TypedParameter,
                 ValueAccess, ValueType, can_read, can_set_online, can_wait_for_status,
                 constraint_type, enumerated_type, is_relevant, value_access, value_type,
             };
@@ -526,6 +526,104 @@ macro_rules! impl_parameter_methods {
                     let constraint = RangeConstraint::from_raw(unsafe { &*ptr });
                     picam_call!(sys::Picam_DestroyRangeConstraints(ptr))?;
                     Ok(constraint)
+                }
+                /// Reports which of `parameter`'s attributes may change as other
+                /// parameters change (PICam manual 7.4.10.5).
+                ///
+                /// # Errors
+                ///
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter`
+                #[doc = concat!(" doesn't apply to this ", $noun, ", or an error if PICam is unable to")]
+                /// query this.
+                pub fn dynamics(&self, parameter: impl Into<Parameter>) -> Result<Dynamics> {
+                    let mut dynamics = sys::PicamDynamicsMask(0);
+                    picam_call!(sys::PicamAdvanced_GetParameterDynamics(
+                        self.handle,
+                        parameter.into().to_raw(),
+                        &mut dynamics
+                    ))?;
+                    Ok(Dynamics::from_bits_retain(dynamics.0))
+                }
+
+                /// Reports which of `parameter`'s attributes may change because of
+                /// something outside the software, such as the state of the
+                /// hardware (PICam manual 7.4.10.6).
+                ///
+                /// # Errors
+                ///
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter`
+                #[doc = concat!(" doesn't apply to this ", $noun, ", or an error if PICam is unable to")]
+                /// query this.
+                pub fn extrinsic_dynamics(&self, parameter: impl Into<Parameter>) -> Result<Dynamics> {
+                    let mut dynamics = sys::PicamDynamicsMask(0);
+                    picam_call!(sys::PicamAdvanced_GetParameterExtrinsicDynamics(
+                        self.handle,
+                        parameter.into().to_raw(),
+                        &mut dynamics
+                    ))?;
+                    Ok(Dynamics::from_bits_retain(dynamics.0))
+                }
+
+                /// Gets every collection constraint on `parameter`'s value
+                /// (PICam manual 7.4.12.1).
+                ///
+                /// # Errors
+                ///
+                /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
+                /// if `parameter` isn't collection-constrained, or an error if PICam
+                /// is unable to query this.
+                pub fn collection_constraints(
+                    &self,
+                    parameter: impl Into<Parameter>,
+                ) -> Result<Vec<CollectionConstraint>> {
+                    let mut array: *const sys::PicamCollectionConstraint = std::ptr::null();
+                    let mut count: sys::piint = 0;
+                    picam_call!(sys::PicamAdvanced_GetParameterCollectionConstraints(
+                        self.handle,
+                        parameter.into().to_raw(),
+                        &mut array,
+                        &mut count
+                    ))?;
+
+                    let constraints =
+                        // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
+                        unsafe { collect_raw_array(array, count, CollectionConstraint::from_raw) };
+
+                    if !array.is_null() {
+                        picam_call!(sys::Picam_DestroyCollectionConstraints(array))?;
+                    }
+                    Ok(constraints)
+                }
+
+                /// Gets every range constraint on `parameter`'s value (PICam manual
+                /// 7.4.12.4).
+                ///
+                /// # Errors
+                ///
+                /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
+                /// if `parameter` isn't range-constrained, or an error if PICam
+                /// is unable to query this.
+                pub fn range_constraints(
+                    &self,
+                    parameter: impl Into<Parameter>,
+                ) -> Result<Vec<RangeConstraint>> {
+                    let mut array: *const sys::PicamRangeConstraint = std::ptr::null();
+                    let mut count: sys::piint = 0;
+                    picam_call!(sys::PicamAdvanced_GetParameterRangeConstraints(
+                        self.handle,
+                        parameter.into().to_raw(),
+                        &mut array,
+                        &mut count
+                    ))?;
+
+                    let constraints =
+                        // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
+                        unsafe { collect_raw_array(array, count, RangeConstraint::from_raw) };
+
+                    if !array.is_null() {
+                        picam_call!(sys::Picam_DestroyRangeConstraints(array))?;
+                    }
+                    Ok(constraints)
                 }
             }
         };

@@ -347,6 +347,94 @@ impl Camera {
         picam_call!(sys::Picam_DestroyModulationsConstraints(ptr))?;
         Ok(constraint)
     }
+
+    /// Gets every rois constraint on `parameter`'s value (PICam manual
+    /// 7.4.11.1).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
+    /// if `parameter` isn't rois-constrained, or an error if PICam is
+    /// unable to query this.
+    pub fn rois_constraints(&self, parameter: impl Into<Parameter>) -> Result<Vec<RoisConstraint>> {
+        let mut array: *const sys::PicamRoisConstraint = std::ptr::null();
+        let mut count: sys::piint = 0;
+        picam_call!(sys::PicamAdvanced_GetParameterRoisConstraints(
+            self.handle,
+            parameter.into().to_raw(),
+            &mut array,
+            &mut count
+        ))?;
+
+        // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
+        let constraints = unsafe { collect_raw_array(array, count, RoisConstraint::from_raw) };
+
+        if !array.is_null() {
+            picam_call!(sys::Picam_DestroyRoisConstraints(array))?;
+        }
+        Ok(constraints)
+    }
+
+    /// Gets every pulse constraint on `parameter`'s value (PICam manual
+    /// 7.4.11.4).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
+    /// if `parameter` isn't pulse-constrained, or an error if PICam is
+    /// unable to query this.
+    pub fn pulse_constraints(
+        &self,
+        parameter: impl Into<Parameter>,
+    ) -> Result<Vec<PulseConstraint>> {
+        let mut array: *const sys::PicamPulseConstraint = std::ptr::null();
+        let mut count: sys::piint = 0;
+        picam_call!(sys::PicamAdvanced_GetParameterPulseConstraints(
+            self.handle,
+            parameter.into().to_raw(),
+            &mut array,
+            &mut count
+        ))?;
+
+        // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
+        let constraints = unsafe { collect_raw_array(array, count, PulseConstraint::from_raw) };
+
+        if !array.is_null() {
+            picam_call!(sys::Picam_DestroyPulseConstraints(array))?;
+        }
+        Ok(constraints)
+    }
+
+    /// Gets every modulations constraint on `parameter`'s value (PICam manual
+    /// 7.4.11.7).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
+    /// if `parameter` isn't modulations-constrained, or an error if PICam is
+    /// unable to query this.
+    pub fn modulations_constraints(
+        &self,
+        parameter: impl Into<Parameter>,
+    ) -> Result<Vec<ModulationsConstraint>> {
+        let mut array: *const sys::PicamModulationsConstraint = std::ptr::null();
+        let mut count: sys::piint = 0;
+        picam_call!(sys::PicamAdvanced_GetParameterModulationsConstraints(
+            self.handle,
+            parameter.into().to_raw(),
+            &mut array,
+            &mut count
+        ))?;
+
+        // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
+        let constraints =
+            unsafe { collect_raw_array(array, count, ModulationsConstraint::from_raw) };
+
+        if !array.is_null() {
+            picam_call!(sys::Picam_DestroyModulationsConstraints(array))?;
+        }
+        Ok(constraints)
+    }
 }
 
 impl_parameter_methods!(Camera, "camera");
