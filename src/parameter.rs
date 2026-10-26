@@ -575,7 +575,7 @@ pub struct Roi {
 }
 
 impl Roi {
-    fn from_raw(raw: &sys::PicamRoi) -> Self {
+    pub(crate) fn from_raw(raw: &sys::PicamRoi) -> Self {
         Self {
             x: raw.x,
             width: raw.width,
@@ -702,7 +702,7 @@ pub struct Modulation {
 }
 
 impl Modulation {
-    fn from_raw(raw: &sys::PicamModulation) -> Self {
+    pub(crate) fn from_raw(raw: &sys::PicamModulation) -> Self {
         Self {
             duration: raw.duration,
             frequency: raw.frequency,
@@ -831,7 +831,7 @@ pub struct Pulse {
 }
 
 impl Pulse {
-    fn from_raw(raw: &sys::PicamPulse) -> Self {
+    pub(crate) fn from_raw(raw: &sys::PicamPulse) -> Self {
         Self {
             delay: raw.delay,
             width: raw.width,

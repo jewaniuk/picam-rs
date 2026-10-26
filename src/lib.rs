@@ -41,6 +41,7 @@ mod model;
 mod parameter;
 mod sys;
 mod validation;
+mod watch;
 
 pub use accessory::{Accessory, AccessoryHandle, AccessoryId, CalibrationPoint};
 pub use acquisition::{
@@ -68,3 +69,4 @@ pub use parameter::{
 pub use validation::{
     DependentValidationResult, FailedDependentParameter, ValidationResult, ValidationResults,
 };
+pub use watch::Watch;
