@@ -47,13 +47,13 @@ The crate only runs on Windows, the only platform the lab uses. The SDK also shi
 | `sys` | raw bindgen output, private, never exposed | done |
 | `error` | `Error`, `Result`, `picam_call!` | done |
 | `library` | `Library` (initialize/uninitialize lifecycle, the initialized check), `Version` | done |
-| `camera` | `Camera`, `CameraId`, `CameraHandle`, discovery, demo cameras, parameter/constraint methods | done apart from acquisition |
+| `camera` | `Camera`, `CameraId`, `CameraHandle`, discovery, demo cameras, parameter/constraint methods | done |
 | `parameter` | `Parameter`, `TypedParameter` and the generated `params` handles, value traits, `Roi`/`Pulse`/`Modulation`, parameter info queries | done |
 | `constraint` | constraint structs and their enums | done |
 | `model` | `Model`, with a constant per camera or accessory model from `src/generated/models.rs` | done |
 | `enums` | the 39 generated value enums of PICam's enum parameters, from `src/generated/enums.rs` | done |
 | `convert` | shared FFI helpers (string/array conversion, `define_picam_enum!`, `FirmwareDetail`, enum names through `Picam_GetEnumerationString`) | done |
-| acquisition | `Picam_Acquire`, start/stop, waiting for updates | not started |
+| `acquisition` | `Camera::acquire`, `Camera::start_acquisition` and the `Acquisition` guard, the borrowed data views (`Readouts`, `Readout`, `Frame`, `RoiData`, `Pixels`), `AcquisitionErrors` | done |
 | advanced | `picam_advanced.h` | not started |
 | accessory | `picam_accessory.h` | not started |
 | EM calibration | `picam_em_calibration.h` | not started |
@@ -73,12 +73,12 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
   - Bitmask types (`RoisConstraintRules` and any later `*Mask` wrapper) rely on `bitflags`, whose `Debug` and `iter_names` already give flag names without a PICam call. The manual doesn't say what `Picam_GetEnumerationString` returns for a combination of flags.
   - `Error` relies on `Display`. Its crate-side variants have no PICam code, and error handling often has no `Library` to pass, for example when `Library::new` itself fails.
 - Enums and constants are not `#[non_exhaustive]`. When an SDK update adds values, the crate is updated to match.
-- Lists taken straight from the headers are generated, not written by hand. `cargo run -p xtask -- generate` (`xtask/src/generate.rs`) reads the installed headers and writes them into `src/generated/`, which the modules pull in with `include!`. Those files are never edited by hand: change the generator and rerun it. Today that covers `Parameter`, `EnumeratedType`, `Model` and the hardware value enums. Enums whose docs need prose (`Error`, the small `define_picam_enum!` enums, `RoisConstraintRules`) stay hand-written, but `generate --check` verifies that each one still names every value its C enum has. The check only looks for each value's name somewhere in the wrapper's source file, so a value used only in a test or comment (such as `PicamRoisConstraintRulesMask_None`, which has no flag) still counts. The gate runs `generate --check`, so a stale generated file or a missing value fails before anything is pushed. After an SDK update, run `generate`, review the diff and fill in any values `--check` reports.
+- Lists taken straight from the headers are generated, not written by hand. `cargo run -p xtask -- generate` (`xtask/src/generate.rs`) reads the installed headers and writes them into `src/generated/`, which the modules pull in with `include!`. Those files are never edited by hand: change the generator and rerun it. Today that covers `Parameter`, `EnumeratedType`, `Model` and the hardware value enums. Enums whose docs need prose (`Error`, the small `define_picam_enum!` enums, `RoisConstraintRules`, `AcquisitionErrors`) stay hand-written, but `generate --check` verifies that each one still names every value its C enum has. The check only looks for each value's name somewhere in the wrapper's source file, so a value used only in a test or comment (such as `PicamRoisConstraintRulesMask_None`, which has no flag) still counts. The gate runs `generate --check`, so a stale generated file or a missing value fails before anything is pushed. After an SDK update, run `generate`, review the diff and fill in any values `--check` reports.
 - The value enums of PICam's 44 enum parameters (the 39 from `ActiveShutter` to `VacuumStatus`) are generated into `src/generated/enums.rs`:
   - **Which enum each parameter uses:** the generator matches each enum parameter to its enum by name, with `Mask` added, or with a trailing number dropped (`OutputSignal2` uses `OutputSignal`). `PARAMETER_ENUMS` in `xtask/src/generate.rs` covers the seven that don't match, and `tests/handles.rs` checks the mapping against PICam's `Picam_GetParameterEnumeratedType` on every demo model. An unmatched enum parameter fails generation.
   - **Single-value enums** use `define_picam_enum!`, and their docs name the parameters that use them and each value's PICam constant.
   - **Bitmask enums** (the six named `*Mask`) use `bitflags!` without the `Mask` suffix, like `RoisConstraintRules`. Bits the crate doesn't recognize are kept, and a zero value (`None`, or `Orientation`'s `Normal`) isn't a flag: no flags set means it.
-  - The acquisition enums and the advanced API's wait for those stages.
+  - The advanced API's enums, including its acquisition ones (`AcquisitionState`, `AcquisitionStateErrorsMask`), wait for stage 4.
 - `Error::from_raw` follows the same rule and maps unrecognized codes to `Error::Unknown(i32)`.
 
 ### Models (settled)
@@ -90,7 +90,7 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 
 ### Errors (settled)
 
-- `Error` is a `thiserror` enum with one variant per `PicamError` code, plus `Unknown(i32)` and a few crate-side variants (`ValueTooLong`, `InvalidString`, `TooManyDemoCameras`, `EnumeratedTypeMismatch`).
+- `Error` is a `thiserror` enum with one variant per `PicamError` code, plus `Unknown(i32)` and a few crate-side variants (`ValueTooLong`, `InvalidString`, `TooManyDemoCameras`, `EnumeratedTypeMismatch`, `AcquisitionFailed`, `InconsistentDataLayout`).
 - Every raw call goes through `picam_call!` (in `src/error.rs`), which wraps the call in `unsafe` and turns the return code into a `Result<()>`. The macro makes the return value safe to handle, not the call itself; the caller is still responsible for passing valid pointers.
 
 ### Library lifecycle (settled)
@@ -118,6 +118,20 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 - The value traits are sealed. Their methods that take a handle live on supertraits in the private `parameter::sealed` module (`RawPicamValue`, `RawReadablePicamValue`, `RawOnlineSettablePicamValue`) and take a `RawHandle`, a wrapper around the raw handle that only the crate can construct. So users can neither implement the traits nor call those methods. A plain sealed supertrait (a `pub trait` in a private module) is not enough on its own, because its methods can still be called through a generic bound (`T::get(ptr, ...)` with `T: PicamValue`), and the raw handle is just `*mut c_void`. A truly `pub(crate)` supertrait would need `#[allow(private_bounds)]`. Any future public trait whose methods need a PICam handle (accessory parameters, for example) follows the same pattern.
 - Changes made with `set` are pending until `Camera::commit_parameters`, which returns the parameters that failed validation (an empty `Vec` means all were accepted).
 - Repetitive per-type wrappers are generated by macros (`impl_picam_value!`, `impl_bool_query!`, `impl_parameter_info!`, `impl_readable_value!`, `impl_online_settable_scalar!`). Macros live in the module that uses them; `convert.rs` holds the ones shared across modules.
+
+### Acquisition (settled)
+
+Designed with the maintainer on 2026-10-25, through the design discussion in `CLAUDE.md`. The code lives in `src/acquisition.rs`.
+
+- **Shape:** `Camera::acquire(&mut self, readout_count, timeout)` blocks until every readout has arrived. `Camera::start_acquisition(&mut self)` returns an `Acquisition` guard that borrows the camera, with `wait`, `stop`, `is_running`, `camera()` (for calls between updates) and `finish`.
+- **Ending:** PICam requires waiting until an acquisition reports it's no longer running, even after an error or a stop (manual 6.4.5). `finish(self)` stops the acquisition and waits for that, returning any error. Dropping the guard does the same and logs errors. Both give up after `DRAIN_ATTEMPTS` (10) waits of `DRAIN_TIMEOUT` (1 s) in a row bring nothing, rather than hang on a camera that has stopped responding.
+- **Data ownership:** zero copy. `Readouts`, `Readout`, `Frame` and `RoiData` are views of PICam's own buffer. Their lifetime ties them to the `&mut` borrow of the camera (for `acquire`) or of the guard (for `wait`), which blocks every call that could invalidate the buffer (manual 6.4.1 and 6.4.5). Copy the data to keep it longer. The views are automatically `Send` and `Sync`, since they hold only shared slices, so scoped threads can process frames in parallel. `Camera` and `Acquisition` stay neither.
+- **Layout:** before acquiring, the crate reads the layout parameters (`ReadoutStride`, `FramesPerReadout`, `FrameStride`, `FrameSize`, `PixelFormat`, `PixelBitDepth`, `Rois`) and checks that their parts fit together, returning `Error::InconsistentDataLayout` if not, so the views never slice out of bounds. It refuses uncommitted parameters with `Error::ParametersNotCommitted`, since PICam acquires with the committed values. `FrameSize` covers only a frame's pixels, and its metadata runs from there to `FrameStride` (seen on a demo camera with SDK 5.15, consistent with manual figure 6-1).
+- **Pixels:** `RoiData::pixels()` returns `Pixels::Mono16` or `Pixels::Mono32` as a `Cow`. It borrows when the buffer is aligned for the pixel type (`<[u8]>::align_to`) and copies otherwise, since PICam doesn't document its alignment.
+- **Metadata:** `Frame::metadata()` returns the raw bytes. Decoding them is a later chunk.
+- **Timeouts and errors:** timeouts are `Option<Duration>`, rounded up to milliseconds, with `None` waiting forever. A timed-out wait returns `Ok(None)`, and the acquisition carries on. PICam's acquisition errors mask becomes `Error::AcquisitionFailed(AcquisitionErrors)`, and any partial data is dropped.
+- **Threads:** an acquisition is stopped from the thread that waits on it. Other threads signal that thread, which calls `stop` between bounded waits. A `Send` stop handle could be added later without breaking anything, but needs the maintainer's decision and a hardware test of PICam's thread safety.
+- **Not yet supported:** a readout count of 0, or one above `ExactReadoutCountMaximum`, needs a user-allocated buffer, which comes with `picam_advanced.h` (stage 4).
 
 ### Memory that PICam allocates (settled)
 
@@ -181,7 +195,7 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 
 ## Roadmap
 
-As of 2026-10-25: 86 / 199 functions wrapped.
+As of 2026-10-25: 91 / 199 functions wrapped.
 
 ### 1. Finish the `sys`-type refactor (done)
 
@@ -222,7 +236,8 @@ Decided with the maintainer on 2026-10-25. Two chunks, after stage 1, because th
 ### 3. Remaining `picam.h` (7 functions, plus `Picam_DestroyCalibrations` in stage 5)
 
 - [x] quick wins: `Picam_GetVersion`, `Picam_IsLibraryInitialized`. `Picam_DestroyCalibrations` moved to stage 5: it frees only the array `PicamAccessory_GetLightSourceReference` allocates (manual 4.3.3.4 and 7.4.6.1), so it is wrapped with that call
-- [ ] acquisition: `Picam_Acquire`, `Picam_StartAcquisition`, `Picam_StopAcquisition`, `Picam_IsAcquisitionRunning`, `Picam_WaitForAcquisitionUpdate`. This is the most important remaining piece and needs careful design: who owns the frame buffers, and how data is copied out. An agent may write it, but only after the longer design discussion in `CLAUDE.md`, with the actual code shown and approved first (decided with the maintainer on 2026-10-25).
+- [x] acquisition: `Picam_Acquire`, `Picam_StartAcquisition`, `Picam_StopAcquisition`, `Picam_IsAcquisitionRunning`, `Picam_WaitForAcquisitionUpdate`. This is the most important remaining piece and needs careful design: who owns the frame buffers, and how data is copied out. An agent may write it, but only after the longer design discussion in `CLAUDE.md`, with the actual code shown and approved first (decided with the maintainer on 2026-10-25). See [Acquisition](#acquisition-settled).
+- [ ] decode frame metadata (time stamps, frame tracking, gate and modulation tracking), as its own chunk, after checking on demo cameras what each produces
 
 ### 4. `picam_advanced.h` (76 functions)
 
@@ -240,5 +255,4 @@ These largely mirror patterns already in `camera.rs`. `Picam_DestroyCalibrations
 
 ## Open questions
 
-- **Acquisition API design:** blocking versus non-blocking, buffer ownership, and how frames are handed to the user. To be settled in the acquisition design discussion (see `CLAUDE.md`).
 - **Callback design** for `picam_advanced.h`.
