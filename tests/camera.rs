@@ -116,3 +116,35 @@ fn demo_camera_limit() {
     id.disconnect_demo(library)
         .expect("demo camera should disconnect");
 }
+
+/// Checks that a demo camera answers whether it can erase residual charge,
+/// and erases it if it says it can.
+#[test]
+fn residual_erasure_on_demo_camera() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "RESIDUAL01";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let models = Camera::available_demo_models(library).expect("demo models should be listed");
+    let model = *models
+        .first()
+        .expect("PICam should offer at least one demo model");
+    let id =
+        CameraId::connect_demo(library, model, SERIAL_NUMBER).expect("demo camera should connect");
+    let camera = Camera::open(&id, Arc::clone(library)).expect("demo camera should open");
+
+    let erasable = camera
+        .can_erase_residual()
+        .expect("residual erasure should be checked");
+    println!("demo {model:?} can erase residual: {erasable}");
+    // what picam does when asked to erase without support isn't documented,
+    // so only erase when it says it can
+    if erasable {
+        camera.erase_residual().expect("residual should be erased");
+    }
+
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}

@@ -148,6 +148,42 @@ impl Camera {
         handle_id(self.handle)
     }
 
+    /// Reports whether the camera can erase residual charge from its sensor
+    /// (`picam_special.h`, which the PICam manual doesn't document).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to check this.
+    pub fn can_erase_residual(&self) -> Result<bool> {
+        let device = self.device_handle()?;
+        let mut erasable: sys::pibln = 0;
+        picam_call!(sys::PicamSpecial_CanEraseResidual(device, &mut erasable))?;
+        Ok(erasable != 0)
+    }
+
+    /// Erases residual charge from the camera's sensor (`picam_special.h`,
+    /// which the PICam manual doesn't document). Check
+    /// [`Camera::can_erase_residual`] first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to erase it.
+    pub fn erase_residual(&self) -> Result<()> {
+        let device = self.device_handle()?;
+        picam_call!(sys::PicamSpecial_EraseResidual(device))
+    }
+
+    /// The handle of the camera's device (PICam manual 7.4.3.5), which some
+    /// calls need instead of the camera model handle `Picam_OpenCamera`
+    /// gives (manual 4.3.2.4): the `picam_special.h` functions refuse the
+    /// model handle with `InvalidHandle` (seen on a demo camera with SDK
+    /// 5.15). It's only used within one call, never stored.
+    fn device_handle(&self) -> Result<sys::PicamHandle> {
+        let mut device: sys::PicamHandle = std::ptr::null_mut();
+        picam_call!(sys::PicamAdvanced_GetCameraDevice(self.handle, &mut device))?;
+        Ok(device)
+    }
+
     /// Lists the camera models available for use with [`CameraId::connect_demo`].
     ///
     /// # Errors
