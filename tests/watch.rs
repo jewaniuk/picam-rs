@@ -5,7 +5,7 @@
 mod common;
 
 use std::sync::Arc;
-use std::sync::mpsc::TryRecvError;
+use std::sync::mpsc::{RecvTimeoutError, TryRecvError};
 use std::time::Duration;
 
 use picam_rs::{
@@ -39,6 +39,8 @@ fn value_watches_send_each_set_value() {
         .set(params::EXPOSURE_TIME, 50.0)
         .expect("exposure time should be set");
     assert_eq!(exposures.try_recv(), Ok(50.0));
+    // once per set, not once per registration
+    assert_eq!(exposures.try_recv(), Err(TryRecvError::Empty));
 
     let (count_watch, counts) = camera
         .watch_value(params::READOUT_COUNT)
@@ -185,14 +187,26 @@ fn watches_share_a_registration() {
         .expect("exposure time should be set");
     assert_eq!(second.try_recv(), Err(TryRecvError::Disconnected));
 
+    // the last drop unregistered with picam, so registering again gives
+    // each value once, not twice
+    let (again_watch, again) = camera
+        .watch_value(params::EXPOSURE_TIME)
+        .expect("exposure time should be watched again");
+    camera
+        .set(params::EXPOSURE_TIME, 70.0)
+        .expect("exposure time should be set");
+    assert_eq!(again.try_recv(), Ok(70.0));
+    assert_eq!(again.try_recv(), Err(TryRecvError::Empty));
+    drop(again_watch);
+
     drop(camera);
     id.disconnect_demo(library)
         .expect("demo camera should disconnect");
 }
 
 /// Checks that a relevance watch sends the change another parameter's value
-/// causes: kinetics readout makes the kinetics window height relevant (seen
-/// with sdk 5.15).
+/// causes: kinetics readout makes the kinetics window height relevant and the
+/// active width irrelevant (seen with sdk 5.15).
 #[test]
 fn relevance_is_sent_when_another_parameter_changes_it() {
     // each test uses its own serial number so demo cameras never collide
@@ -251,8 +265,9 @@ fn value_access_watch_registers() {
 }
 
 /// Checks that extrinsic watches register through the camera, which looks
-/// up its device, and through the device itself. The demo camera sends no
-/// readings (seen with sdk 5.15).
+/// up its device, and through the device itself, sharing one registration
+/// for the same parameter. The demo camera sends no readings (seen with sdk
+/// 5.15).
 #[test]
 fn extrinsic_watch_registers() {
     // each test uses its own serial number so demo cameras never collide
@@ -266,21 +281,57 @@ fn extrinsic_watch_registers() {
         .watch_extrinsic_value(params::SENSOR_TEMPERATURE_READING)
         .expect("the temperature reading should be watched");
     let device = camera.device().expect("the device should be found");
-    let (device_watch, from_device) = device
+    let (status_watch, statuses) = device
         .watch_extrinsic_value(params::SENSOR_TEMPERATURE_STATUS)
         .expect("the temperature status should be watched");
-    assert!(
-        from_camera
-            .recv_timeout(Duration::from_millis(500))
-            .is_err()
+    // the same key as the camera's watch, since the camera looks up this device
+    let (device_watch, from_device) = device
+        .watch_extrinsic_value(params::SENSOR_TEMPERATURE_READING)
+        .expect("the temperature reading should be watched through the device");
+    let wait = Duration::from_millis(500);
+    assert_eq!(
+        from_camera.recv_timeout(wait),
+        Err(RecvTimeoutError::Timeout)
     );
-    assert!(
-        from_device
-            .recv_timeout(Duration::from_millis(500))
-            .is_err()
+    assert_eq!(statuses.recv_timeout(wait), Err(RecvTimeoutError::Timeout));
+    assert_eq!(
+        from_device.recv_timeout(wait),
+        Err(RecvTimeoutError::Timeout)
     );
 
-    drop((camera_watch, device_watch));
+    // dropping one leaves the other's channel open
+    drop(camera_watch);
+    assert_eq!(from_camera.try_recv(), Err(TryRecvError::Disconnected));
+    assert_eq!(from_device.try_recv(), Err(TryRecvError::Empty));
+    drop((device_watch, status_watch));
+    assert_eq!(from_device.try_recv(), Err(TryRecvError::Disconnected));
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that a watch through the device gets the values set through the
+/// device, which PICam reports with the device's handle.
+#[test]
+fn device_value_watch() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "WATCH0010";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, camera) = open(library, Model::PIXIS_100F, SERIAL_NUMBER);
+    let device = camera.device().expect("the device should be found");
+
+    let (exposure_watch, exposures) = device
+        .watch_value(params::EXPOSURE_TIME)
+        .expect("exposure time should be watched through the device");
+    device
+        .set(params::EXPOSURE_TIME, 35.0)
+        .expect("exposure time should be set through the device");
+    assert_eq!(exposures.try_recv(), Ok(35.0));
+    assert_eq!(exposures.try_recv(), Err(TryRecvError::Empty));
+
+    drop(exposure_watch);
     drop(camera);
     id.disconnect_demo(library)
         .expect("demo camera should disconnect");

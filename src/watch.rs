@@ -102,6 +102,12 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 /// `let (_watch, events) = ...`. Writing `let (_, events) = ...` drops it at
 /// once, and the receiver reports the channel disconnected.
 ///
+/// Since it borrows what it watches, no watch can be alive while the camera
+/// acquires: [`Camera::acquire`](crate::Camera::acquire),
+/// [`Camera::start_acquisition`](crate::Camera::start_acquisition) and
+/// [`Acquisition::wait`](crate::Acquisition::wait) need the camera or the
+/// acquisition mutably.
+///
 /// Dropping it unregisters PICam's callback once no other watch on the same
 /// parameter needs it. Events already sent stay readable. Leaking one with
 /// [`std::mem::forget`] is safe, but its registration is then never removed.
@@ -278,7 +284,8 @@ callbacks! {
 ///
 /// # Safety
 ///
-/// Only PICam calls this, as a `PicamIntegerValueChangedCallback`.
+/// None: it reads no pointer. It's `unsafe` only to match `PicamIntegerValueChangedCallback`, the type
+/// bindgen gives PICam's callback.
 unsafe extern "C" fn integer_changed(
     handle: sys::PicamHandle,
     parameter: sys::PicamParameter,
@@ -291,7 +298,8 @@ unsafe extern "C" fn integer_changed(
 ///
 /// # Safety
 ///
-/// Only PICam calls this, as a `PicamIntegerValueChangedCallback`.
+/// None: it reads no pointer. It's `unsafe` only to match `PicamIntegerValueChangedCallback`, the type
+/// bindgen gives PICam's callback.
 unsafe extern "C" fn extrinsic_integer_changed(
     handle: sys::PicamHandle,
     parameter: sys::PicamParameter,
@@ -309,7 +317,8 @@ unsafe extern "C" fn extrinsic_integer_changed(
 ///
 /// # Safety
 ///
-/// Only PICam calls this, as a `PicamLargeIntegerValueChangedCallback`.
+/// None: it reads no pointer. It's `unsafe` only to match `PicamLargeIntegerValueChangedCallback`, the type
+/// bindgen gives PICam's callback.
 unsafe extern "C" fn large_integer_changed(
     handle: sys::PicamHandle,
     parameter: sys::PicamParameter,
@@ -327,7 +336,8 @@ unsafe extern "C" fn large_integer_changed(
 ///
 /// # Safety
 ///
-/// Only PICam calls this, as a `PicamFloatingPointValueChangedCallback`.
+/// None: it reads no pointer. It's `unsafe` only to match `PicamFloatingPointValueChangedCallback`, the type
+/// bindgen gives PICam's callback.
 unsafe extern "C" fn floating_point_changed(
     handle: sys::PicamHandle,
     parameter: sys::PicamParameter,
@@ -346,7 +356,8 @@ unsafe extern "C" fn floating_point_changed(
 ///
 /// # Safety
 ///
-/// Only PICam calls this, as a `PicamFloatingPointValueChangedCallback`.
+/// None: it reads no pointer. It's `unsafe` only to match `PicamFloatingPointValueChangedCallback`, the type
+/// bindgen gives PICam's callback.
 unsafe extern "C" fn extrinsic_floating_point_changed(
     handle: sys::PicamHandle,
     parameter: sys::PicamParameter,
@@ -364,7 +375,8 @@ unsafe extern "C" fn extrinsic_floating_point_changed(
 ///
 /// # Safety
 ///
-/// Only PICam calls this, as a `PicamIsRelevantChangedCallback`.
+/// None: it reads no pointer. It's `unsafe` only to match `PicamIsRelevantChangedCallback`, the type
+/// bindgen gives PICam's callback.
 unsafe extern "C" fn is_relevant_changed(
     handle: sys::PicamHandle,
     parameter: sys::PicamParameter,
@@ -382,7 +394,8 @@ unsafe extern "C" fn is_relevant_changed(
 ///
 /// # Safety
 ///
-/// Only PICam calls this, as a `PicamValueAccessChangedCallback`.
+/// None: it reads no pointer. It's `unsafe` only to match `PicamValueAccessChangedCallback`, the type
+/// bindgen gives PICam's callback.
 unsafe extern "C" fn value_access_changed(
     handle: sys::PicamHandle,
     parameter: sys::PicamParameter,

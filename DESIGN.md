@@ -295,4 +295,5 @@ These largely mirror patterns already in `camera.rs`.
 ## Open questions
 
 - **Acquisition callbacks**, with user acquisition buffers, under the acquisition design discussion.
+- **Watching while acquiring:** a `Watch` borrows the camera, and acquiring needs it mutably, so no watch, extrinsic ones included, can be alive during an acquisition. Following the sensor temperature while acquiring, the main use for extrinsic watches, isn't possible yet. Options include a watch that holds no borrow but is unregistered when its camera closes, or watches offered through the acquisition guard.
 - **Ending an acquisition that never ends by itself:** `Acquisition`'s drain gives up only after 10 waits in a row bring no data. With stage 4's user buffers and `ReadoutCount = 0`, a camera that keeps sending data after a failed `stop` would keep it waiting forever, so stage 4 should also bound the time since `stop`.

@@ -646,8 +646,9 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to register its callback, for
-                #[doc = concat!(" example because `parameter` doesn't apply to this ", $noun, ".")]
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter`
+                #[doc = concat!(" doesn't apply to this ", $noun, ", or an error if PICam is")]
+                /// unable to register its callback.
                 pub fn watch_value<T: PicamValue>(
                     &self,
                     parameter: TypedParameter<T>,
@@ -661,8 +662,9 @@ macro_rules! impl_parameter_methods {
                 /// # Errors
                 ///
                 /// Returns [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum other
-                /// than the one `parameter` uses, or an error if PICam is unable to register
-                /// its callback.
+                /// than the one `parameter` uses, [`crate::Error::ParameterDoesNotExist`] if
+                #[doc = concat!(" `parameter` doesn't apply to this ", $noun, ", or an error if PICam")]
+                /// is unable to register its callback.
                 pub fn watch_value_untyped<T: PicamValue>(
                     &self,
                     parameter: Parameter,
@@ -678,7 +680,9 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to register its callback.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter`
+                #[doc = concat!(" doesn't apply to this ", $noun, ", or an error if PICam is")]
+                /// unable to find the handle to register on or to register its callback.
                 pub fn watch_extrinsic_value<T: ReadablePicamValue>(
                     &self,
                     parameter: TypedParameter<T>,
@@ -692,8 +696,9 @@ macro_rules! impl_parameter_methods {
                 /// # Errors
                 ///
                 /// Returns [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum other
-                /// than the one `parameter` uses, or an error if PICam is unable to register
-                /// its callback.
+                /// than the one `parameter` uses, [`crate::Error::ParameterDoesNotExist`] if
+                #[doc = concat!(" `parameter` doesn't apply to this ", $noun, ", or an error if PICam")]
+                /// is unable to find the handle to register on or to register its callback.
                 pub fn watch_extrinsic_value_untyped<T: ReadablePicamValue>(
                     &self,
                     parameter: Parameter,
