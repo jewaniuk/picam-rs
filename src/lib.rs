@@ -25,6 +25,7 @@
 //! # }
 //! ```
 
+mod accessory;
 mod acquisition;
 mod camera;
 mod constraint;
@@ -36,6 +37,7 @@ mod model;
 mod parameter;
 mod sys;
 
+pub use accessory::{Accessory, AccessoryHandle, AccessoryId, CalibrationPoint};
 pub use acquisition::{
     Acquisition, AcquisitionErrors, Frame, Pixels, Readout, Readouts, RoiData, Update,
 };
