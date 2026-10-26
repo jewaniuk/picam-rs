@@ -28,6 +28,7 @@
 mod accessory;
 mod acquisition;
 mod camera;
+mod camera_device;
 mod constraint;
 mod convert;
 mod defect;
@@ -45,7 +46,8 @@ pub use accessory::{Accessory, AccessoryHandle, AccessoryId, CalibrationPoint};
 pub use acquisition::{
     Acquisition, AcquisitionErrors, Frame, Pixels, Readout, Readouts, RoiData, Update,
 };
-pub use camera::{Camera, CameraHandle, CameraId};
+pub use camera::{Camera, CameraHandle, CameraId, HandleType};
+pub use camera_device::CameraDevice;
 pub use constraint::{
     CollectionConstraint, ConstraintCategory, ConstraintScope, ConstraintSeverity, ConstraintType,
     ModulationsConstraint, PulseConstraint, RangeConstraint, RoisConstraint, RoisConstraintRules,
