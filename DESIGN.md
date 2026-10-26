@@ -55,9 +55,9 @@ The crate only runs on Windows, the only platform the lab uses. The SDK also shi
 | `convert` | shared FFI helpers (string/array conversion, `define_picam_enum!`, `FirmwareDetail`, enum names through `Picam_GetEnumerationString`) | done |
 | `acquisition` | `Camera::acquire`, `Camera::start_acquisition` and the `Acquisition` guard, the borrowed data views (`Readouts`, `Readout`, `Frame`, `RoiData`, `Pixels`), `AcquisitionErrors` | done |
 | advanced | `picam_advanced.h` | not started |
-| accessory | `picam_accessory.h` | not started |
+| `accessory` | `Accessory`, `AccessoryId`, `AccessoryHandle`, `CalibrationPoint`: identifying, opening and querying accessories, and the light source reference | done apart from parameters and discovery |
 | EM calibration | `picam_em_calibration.h` | not started |
-| special | `picam_special.h` | not started |
+| special | `picam_special.h`: residual erasure, as `Camera` methods in `camera` | done |
 
 ### Single crate, private `sys` module (settled)
 
@@ -102,7 +102,7 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 
 ### Cameras and thread safety (settled)
 
-- `Camera` owns a `PicamHandle` and closes it on `Drop`.
+- `Camera` owns a `PicamHandle` and closes it on `Drop`. It is the camera *model* handle `Picam_OpenCamera` gives. A few calls need the camera *device* handle instead (manual 7.4.3.4 and 7.4.3.5): the `picam_special.h` functions refuse the model handle with `Error::InvalidHandle` (seen on a demo camera with SDK 5.15). Those methods look the device handle up with `PicamAdvanced_GetCameraDevice` for each call and never store it.
 - `Camera` is deliberately **not** `Send` or `Sync`. This falls out naturally from the raw-pointer handle and must stay that way: downstream code decides how to manage thread safety (the same choice as `tlpm-rs`'s `PowerMeter`). Never add `unsafe impl Send/Sync` without the maintainer's approval.
 - `CameraId` identifies a camera whether or not it is open. It is spelled `CameraId`, not `CameraID`, following Rust naming conventions.
 - `CameraHandle<'a>` is a non-owning view of a handle that is open somewhere in the process, returned by `Camera::list_open_cameras`. It never closes the handle, and its lifetime ties it to the `Library`. A call on a handle that has since been closed should fail with `Error::InvalidHandle`, which is listed in the README's "to test" list to confirm on hardware.
@@ -195,7 +195,7 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 
 ## Roadmap
 
-As of 2026-10-25: 91 / 199 functions wrapped.
+As of 2026-10-25: 108 / 199 functions wrapped.
 
 ### 1. Finish the `sys`-type refactor (done)
 
@@ -245,7 +245,13 @@ Callback registration (`Register*`/`Unregister*` pairs), parameter validation, c
 
 ### 5. `picam_accessory.h` (18), `picam_em_calibration.h` (11), `picam_special.h` (2)
 
-These largely mirror patterns already in `camera.rs`. `Picam_DestroyCalibrations` from `picam.h` is wrapped here too, together with `PicamAccessory_GetLightSourceReference`, whose array it frees.
+These largely mirror patterns already in `camera.rs`.
+
+- [x] accessory identification and access (`Accessory`, `AccessoryId`, `AccessoryHandle`), firmware details and the light source reference, with `Picam_DestroyCalibrations` from `picam.h`, which frees the reference
+- [x] `picam_special.h`: `Camera::can_erase_residual` and `Camera::erase_residual`, through the camera's device handle (wrapping `PicamAdvanced_GetCameraDevice` privately)
+- [ ] accessory parameters: share `Camera`'s parameter methods with `Accessory` (no new functions)
+- [ ] `picam_em_calibration.h`, apart from the calibration progress callback
+- accessory discovery (`DiscoverAccessories`, `StopDiscoveringAccessories`, `IsDiscoveringAccessories`) moved to stage 4's callbacks, with the discovery callback its results arrive through
 
 ### 6. Finishing
 
