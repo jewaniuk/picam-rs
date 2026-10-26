@@ -270,6 +270,12 @@ impl Camera {
         self.handle
     }
 
+    /// The handle PICam registers extrinsic value callbacks on, the camera's
+    /// device (PICam manual 7.4.9.3), for `impl_parameter_methods!`.
+    fn extrinsic_handle(&self) -> Result<sys::PicamHandle> {
+        self.device_handle()
+    }
+
     /// Sets `parameter`, a handle from [`params`](crate::params), to `value`
     /// and applies it immediately, without needing
     /// [`Camera::commit_parameters`].

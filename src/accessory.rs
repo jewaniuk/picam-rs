@@ -205,6 +205,14 @@ impl Accessory {
     }
 }
 
+impl Accessory {
+    /// The handle PICam registers extrinsic value callbacks on, the
+    /// accessory's own (PICam manual 7.4.9.3), for `impl_parameter_methods!`.
+    fn extrinsic_handle(&self) -> Result<sys::PicamHandle> {
+        Ok(self.handle)
+    }
+}
+
 impl_parameter_methods!(Accessory, "accessory");
 
 impl Drop for Accessory {

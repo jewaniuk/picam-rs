@@ -9,6 +9,8 @@
 //! demo cameras. None is online-settable, since PICam only sets integer
 //! parameters online (5.4.1.20).
 
+use std::sync::mpsc::Receiver;
+
 use crate::convert::define_picam_enum;
 use crate::error::{Error, Result};
 use crate::parameter::sealed::{self, RawHandle};
@@ -16,6 +18,7 @@ use crate::parameter::{
     EnumeratedType, Parameter, PicamValue, ReadablePicamValue, enumerated_type,
 };
 use crate::sys;
+use crate::watch::{self, Event, Kind, Watch};
 
 /// Checks that `parameter`'s values belong to `expected`, for an untyped call
 /// that names an enum PICam can't check itself.
@@ -64,6 +67,16 @@ macro_rules! impl_value_via_i32 {
             fn check_type(handle: RawHandle, parameter: Parameter) -> Result<()> {
                 check_enumerated_type(handle, parameter, sys::PicamEnumeratedType::$enumerated)
             }
+
+            fn watch<'a>(
+                handle: RawHandle,
+                parameter: Parameter,
+            ) -> Result<(Watch<'a>, Receiver<Self>)> {
+                watch::subscribe(handle.0, parameter, Kind::Integer, |event| match event {
+                    Event::Integer(code) => Some(($from)(*code)),
+                    _ => None,
+                })
+            }
         }
 
         impl PicamValue for $ty {}
@@ -71,6 +84,21 @@ macro_rules! impl_value_via_i32 {
         impl sealed::RawReadablePicamValue for $ty {
             fn read(handle: RawHandle, parameter: Parameter) -> Result<Self> {
                 <i32 as sealed::RawReadablePicamValue>::read(handle, parameter).map($from)
+            }
+
+            fn watch_extrinsic<'a>(
+                handle: RawHandle,
+                parameter: Parameter,
+            ) -> Result<(Watch<'a>, Receiver<Self>)> {
+                watch::subscribe(
+                    handle.0,
+                    parameter,
+                    Kind::ExtrinsicInteger,
+                    |event| match event {
+                        Event::Integer(code) => Some(($from)(*code)),
+                        _ => None,
+                    },
+                )
             }
         }
 

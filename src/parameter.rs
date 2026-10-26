@@ -3,11 +3,13 @@
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
+use std::sync::mpsc::Receiver;
 
 use crate::convert::{collect_raw_array, define_picam_enum, enumeration_string};
 use crate::error::{Result, picam_call};
 use crate::library::Library;
 use crate::sys;
+use crate::watch::{self, Event, Kind, Watch};
 
 define_picam_enum!(
     /// How a camera connects to the computer (PICam manual 4.1).
@@ -276,9 +278,12 @@ impl<T> Hash for TypedParameter<T> {
 /// }
 /// ```
 pub(crate) mod sealed {
+    use std::sync::mpsc::Receiver;
+
     use super::Parameter;
     use crate::error::Result;
     use crate::sys;
+    use crate::watch::Watch;
 
     /// A raw camera handle that only this crate can construct.
     ///
@@ -330,6 +335,17 @@ pub(crate) mod sealed {
         fn check_type(_handle: RawHandle, _parameter: Parameter) -> Result<()> {
             Ok(())
         }
+
+        /// Watches `parameter`'s value on `handle`, sending each value it's set to
+        /// (PICam manual 7.4.8 and 7.4.9.1).
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if PICam is unable to register the callback.
+        fn watch<'a>(
+            handle: RawHandle,
+            parameter: Parameter,
+        ) -> Result<(Watch<'a>, Receiver<Self>)>;
     }
 
     /// The handle-taking half of [`super::ReadablePicamValue`].
@@ -340,6 +356,17 @@ pub(crate) mod sealed {
         ///
         /// Returns an error if PICam is unable to read the value.
         fn read(handle: RawHandle, parameter: Parameter) -> Result<Self>;
+
+        /// Watches `parameter`'s value on `handle`, sending each value the hardware
+        /// changes it to (PICam manual 7.4.9.3 and 7.4.9.7).
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if PICam is unable to register the callback.
+        fn watch_extrinsic<'a>(
+            handle: RawHandle,
+            parameter: Parameter,
+        ) -> Result<(Watch<'a>, Receiver<Self>)>;
     }
 
     /// The handle-taking half of [`super::OnlineSettablePicamValue`].
@@ -373,7 +400,7 @@ use sealed::RawHandle;
 pub trait PicamValue: sealed::RawPicamValue {}
 
 macro_rules! impl_picam_value {
-    ($ty:ty, $get:ident, $set:ident, $default:ident, $can_set:ident) => {
+    ($ty:ty, $get:ident, $set:ident, $default:ident, $can_set:ident, $kind:ident, $event:ident) => {
         impl sealed::RawPicamValue for $ty {
             fn get(handle: RawHandle, parameter: Parameter) -> Result<Self> {
                 let mut value: $ty = Default::default();
@@ -401,6 +428,16 @@ macro_rules! impl_picam_value {
                 ))?;
                 Ok(settable != 0)
             }
+
+            fn watch<'a>(
+                handle: RawHandle,
+                parameter: Parameter,
+            ) -> Result<(Watch<'a>, Receiver<Self>)> {
+                watch::subscribe(handle.0, parameter, Kind::$kind, |event| match event {
+                    Event::$event(value) => Some(*value),
+                    _ => None,
+                })
+            }
         }
 
         impl PicamValue for $ty {}
@@ -412,21 +449,27 @@ impl_picam_value!(
     Picam_GetParameterIntegerValue,
     Picam_SetParameterIntegerValue,
     Picam_GetParameterIntegerDefaultValue,
-    Picam_CanSetParameterIntegerValue
+    Picam_CanSetParameterIntegerValue,
+    Integer,
+    Integer
 );
 impl_picam_value!(
     i64,
     Picam_GetParameterLargeIntegerValue,
     Picam_SetParameterLargeIntegerValue,
     Picam_GetParameterLargeIntegerDefaultValue,
-    Picam_CanSetParameterLargeIntegerValue
+    Picam_CanSetParameterLargeIntegerValue,
+    LargeInteger,
+    LargeInteger
 );
 impl_picam_value!(
     f64,
     Picam_GetParameterFloatingPointValue,
     Picam_SetParameterFloatingPointValue,
     Picam_GetParameterFloatingPointDefaultValue,
-    Picam_CanSetParameterFloatingPointValue
+    Picam_CanSetParameterFloatingPointValue,
+    FloatingPoint,
+    FloatingPoint
 );
 
 macro_rules! impl_bool_query {
@@ -482,12 +525,22 @@ impl_parameter_info!(
 pub trait ReadablePicamValue: PicamValue + sealed::RawReadablePicamValue {}
 
 macro_rules! impl_readable_value {
-    ($ty:ty, $read:ident) => {
+    ($ty:ty, $read:ident, $kind:ident, $event:ident) => {
         impl sealed::RawReadablePicamValue for $ty {
             fn read(handle: RawHandle, parameter: Parameter) -> Result<Self> {
                 let mut value: $ty = Default::default();
                 picam_call!(sys::$read(handle.0, parameter.to_raw(), &mut value))?;
                 Ok(value)
+            }
+
+            fn watch_extrinsic<'a>(
+                handle: RawHandle,
+                parameter: Parameter,
+            ) -> Result<(Watch<'a>, Receiver<Self>)> {
+                watch::subscribe(handle.0, parameter, Kind::$kind, |event| match event {
+                    Event::$event(value) => Some(*value),
+                    _ => None,
+                })
             }
         }
 
@@ -495,8 +548,18 @@ macro_rules! impl_readable_value {
     };
 }
 
-impl_readable_value!(i32, Picam_ReadParameterIntegerValue);
-impl_readable_value!(f64, Picam_ReadParameterFloatingPointValue);
+impl_readable_value!(
+    i32,
+    Picam_ReadParameterIntegerValue,
+    ExtrinsicInteger,
+    Integer
+);
+impl_readable_value!(
+    f64,
+    Picam_ReadParameterFloatingPointValue,
+    ExtrinsicFloatingPoint,
+    FloatingPoint
+);
 
 // picam gets and sets booleans through its integer calls, as 0 for false and
 // 1 for true (PICam manual 5.1.1.42). 5.4.2.1, 5.4.2.3, 5.4.2.7 and 5.4.2.12
@@ -519,6 +582,13 @@ impl sealed::RawPicamValue for bool {
     fn can_set(handle: RawHandle, parameter: Parameter, value: Self) -> Result<bool> {
         <i32 as sealed::RawPicamValue>::can_set(handle, parameter, i32::from(value))
     }
+
+    fn watch<'a>(handle: RawHandle, parameter: Parameter) -> Result<(Watch<'a>, Receiver<Self>)> {
+        watch::subscribe(handle.0, parameter, Kind::Integer, |event| match event {
+            Event::Integer(value) => Some(*value != 0),
+            _ => None,
+        })
+    }
 }
 
 impl PicamValue for bool {}
@@ -526,6 +596,21 @@ impl PicamValue for bool {}
 impl sealed::RawReadablePicamValue for bool {
     fn read(handle: RawHandle, parameter: Parameter) -> Result<Self> {
         <i32 as sealed::RawReadablePicamValue>::read(handle, parameter).map(|value| value != 0)
+    }
+
+    fn watch_extrinsic<'a>(
+        handle: RawHandle,
+        parameter: Parameter,
+    ) -> Result<(Watch<'a>, Receiver<Self>)> {
+        watch::subscribe(
+            handle.0,
+            parameter,
+            Kind::ExtrinsicInteger,
+            |event| match event {
+                Event::Integer(value) => Some(*value != 0),
+                _ => None,
+            },
+        )
     }
 }
 
@@ -682,6 +767,13 @@ impl sealed::RawPicamValue for Vec<Roi> {
         ))?;
         Ok(settable != 0)
     }
+
+    fn watch<'a>(handle: RawHandle, parameter: Parameter) -> Result<(Watch<'a>, Receiver<Self>)> {
+        watch::subscribe(handle.0, parameter, Kind::Rois, |event| match event {
+            Event::Rois(rois) => Some(rois.clone()),
+            _ => None,
+        })
+    }
 }
 
 impl PicamValue for Vec<Roi> {}
@@ -815,6 +907,18 @@ impl sealed::RawPicamValue for Vec<Modulation> {
         ))?;
         Ok(settable != 0)
     }
+
+    fn watch<'a>(handle: RawHandle, parameter: Parameter) -> Result<(Watch<'a>, Receiver<Self>)> {
+        watch::subscribe(
+            handle.0,
+            parameter,
+            Kind::Modulations,
+            |event| match event {
+                Event::Modulations(modulations) => Some(modulations.clone()),
+                _ => None,
+            },
+        )
+    }
 }
 
 impl PicamValue for Vec<Modulation> {}
@@ -906,6 +1010,13 @@ impl sealed::RawPicamValue for Pulse {
             &mut settable
         ))?;
         Ok(settable != 0)
+    }
+
+    fn watch<'a>(handle: RawHandle, parameter: Parameter) -> Result<(Watch<'a>, Receiver<Self>)> {
+        watch::subscribe(handle.0, parameter, Kind::Pulse, |event| match event {
+            Event::Pulse(pulse) => Some(*pulse),
+            _ => None,
+        })
     }
 }
 
