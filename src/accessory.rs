@@ -6,6 +6,7 @@ use std::sync::Arc;
 use crate::convert::{
     FirmwareDetail, c_char_array_to_string, collect_raw_array, string_to_c_char_array,
 };
+use crate::device::impl_parameter_methods;
 use crate::error::{Error, Result, picam_call};
 use crate::library::Library;
 use crate::model::Model;
@@ -14,7 +15,35 @@ use crate::sys;
 
 /// An open connection to a PICam accessory, such as a light source.
 ///
-/// It closes the accessory on drop.
+/// It closes the accessory on drop. Accessories are configured through the
+/// same parameter methods as [`Camera`](crate::Camera): those
+/// `picam_accessory.h` lists for accessories. Accessory parameters take
+/// integer, on/off, enum and floating-point values. The value methods are
+/// generic, so calls with other value types (`i64`, `Vec<Roi>`, `Pulse`,
+/// `Vec<Modulation>`) compile, but PICam refuses them.
+///
+/// Unlike a camera's, an accessory's parameter changes apply to the hardware
+/// at once, so it always counts as committed (PICam manual 5.4.6):
+/// [`Accessory::commit_parameters`] and
+/// [`Accessory::are_parameters_committed`] are there for completeness and
+/// do nothing useful.
+///
+/// ```no_run
+/// use std::sync::Arc;
+///
+/// use picam_rs::{Accessory, Library, LightSource, params};
+///
+/// # fn main() -> picam_rs::Result<()> {
+/// let library = Arc::new(Library::new()?);
+/// let lamp = Accessory::open_first(library)?;
+/// if lamp.does_parameter_exist(params::LIGHT_SOURCE)? {
+///     // applies at once, no commit needed
+///     lamp.set(params::LIGHT_SOURCE, LightSource::Qth)?;
+///     println!("status: {:?}", lamp.get(params::LIGHT_SOURCE_STATUS)?);
+/// }
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct Accessory {
     handle: sys::PicamHandle,
@@ -175,6 +204,8 @@ impl Accessory {
         Ok(points)
     }
 }
+
+impl_parameter_methods!(Accessory, "accessory");
 
 impl Drop for Accessory {
     fn drop(&mut self) {

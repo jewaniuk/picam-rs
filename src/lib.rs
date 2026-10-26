@@ -30,6 +30,7 @@ mod acquisition;
 mod camera;
 mod constraint;
 mod convert;
+mod device;
 mod enums;
 mod error;
 mod library;
