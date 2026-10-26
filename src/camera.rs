@@ -6,7 +6,8 @@ use crate::constraint::{
     ConstraintCategory, ModulationsConstraint, PulseConstraint, RoisConstraint,
 };
 use crate::convert::{
-    FirmwareDetail, c_char_array_to_string, collect_raw_array, string_to_c_char_array,
+    FirmwareDetail, c_char_array_to_string, collect_raw_array, define_picam_enum,
+    string_to_c_char_array,
 };
 use crate::device::impl_parameter_methods;
 use crate::error::{Result, picam_call};
@@ -60,8 +61,38 @@ impl Camera {
         })
     }
 
-    /// Lists every camera handle currently open in this process, whether or
-    /// not it was opened through this crate
+    /// Opens a specific camera through PICam's advanced device call (PICam
+    /// manual 7.4.3.1). The result is the same as [`Camera::open`]: the
+    /// camera holds its model handle, and [`Camera::device`] gives the device.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::InvalidCameraId`] if `id` doesn't match a
+    /// currently available camera, [`crate::Error::CameraAlreadyOpened`] if
+    /// it's already open elsewhere in this process, or an error if PICam is
+    /// unable to open it.
+    pub fn open_device(id: &CameraId, library: Arc<Library>) -> Result<Self> {
+        tracing::debug!("opening camera device: {}", id.serial_number);
+        let raw_id = id.to_raw()?;
+        let mut device: sys::PicamHandle = std::ptr::null_mut();
+        picam_call!(sys::PicamAdvanced_OpenCameraDevice(&raw_id, &mut device))?;
+        let mut model: sys::PicamHandle = std::ptr::null_mut();
+        if let Err(e) = picam_call!(sys::PicamAdvanced_GetCameraModel(device, &mut model)) {
+            // closing the device closes the whole camera (manual 7.4.3.1)
+            if let Err(close) = picam_call!(sys::PicamAdvanced_CloseCameraDevice(device)) {
+                tracing::error!("failed to close PICam camera device: {close}");
+            }
+            return Err(e);
+        }
+        Ok(Self {
+            handle: model,
+            _library: library,
+        })
+    }
+
+    /// Lists the model handle of every camera open in this process, whether
+    /// or not it was opened through this crate.
+    /// [`Camera::list_open_camera_devices`] lists their device handles.
     ///
     /// # Errors
     ///
@@ -72,6 +103,36 @@ impl Camera {
         let mut array: *const sys::PicamHandle = std::ptr::null();
         let mut count: sys::piint = 0;
         picam_call!(sys::Picam_GetOpenCameras(&mut array, &mut count))?;
+
+        // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
+        let handles = unsafe {
+            collect_raw_array(array, count, |&handle| CameraHandle {
+                handle,
+                _marker: std::marker::PhantomData,
+            })
+        };
+
+        if !array.is_null() {
+            picam_call!(sys::Picam_DestroyHandles(array))?;
+        }
+        Ok(handles)
+    }
+
+    /// Lists the device handle of every camera open in this process (PICam
+    /// manual 7.4.3.3), whether or not it was opened through this crate.
+    /// [`Camera::list_open_cameras`] lists their model handles.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to enumerate open camera devices.
+    pub fn list_open_camera_devices(library: &Library) -> Result<Vec<CameraHandle<'_>>> {
+        tracing::debug!("enumerating open camera devices");
+        let _ = library; // ties the returned lifetime to `library`, see `CameraHandle`
+        let mut array: *const sys::PicamHandle = std::ptr::null();
+        let mut count: sys::piint = 0;
+        picam_call!(sys::PicamAdvanced_GetOpenCameraDevices(
+            &mut array, &mut count
+        ))?;
 
         // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
         let handles = unsafe {
@@ -173,8 +234,9 @@ impl Camera {
     /// calls need instead of the camera model handle `Picam_OpenCamera`
     /// gives (manual 4.3.2.4): the `picam_special.h` functions refuse the
     /// model handle with `InvalidHandle` (seen on a demo camera with SDK
-    /// 5.15). It's only used within one call, never stored.
-    fn device_handle(&self) -> Result<sys::PicamHandle> {
+    /// 5.15). It's only stored by [`crate::CameraDevice`], which borrows the
+    /// camera.
+    pub(crate) fn device_handle(&self) -> Result<sys::PicamHandle> {
         let mut device: sys::PicamHandle = std::ptr::null_mut();
         picam_call!(sys::PicamAdvanced_GetCameraDevice(self.handle, &mut device))?;
         Ok(device)
@@ -448,7 +510,10 @@ impl Drop for Camera {
 }
 
 /// A reference to a camera handle that is open somewhere in this process,
-/// without implying ownership of it.
+/// without implying ownership of it. It's either a model handle, from
+/// [`Camera::list_open_cameras`], or a device handle, from
+/// [`Camera::list_open_camera_devices`]: [`CameraHandle::handle_type`] says
+/// which.
 ///
 /// Unlike [`Camera`], a `CameraHandle` never closes the underlying handle;
 /// it exists purely to let you inspect a camera you don't own (for example,
@@ -465,7 +530,49 @@ pub struct CameraHandle<'a> {
     _marker: std::marker::PhantomData<&'a Library>,
 }
 
-impl CameraHandle<'_> {
+impl<'a> CameraHandle<'a> {
+    /// Reports whether this is a camera's model or device handle (PICam
+    /// manual 7.4.4.1).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to check this.
+    pub fn handle_type(&self) -> Result<HandleType> {
+        let mut raw = sys::PicamHandleType(0);
+        picam_call!(sys::PicamAdvanced_GetHandleType(self.handle, &mut raw))?;
+        Ok(HandleType::from_raw(raw))
+    }
+
+    /// The camera's model handle, whichever handle this is (PICam manual
+    /// 7.4.3.4).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to look it up.
+    pub fn model(&self) -> Result<CameraHandle<'a>> {
+        let mut model: sys::PicamHandle = std::ptr::null_mut();
+        picam_call!(sys::PicamAdvanced_GetCameraModel(self.handle, &mut model))?;
+        Ok(CameraHandle {
+            handle: model,
+            _marker: std::marker::PhantomData,
+        })
+    }
+
+    /// The camera's device handle, whichever handle this is (PICam manual
+    /// 7.4.3.5).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to look it up.
+    pub fn device(&self) -> Result<CameraHandle<'a>> {
+        let mut device: sys::PicamHandle = std::ptr::null_mut();
+        picam_call!(sys::PicamAdvanced_GetCameraDevice(self.handle, &mut device))?;
+        Ok(CameraHandle {
+            handle: device,
+            _marker: std::marker::PhantomData,
+        })
+    }
+
     /// Reports whether this camera is currently connected.
     ///
     /// # Errors
@@ -494,6 +601,24 @@ impl CameraHandle<'_> {
         handle_id(self.handle)
     }
 }
+
+define_picam_enum!(
+    /// The kind of thing a PICam handle refers to (PICam manual 7.1.2.1).
+    HandleType,
+    sys::PicamHandleType,
+    PicamEnumeratedType_HandleType,
+    /// A physical camera, as [`crate::CameraHandle::device`] and
+    /// [`crate::Camera::list_open_camera_devices`] give.
+    CameraDevice = PicamHandleType_CameraDevice,
+    /// A camera's model, the copy of its parameters in memory, as
+    /// [`crate::Camera`] holds and [`crate::Camera::list_open_cameras`] gives.
+    CameraModel = PicamHandleType_CameraModel,
+    /// An accessory.
+    Accessory = PicamHandleType_Accessory,
+    /// A camera opened for EM gain calibration.
+    #[doc(alias = "EMCalibration")]
+    EmCalibration = PicamHandleType_EMCalibration,
+);
 
 fn handle_is_connected(handle: sys::PicamHandle) -> Result<bool> {
     let mut connected: sys::pibln = 0;
@@ -711,4 +836,15 @@ fn collect_and_destroy_ids(
         picam_call!(sys::Picam_DestroyCameraIDs(array))?;
     }
     Ok(ids)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::convert::assert_round_trips;
+
+    #[test]
+    fn handle_type_round_trips() {
+        assert_round_trips!(HandleType, sys::PicamHandleType, 4);
+    }
 }

@@ -1,4 +1,4 @@
-//! The parameter methods cameras and accessories share.
+//! The parameter methods cameras, camera devices and accessories share.
 
 /// Implements the parameter methods cameras and accessories share on `$ty`,
 /// whose `handle` field is its PICam handle: the calls `picam_accessory.h`
