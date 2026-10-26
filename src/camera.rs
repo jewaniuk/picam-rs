@@ -148,6 +148,32 @@ impl Camera {
         handle_id(self.handle)
     }
 
+    /// Reports whether the camera can erase residual charge from its sensor
+    /// (`picam_special.h`, which the PICam manual doesn't document).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to check this.
+    pub fn can_erase_residual(&self) -> Result<bool> {
+        let mut erasable: sys::pibln = 0;
+        picam_call!(sys::PicamSpecial_CanEraseResidual(
+            self.handle,
+            &mut erasable
+        ))?;
+        Ok(erasable != 0)
+    }
+
+    /// Erases residual charge from the camera's sensor (`picam_special.h`,
+    /// which the PICam manual doesn't document). Check
+    /// [`Camera::can_erase_residual`] first.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to erase it.
+    pub fn erase_residual(&self) -> Result<()> {
+        picam_call!(sys::PicamSpecial_EraseResidual(self.handle))
+    }
+
     /// Lists the camera models available for use with [`CameraId::connect_demo`].
     ///
     /// # Errors
