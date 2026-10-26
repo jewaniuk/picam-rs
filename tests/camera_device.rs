@@ -1,14 +1,18 @@
 //! Tests for camera devices (`Camera::open_device`, `Camera::device`,
 //! `Camera::list_open_camera_devices`, the `CameraHandle` handle methods) and
 //! moving parameter values between a camera's model and its device
-//! (`commit_parameters_to_device`, `refresh_parameter(s)_from_device`), using
-//! PIXIS 100F demo cameras.
+//! (`commit_parameters_to_device`, `refresh_parameter(s)_from_device`),
+//! including during an acquisition, using PIXIS 100F demo cameras.
 
 mod common;
 
 use std::sync::Arc;
+use std::time::Duration;
 
-use picam_rs::{Camera, CameraId, Error, HandleType, Model, Parameter, ReadoutControlMode, params};
+use picam_rs::{
+    Camera, CameraId, ConstraintCategory, ConstraintType, Error, HandleType, Model, Parameter,
+    ReadoutControlMode, Roi, ValueAccess, ValueType, params,
+};
 
 /// Checks that `open_device` opens a camera with a model and a device
 /// handle, which lead to each other, and that dropping the camera closes
@@ -201,6 +205,131 @@ fn commit_to_device() {
         Err(Error::InvalidParameterValue)
     );
     assert_eq!(device.get(params::READOUT_CONTROL_MODE), Ok(mode));
+
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// A value `parameter` can take other than its current one, from its capable
+/// constraint, for the parameters set through a plain number. `None` for
+/// parameters that can't be set or have no such value.
+fn other_value(camera: &Camera, parameter: Parameter) -> Option<f64> {
+    if camera.value_access(parameter).ok()? == ValueAccess::ReadOnly {
+        return None;
+    }
+    let current = match camera.value_type(parameter).ok()? {
+        ValueType::FloatingPoint => camera.get_untyped::<f64>(parameter).ok()?,
+        ValueType::Integer | ValueType::Boolean | ValueType::Enumeration => {
+            f64::from(camera.get_untyped::<i32>(parameter).ok()?)
+        }
+        _ => return None,
+    };
+    let candidates = match camera.constraint_type(parameter).ok()? {
+        ConstraintType::Collection => {
+            camera
+                .collection_constraint(parameter, ConstraintCategory::Capable)
+                .ok()?
+                .values
+        }
+        ConstraintType::Range => {
+            let range = camera
+                .range_constraint(parameter, ConstraintCategory::Capable)
+                .ok()?;
+            vec![range.minimum, range.maximum]
+        }
+        _ => return None,
+    };
+    candidates.into_iter().find(|&value| value != current)
+}
+
+/// Checks that during an acquisition PICam refuses every change through the
+/// device except to parameters it can set online, so the data layout the
+/// acquisition views rely on can't change through a `CameraDevice`.
+#[test]
+fn device_changes_are_refused_while_acquiring() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "DEVICE005";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let id = CameraId::connect_demo(library, Model::PIXIS_100F, SERIAL_NUMBER)
+        .expect("demo camera should connect");
+    let mut camera = Camera::open(&id, Arc::clone(library)).expect("demo camera should open");
+    camera
+        .set(params::READOUT_COUNT, 2)
+        .expect("readout count should be set");
+    camera
+        .set(params::EXPOSURE_TIME, 1000.0)
+        .expect("exposure time should be set");
+    assert_eq!(camera.commit_parameters(), Ok(vec![]));
+    let readout_stride = usize::try_from(
+        camera
+            .get(params::READOUT_STRIDE)
+            .expect("readout stride should be read"),
+    )
+    .expect("readout stride should be positive");
+    let rois = camera.get(params::ROIS).expect("regions should be read");
+    let smaller = vec![Roi {
+        height: rois[0].height / 2,
+        ..rois[0]
+    }];
+    let changes: Vec<(Parameter, ValueType, f64)> = camera
+        .parameters()
+        .expect("parameters should be listed")
+        .into_iter()
+        .filter_map(|parameter| {
+            let value = other_value(&camera, parameter)?;
+            Some((parameter, camera.value_type(parameter).ok()?, value))
+        })
+        .collect();
+    assert!(!changes.is_empty());
+
+    let mut acquisition = camera
+        .start_acquisition()
+        .expect("acquisition should start");
+    {
+        let during = acquisition.camera();
+        let device = during.device().expect("the device should be found");
+        // seen with sdk 5.15, on this and two other demo models
+        let refused = Some(Error::AcquisitionInProgress);
+        for (parameter, value_type, value) in changes {
+            let result = match value_type {
+                ValueType::FloatingPoint => device.set_untyped::<f64>(parameter, value),
+                _ => device.set_untyped::<i32>(parameter, value as i32),
+            };
+            if during.can_set_online(parameter) == Ok(true) {
+                assert_eq!(result, Ok(()), "{parameter:?} can be set online");
+            } else {
+                assert_eq!(result.err(), refused, "{parameter:?} can't be set online");
+            }
+        }
+        assert_eq!(device.set(params::ROIS, smaller).err(), refused);
+        assert_eq!(device.commit_parameters().err(), refused);
+        assert_eq!(device.restore_parameters_to_default_values().err(), refused);
+        assert_eq!(during.commit_parameters_to_device().err(), refused);
+        assert_eq!(
+            during.refresh_parameter_from_device(Parameter::Rois).err(),
+            refused
+        );
+        assert_eq!(during.refresh_parameters_from_device().err(), refused);
+    }
+
+    loop {
+        let update = acquisition
+            .wait(Some(Duration::from_secs(10)))
+            .expect("wait should work")
+            .expect("a demo readout should arrive within the timeout");
+        for readout in update.readouts().iter() {
+            assert_eq!(readout.bytes().len(), readout_stride);
+        }
+        if !update.running() {
+            break;
+        }
+    }
+    acquisition
+        .finish()
+        .expect("an ended acquisition should finish cleanly");
 
     drop(camera);
     id.disconnect_demo(library)

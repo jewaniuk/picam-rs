@@ -53,7 +53,7 @@ The crate only runs on Windows, the only platform the lab uses. The SDK also shi
 | `constraint` | constraint structs and their enums | done |
 | `model` | `Model`, with a constant per camera or accessory model from `src/generated/models.rs` | done |
 | `enums` | the 39 generated value enums of PICam's enum parameters, from `src/generated/enums.rs` | done |
-| `device` | `impl_parameter_methods!`, the parameter methods `Camera` and `Accessory` share | done |
+| `device` | `impl_parameter_methods!`, the parameter methods `Camera`, `CameraDevice` and `Accessory` share | done |
 | `convert` | shared FFI helpers (string/array conversion, `define_picam_enum!`, `FirmwareDetail`, enum names through `Picam_GetEnumerationString`) | done |
 | `acquisition` | `Camera::acquire`, `Camera::start_acquisition` and the `Acquisition` guard, the borrowed data views (`Readouts`, `Readout`, `Frame`, `RoiData`, `Pixels`), `AcquisitionErrors` | done |
 | `validation` | `ValidationResult`, `ValidationResults`, `DependentValidationResult`, `FailedDependentParameter`, and `Camera`'s validation methods | done |
@@ -107,7 +107,7 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 ### Cameras and thread safety (settled)
 
 - `Camera` owns a `PicamHandle` and closes it on `Drop`. It is the camera *model* handle `Picam_OpenCamera` gives (manual 4.3.2.4): a copy of the camera's parameters in memory, whose changes reach the physical camera, the *device*, only when committed (manual 2.6.1). `Picam_CloseCamera` closes both handles (manual 4.3.2.6). `Camera::open_device` opens through `PicamAdvanced_OpenCameraDevice` instead and keeps the model handle the same way (decided with the maintainer on 2026-10-26).
-- `Camera::device()` gives a `CameraDevice<'_>`, a view of the device handle with the parameter methods `Camera` and `Accessory` share. It borrows the camera, so it can't outlive it or exist during an acquisition, and it has no `Drop`. Setting a value through it also sets it on the model (manual 5.4.1.3) (decided with the maintainer on 2026-10-26).
+- `Camera::device()` gives a `CameraDevice<'_>`, a view of the device handle with the parameter methods `Camera` and `Accessory` share. It borrows the camera, so it can't outlive it, and it has no `Drop`. Setting a value through it also sets it on the model (manual 5.4.1.3) (decided with the maintainer on 2026-10-26). One can be made between an acquisition's updates through `Acquisition::camera`, but PICam then refuses every change through it with `Error::AcquisitionInProgress`, except to the parameters it can set online, the same ones `Camera::set_online` changes (seen on three demo models with SDK 5.15, checked by `tests/camera_device.rs`). So it can't change the data layout the acquisition views rely on.
 - The `picam_special.h` functions refuse the model handle with `Error::InvalidHandle` (seen on a demo camera with SDK 5.15), so those methods look the device handle up with `PicamAdvanced_GetCameraDevice` for each call.
 - `Camera` is deliberately **not** `Send` or `Sync`. This falls out naturally from the raw-pointer handle and must stay that way: downstream code decides how to manage thread safety (the same choice as `tlpm-rs`'s `PowerMeter`). Never add `unsafe impl Send/Sync` without the maintainer's approval.
 - `CameraId` identifies a camera whether or not it is open. It is spelled `CameraId`, not `CameraID`, following Rust naming conventions.

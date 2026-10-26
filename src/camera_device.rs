@@ -14,9 +14,14 @@ use crate::sys;
 /// [`Camera`] holds, whose parameter values can be set without reaching the
 /// hardware until they're committed (PICam manual 2.6.1).
 ///
-/// It borrows the camera, so it can't outlive it or exist during an
-/// acquisition. Setting a value through it also sets it on the camera's model
-/// (manual 5.4.1.3).
+/// It borrows the camera, so it can't outlive it. Setting a value through it
+/// also sets it on the camera's model (manual 5.4.1.3).
+///
+/// During an acquisition, one can be made between updates through
+/// [`crate::Acquisition::camera`]. PICam then refuses every change through it
+/// with [`crate::Error::AcquisitionInProgress`], except to the parameters it
+/// can set online, as [`Camera::set_online`] does (seen on demo cameras with
+/// SDK 5.15), so the acquisition's data layout can't change.
 #[derive(Debug)]
 pub struct CameraDevice<'a> {
     handle: sys::PicamHandle,

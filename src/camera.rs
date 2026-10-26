@@ -90,8 +90,9 @@ impl Camera {
         })
     }
 
-    /// Lists every camera handle currently open in this process, whether or
-    /// not it was opened through this crate
+    /// Lists the model handle of every camera open in this process, whether
+    /// or not it was opened through this crate.
+    /// [`Camera::list_open_camera_devices`] lists their device handles.
     ///
     /// # Errors
     ///
@@ -509,7 +510,10 @@ impl Drop for Camera {
 }
 
 /// A reference to a camera handle that is open somewhere in this process,
-/// without implying ownership of it.
+/// without implying ownership of it. It's either a model handle, from
+/// [`Camera::list_open_cameras`], or a device handle, from
+/// [`Camera::list_open_camera_devices`]: [`CameraHandle::handle_type`] says
+/// which.
 ///
 /// Unlike [`Camera`], a `CameraHandle` never closes the underlying handle;
 /// it exists purely to let you inspect a camera you don't own (for example,
@@ -603,7 +607,7 @@ define_picam_enum!(
     HandleType,
     sys::PicamHandleType,
     PicamEnumeratedType_HandleType,
-    /// A physical camera, as [`crate::Camera::device`] and
+    /// A physical camera, as [`crate::CameraHandle::device`] and
     /// [`crate::Camera::list_open_camera_devices`] give.
     CameraDevice = PicamHandleType_CameraDevice,
     /// A camera's model, the copy of its parameters in memory, as
@@ -832,4 +836,15 @@ fn collect_and_destroy_ids(
         picam_call!(sys::Picam_DestroyCameraIDs(array))?;
     }
     Ok(ids)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::convert::assert_round_trips;
+
+    #[test]
+    fn handle_type_round_trips() {
+        assert_round_trips!(HandleType, sys::PicamHandleType, 4);
+    }
 }
