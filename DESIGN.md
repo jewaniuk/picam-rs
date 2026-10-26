@@ -47,7 +47,7 @@ The crate only runs on Windows, the only platform the lab uses. The SDK also shi
 | `sys` | raw bindgen output, private, never exposed | done |
 | `error` | `Error`, `Result`, `picam_call!` | done |
 | `library` | `Library` (initialize/uninitialize lifecycle, the initialized check), `Version` | done |
-| `camera` | `Camera`, `CameraId`, `CameraHandle`, discovery, demo cameras, parameter/constraint methods | done |
+| `camera` | `Camera`, `CameraId`, `CameraHandle`, discovery, demo cameras, the camera-only parameter methods (`set_online`, the ROI, pulse and modulation constraints) and residual erasure | done |
 | `parameter` | `Parameter`, `TypedParameter` and the generated `params` handles, value traits, `Roi`/`Pulse`/`Modulation`, parameter info queries | done |
 | `constraint` | constraint structs and their enums | done |
 | `model` | `Model`, with a constant per camera or accessory model from `src/generated/models.rs` | done |

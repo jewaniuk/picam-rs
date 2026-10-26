@@ -13,7 +13,7 @@ macro_rules! impl_parameter_methods {
                 CollectionConstraint, ConstraintCategory, ConstraintType, RangeConstraint,
             };
             use $crate::convert::collect_raw_array;
-            use $crate::error::{Result, picam_call};
+            use $crate::error::{Error, Result, picam_call};
             use $crate::parameter::sealed::RawHandle;
             use $crate::parameter::{
                 EnumeratedType, Parameter, PicamValue, ReadablePicamValue, TypedParameter,
@@ -483,7 +483,7 @@ macro_rules! impl_parameter_methods {
                     ))?;
 
                     if ptr.is_null() {
-                        return Err(crate::error::Error::UnexpectedNullPointer);
+                        return Err(Error::UnexpectedNullPointer);
                     }
 
                     // SAFETY: just checked `ptr` is non-null; PICam guarantees a valid
@@ -518,7 +518,7 @@ macro_rules! impl_parameter_methods {
                     ))?;
 
                     if ptr.is_null() {
-                        return Err(crate::error::Error::UnexpectedNullPointer);
+                        return Err(Error::UnexpectedNullPointer);
                     }
 
                     // SAFETY: just checked `ptr` is non-null; PICam guarantees a valid
