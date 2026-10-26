@@ -30,6 +30,7 @@ mod acquisition;
 mod camera;
 mod constraint;
 mod convert;
+mod defect;
 mod device;
 mod em_calibration;
 mod enums;
@@ -50,6 +51,9 @@ pub use constraint::{
     ModulationsConstraint, PulseConstraint, RangeConstraint, RoisConstraint, RoisConstraintRules,
 };
 pub use convert::FirmwareDetail;
+pub use defect::{
+    ColumnDefect, PixelDefectMap, PixelLocation, RowDefect, StarDefect, StarDefectMap,
+};
 pub use em_calibration::{EmCalibration, EmCalibrationDate, EmCalibrationHandle};
 pub use enums::*;
 pub use error::{Error, Result};
