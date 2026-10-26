@@ -47,7 +47,8 @@ The crate only runs on Windows, the only platform the lab uses. The SDK also shi
 | `sys` | raw bindgen output, private, never exposed | done |
 | `error` | `Error`, `Result`, `picam_call!` | done |
 | `library` | `Library` (initialize/uninitialize lifecycle, the initialized check), `Version` | done |
-| `camera` | `Camera`, `CameraId`, `CameraHandle`, discovery, demo cameras, the camera-only parameter methods (`set_online`, the ROI, pulse and modulation constraints) and residual erasure | done |
+| `camera` | `Camera`, `CameraId`, `CameraHandle`, `HandleType`, discovery, demo cameras, opening through the device call (`open_device`), listing open model and device handles, the camera-only parameter methods (`set_online`, the ROI, pulse and modulation constraints) and residual erasure | done |
+| `camera_device` | `CameraDevice`, the borrowed view of a camera's device handle, and committing to and refreshing from the device | done |
 | `parameter` | `Parameter`, `TypedParameter` and the generated `params` handles, value traits, `Roi`/`Pulse`/`Modulation`, parameter info queries | done |
 | `constraint` | constraint structs and their enums | done |
 | `model` | `Model`, with a constant per camera or accessory model from `src/generated/models.rs` | done |
@@ -57,7 +58,7 @@ The crate only runs on Windows, the only platform the lab uses. The SDK also shi
 | `acquisition` | `Camera::acquire`, `Camera::start_acquisition` and the `Acquisition` guard, the borrowed data views (`Readouts`, `Readout`, `Frame`, `RoiData`, `Pixels`), `AcquisitionErrors` | done |
 | `validation` | `ValidationResult`, `ValidationResults`, `DependentValidationResult`, `FailedDependentParameter`, and `Camera`'s validation methods | done |
 | `defect` | `PixelDefectMap`, `StarDefectMap` and their parts, and `Camera`'s defect map methods | done |
-| advanced | the rest of `picam_advanced.h`: camera devices, user state, commit and refresh, acquisition buffers, callbacks and discovery (`PicamAdvanced_GetCameraDevice` is used privately by `Camera`) | not started |
+| advanced | the rest of `picam_advanced.h`: user state, acquisition buffers, callbacks and discovery | not started |
 | `accessory` | `Accessory`, `AccessoryId`, `AccessoryHandle`, `CalibrationPoint`: identifying, opening and querying accessories, the light source reference, and the parameter methods shared with `Camera` | done apart from discovery |
 | `em_calibration` | `EmCalibration`, `EmCalibrationHandle`, `EmCalibrationDate`: opening a camera for EM gain calibration and its sensor temperature | done apart from `Calibrate`, which needs a callback |
 | special | `picam_special.h`: residual erasure, as `Camera` methods in `camera` | done |
@@ -105,10 +106,12 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 
 ### Cameras and thread safety (settled)
 
-- `Camera` owns a `PicamHandle` and closes it on `Drop`. It is the camera *model* handle `Picam_OpenCamera` gives (manual 4.3.2.4). A few calls need the camera *device* handle instead (`PicamAdvanced_GetCameraDevice`, manual 7.4.3.5): the `picam_special.h` functions refuse the model handle with `Error::InvalidHandle` (seen on a demo camera with SDK 5.15). Those methods look the device handle up with `PicamAdvanced_GetCameraDevice` for each call and never store it.
+- `Camera` owns a `PicamHandle` and closes it on `Drop`. It is the camera *model* handle `Picam_OpenCamera` gives (manual 4.3.2.4): a copy of the camera's parameters in memory, whose changes reach the physical camera, the *device*, only when committed (manual 2.6.1). `Picam_CloseCamera` closes both handles (manual 4.3.2.6). `Camera::open_device` opens through `PicamAdvanced_OpenCameraDevice` instead and keeps the model handle the same way (decided with the maintainer on 2026-10-26).
+- `Camera::device()` gives a `CameraDevice<'_>`, a view of the device handle with the parameter methods `Camera` and `Accessory` share. It borrows the camera, so it can't outlive it or exist during an acquisition, and it has no `Drop`. Setting a value through it also sets it on the model (manual 5.4.1.3) (decided with the maintainer on 2026-10-26).
+- The `picam_special.h` functions refuse the model handle with `Error::InvalidHandle` (seen on a demo camera with SDK 5.15), so those methods look the device handle up with `PicamAdvanced_GetCameraDevice` for each call.
 - `Camera` is deliberately **not** `Send` or `Sync`. This falls out naturally from the raw-pointer handle and must stay that way: downstream code decides how to manage thread safety (the same choice as `tlpm-rs`'s `PowerMeter`). Never add `unsafe impl Send/Sync` without the maintainer's approval.
 - `CameraId` identifies a camera whether or not it is open. It is spelled `CameraId`, not `CameraID`, following Rust naming conventions.
-- `CameraHandle<'a>` is a non-owning view of a handle that is open somewhere in the process, returned by `Camera::list_open_cameras`. It never closes the handle, and its lifetime ties it to the `Library`. A call on a handle that has since been closed should fail with `Error::InvalidHandle`, which is listed in the README's "to test" list to confirm on hardware.
+- `CameraHandle<'a>` is a non-owning view of a handle that is open somewhere in the process, returned by `Camera::list_open_cameras` (model handles) and `Camera::list_open_camera_devices` (device handles). `handle_type` says which, and `model` and `device` look up the other. It never closes the handle, and its lifetime ties it to the `Library`. A call on a handle that has since been closed should fail with `Error::InvalidHandle`, which is listed in the README's "to test" list to confirm on hardware.
 - Method names say what they do. For example, `list_open_cameras` (not `open_cameras`) so it isn't mistaken for a way to open cameras.
 - Demo cameras: `CameraId::connect_demo(&library, model, serial_number)` creates one and `id.disconnect_demo(&library)` removes it; `Camera::available_demo_models(&library)` lists the models.
 
@@ -119,8 +122,8 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 - The value methods are generic over the `PicamValue` trait. It is implemented for `i32`, `bool`, `i64`, `f64`, `Vec<Roi>`, `Vec<Modulation>`, `Pulse` and the generated value enums. `bool` and the enums go through PICam's integer calls, `bool` as 0 or 1 (manual 5.1.1.42), and neither is online-settable because PICam only sets integer parameters online (5.4.1.20).
 - `ReadablePicamValue` (`Camera::read`) and `OnlineSettablePicamValue` (`Camera::set_online`) are sub-traits implemented only for the types PICam supports those operations for.
 - The value traits are sealed. Their methods that take a handle live on supertraits in the private `parameter::sealed` module (`RawPicamValue`, `RawReadablePicamValue`, `RawOnlineSettablePicamValue`) and take a `RawHandle`, a wrapper around the raw handle that only the crate can construct. So users can neither implement the traits nor call those methods. A plain sealed supertrait (a `pub trait` in a private module) is not enough on its own, because its methods can still be called through a generic bound (`T::get(ptr, ...)` with `T: PicamValue`), and the raw handle is just `*mut c_void`. A truly `pub(crate)` supertrait would need `#[allow(private_bounds)]`. Any future public trait whose methods need a PICam handle follows the same pattern.
-- Changes made with `set` are pending until `Camera::commit_parameters`, which returns the parameters that failed validation (an empty `Vec` means all were accepted).
-- Accessories are configured through the same parameter calls as cameras. `impl_parameter_methods!` (in `src/device.rs`) generates the same inherent methods on `Camera` and `Accessory`: every call `picam_accessory.h` lists for accessories (the value methods and their `_untyped` twins, `read`, the information and commit methods, status waiting, dynamics, and the collection and range constraints, one at a time or all at once). `set_online` and the ROI, pulse and modulation constraints stay `Camera`-only, since accessories don't support them, and so do validation and the defect maps, which `picam_advanced.h` defines for cameras only. The value methods stay generic over `PicamValue`, so an accessory call with a value type it doesn't use compiles and PICam refuses it.
+- Changes made with `set` are pending until `Camera::commit_parameters`, which returns the parameters that failed validation (an empty `Vec` means all were accepted). `Camera::commit_parameters_to_device` commits them through the advanced call, which returns an error instead and leaves the device as it was if it fails (manual 7.4.13.7), and `Camera::refresh_parameter_from_device` and `refresh_parameters_from_device` discard pending changes by copying the device's values back.
+- Accessories are configured through the same parameter calls as cameras. `impl_parameter_methods!` (in `src/device.rs`) generates the same inherent methods on `Camera`, `CameraDevice` and `Accessory`: every call `picam_accessory.h` lists for accessories (the value methods and their `_untyped` twins, `read`, the information and commit methods, status waiting, dynamics, and the collection and range constraints, one at a time or all at once). `set_online` and the ROI, pulse and modulation constraints stay `Camera`-only, since accessories don't support them, and so do validation and the defect maps, which `picam_advanced.h` defines for cameras only. The value methods stay generic over `PicamValue`, so an accessory call with a value type it doesn't use compiles and PICam refuses it.
 - Repetitive per-type wrappers are generated by macros (`impl_picam_value!`, `impl_bool_query!`, `impl_parameter_info!`, `impl_readable_value!`, `impl_online_settable_scalar!`, `impl_parameter_methods!`). Macros live in the module that uses them; `convert.rs` holds the small helpers shared across modules, and `device.rs` the parameter methods `Camera` and `Accessory` share.
 
 ### Acquisition (settled)
@@ -199,7 +202,7 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 
 ## Roadmap
 
-As of 2026-10-26: 136 / 199 functions wrapped.
+As of 2026-10-26: 144 / 199 functions wrapped.
 
 ### 1. Finish the `sys`-type refactor (done)
 
@@ -250,10 +253,10 @@ Callback registration (`Register*`/`Unregister*` pairs), parameter validation, c
 - [x] parameter dynamics (`Dynamics`, `dynamics`, `extrinsic_dynamics`) and the calls listing every constraint on a parameter (`collection_constraints` and the rest)
 - [x] parameter validation (`validate_parameter`, `validate_parameters`, `validate_dependent_parameter`)
 - [x] pixel and star defect maps
-- [ ] camera devices, handle types and user state
-- [ ] committing to and refreshing from the camera device
+- [x] camera devices and handle types (`Camera::open_device`, `Camera::device` and `CameraDevice`, `Camera::list_open_camera_devices`, `HandleType` and `CameraHandle`'s `handle_type`, `model` and `device`)
+- [x] committing to and refreshing from the camera device
 - [ ] user-supplied acquisition buffers, under the acquisition design discussion
-- [ ] callbacks and discovery, under the callback design discussion
+- [ ] callbacks, discovery and user state (`Get/SetUserState`, whose pointer the callback trampolines may need), under the callback design discussion
 
 ### 5. `picam_accessory.h` (18), `picam_em_calibration.h` (11), `picam_special.h` (2)
 
