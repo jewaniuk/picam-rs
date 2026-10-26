@@ -45,10 +45,9 @@ impl Accessory {
     /// # Errors
     ///
     /// Returns [`crate::Error::InvalidAccessoryId`] if `id` doesn't match an
-    /// available accessory, [`crate::Error::AccessoryAlreadyOpened`] if it's
-    /// already open elsewhere in this process, [`crate::Error::ValueTooLong`]
-    /// if `id`'s serial number doesn't fit in PICam's buffer, or an error if
-    /// PICam is unable to open it.
+    /// available accessory (seen with SDK 5.15),
+    /// [`crate::Error::ValueTooLong`] if `id`'s serial number doesn't fit in
+    /// PICam's buffer, or an error if PICam is unable to open it.
     pub fn open(id: &AccessoryId, library: Arc<Library>) -> Result<Self> {
         tracing::debug!("opening accessory: {}", id.serial_number);
         let raw_id = id.to_raw()?;
@@ -149,7 +148,7 @@ impl Accessory {
     ///
     /// Returns [`crate::Error::UnexpectedNullPointer`] if PICam reports
     /// success but returns no reference, or an error if PICam is unable to
-    /// get it, for example because the accessory isn't a light source.
+    /// get it.
     pub fn light_source_reference(&self) -> Result<Vec<CalibrationPoint>> {
         let mut ptr: *const sys::PicamCalibration = std::ptr::null();
         picam_call!(sys::PicamAccessory_GetLightSourceReference(
@@ -239,7 +238,7 @@ fn handle_id(handle: sys::PicamHandle) -> Result<AccessoryId> {
     Ok(AccessoryId::from_raw(&raw))
 }
 
-/// Identifies an accessory, whether or not it is open (PICam manual 4.2).
+/// Identifies an accessory, whether or not it is open (PICam manual 4.2.2).
 #[derive(Debug, Clone)]
 pub struct AccessoryId {
     /// The accessory's model.
@@ -271,9 +270,10 @@ impl AccessoryId {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::ValueTooLong`] if this ID's serial number
-    /// doesn't fit in PICam's buffer, or an error if PICam is unable to
-    /// query this.
+    /// Returns [`crate::Error::InvalidAccessoryId`] if this ID matches no
+    /// accessory PICam knows of (seen with SDK 5.15),
+    /// [`crate::Error::ValueTooLong`] if its serial number doesn't fit in
+    /// PICam's buffer, or an error if PICam is unable to query this.
     pub fn is_connected(&self, library: &Library) -> Result<bool> {
         let _ = library; // only taken to prove picam is initialized
         let raw = self.to_raw()?;
@@ -289,9 +289,10 @@ impl AccessoryId {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::ValueTooLong`] if this ID's serial number
-    /// doesn't fit in PICam's buffer, or an error if PICam is unable to
-    /// query this.
+    /// Returns [`crate::Error::InvalidAccessoryId`] if this ID matches no
+    /// accessory PICam knows of (seen with SDK 5.15),
+    /// [`crate::Error::ValueTooLong`] if its serial number doesn't fit in
+    /// PICam's buffer, or an error if PICam is unable to query this.
     pub fn is_open_elsewhere(&self, library: &Library) -> Result<bool> {
         let _ = library; // only taken to prove picam is initialized
         let raw = self.to_raw()?;
@@ -307,9 +308,10 @@ impl AccessoryId {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::ValueTooLong`] if this ID's serial number
-    /// doesn't fit in PICam's buffer, or an error if PICam is unable to
-    /// query this.
+    /// Returns [`crate::Error::InvalidAccessoryId`] if this ID matches no
+    /// accessory PICam knows of (seen with SDK 5.15),
+    /// [`crate::Error::ValueTooLong`] if its serial number doesn't fit in
+    /// PICam's buffer, or an error if PICam is unable to query this.
     pub fn firmware_details(&self, library: &Library) -> Result<Vec<FirmwareDetail>> {
         let _ = library; // only taken to prove picam is initialized
         let raw_id = self.to_raw()?;

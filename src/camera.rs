@@ -173,9 +173,11 @@ impl Camera {
         picam_call!(sys::PicamSpecial_EraseResidual(device))
     }
 
-    /// The handle of the camera's device, which some calls need instead of
-    /// the camera model handle `Picam_OpenCamera` gives (PICam manual
-    /// 7.4.3.4 and 7.4.3.5). It's only used within one call, never stored.
+    /// The handle of the camera's device (PICam manual 7.4.3.5), which some
+    /// calls need instead of the camera model handle `Picam_OpenCamera`
+    /// gives (manual 4.3.2.4): the `picam_special.h` functions refuse the
+    /// model handle with `InvalidHandle` (seen on a demo camera with SDK
+    /// 5.15). It's only used within one call, never stored.
     fn device_handle(&self) -> Result<sys::PicamHandle> {
         let mut device: sys::PicamHandle = std::ptr::null_mut();
         picam_call!(sys::PicamAdvanced_GetCameraDevice(self.handle, &mut device))?;
