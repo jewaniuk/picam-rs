@@ -28,6 +28,14 @@ pub struct CameraDevice<'a> {
     _camera: PhantomData<&'a Camera>,
 }
 
+impl CameraDevice<'_> {
+    /// The handle PICam registers extrinsic value callbacks on, this device's
+    /// own (PICam manual 7.4.9.3), for `impl_parameter_methods!`.
+    fn extrinsic_handle(&self) -> Result<sys::PicamHandle> {
+        Ok(self.handle)
+    }
+}
+
 impl_parameter_methods!(CameraDevice<'_>, "camera device");
 
 impl Camera {
@@ -36,10 +44,10 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to look it up.
+    /// Doesn't fail now; the `Result` is kept so the signature stays the same.
     pub fn device(&self) -> Result<CameraDevice<'_>> {
         Ok(CameraDevice {
-            handle: self.device_handle()?,
+            handle: self.device_handle(),
             _camera: PhantomData,
         })
     }

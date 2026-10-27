@@ -3,12 +3,17 @@
 /// Implements the parameter methods cameras and accessories share on `$ty`,
 /// whose `handle` field is its PICam handle: the calls `picam_accessory.h`
 /// lists for accessories, which cameras support too. `$noun` names the type
-/// in the docs.
+/// in the docs. `$ty` must also have a private
+/// `extrinsic_handle(&self) -> Result<sys::PicamHandle>`, the handle PICam
+/// registers extrinsic value callbacks on: a device or accessory handle
+/// (PICam manual 7.4.9.3).
 macro_rules! impl_parameter_methods {
     ($ty:ty, $noun:literal) => {
         // the method bodies name these directly, so they're imported here
         // rather than at each invocation
         const _: () = {
+            use std::sync::mpsc::Receiver;
+
             use $crate::constraint::{
                 CollectionConstraint, ConstraintCategory, ConstraintType, RangeConstraint,
             };
@@ -21,6 +26,7 @@ macro_rules! impl_parameter_methods {
                 constraint_type, enumerated_type, is_relevant, value_access, value_type,
             };
             use $crate::sys;
+            use $crate::watch::{self, Event, Kind, Watch};
 
             impl $ty {
                 /// Gets the current value of `parameter`, a handle from
@@ -627,6 +633,112 @@ macro_rules! impl_parameter_methods {
                         picam_call!(sys::Picam_DestroyRangeConstraints(array))?;
                     }
                     Ok(constraints)
+                }
+
+                /// Watches `parameter`, a handle from [`params`](crate::params), sending
+                /// each value it's set to, including when setting another parameter changes
+                /// it (PICam manual 7.4.8 and 7.4.9.1). Each value is sent before the call
+                /// that set it returns. Values the hardware changes by itself aren't sent,
+                /// see [`Self::watch_extrinsic_value`].
+                ///
+                /// Values arrive on the returned receiver while the [`Watch`] lives. Keep it
+                /// alive, as in `let (_watch, values) = ...`.
+                ///
+                /// # Errors
+                ///
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter`
+                #[doc = concat!(" doesn't apply to this ", $noun, ", or an error if PICam is")]
+                /// unable to register its callback.
+                pub fn watch_value<T: PicamValue>(
+                    &self,
+                    parameter: TypedParameter<T>,
+                ) -> Result<(Watch, Receiver<T>)> {
+                    T::watch(RawHandle(self.handle), parameter.parameter())
+                }
+
+                /// Watches `parameter` like [`Self::watch_value`], as a `T` the caller
+                /// chooses, for parameters with no handle in [`params`](crate::params).
+                ///
+                /// # Errors
+                ///
+                /// Returns [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum other
+                /// than the one `parameter` uses, [`crate::Error::ParameterDoesNotExist`] if
+                #[doc = concat!(" `parameter` doesn't apply to this ", $noun, ", or an error if PICam")]
+                /// is unable to register its callback.
+                pub fn watch_value_untyped<T: PicamValue>(
+                    &self,
+                    parameter: Parameter,
+                ) -> Result<(Watch, Receiver<T>)> {
+                    T::check_type(RawHandle(self.handle), parameter)?;
+                    T::watch(RawHandle(self.handle), parameter)
+                }
+
+                /// Watches a value the hardware changes by itself, such as the sensor
+                /// temperature reading, sending each new value (PICam manual 7.4.9.3 and
+                /// 7.4.9.7). Values are sent from a thread of PICam's, while the [`Watch`]
+                /// lives.
+                ///
+                /// # Errors
+                ///
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter`
+                #[doc = concat!(" doesn't apply to this ", $noun, ", or an error if PICam is")]
+                /// unable to register its callback.
+                pub fn watch_extrinsic_value<T: ReadablePicamValue>(
+                    &self,
+                    parameter: TypedParameter<T>,
+                ) -> Result<(Watch, Receiver<T>)> {
+                    T::watch_extrinsic(RawHandle(self.extrinsic_handle()?), parameter.parameter())
+                }
+
+                /// Watches `parameter` like [`Self::watch_extrinsic_value`], as a `T` the
+                /// caller chooses.
+                ///
+                /// # Errors
+                ///
+                /// Returns [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum other
+                /// than the one `parameter` uses, [`crate::Error::ParameterDoesNotExist`] if
+                #[doc = concat!(" `parameter` doesn't apply to this ", $noun, ", or an error if PICam")]
+                /// is unable to register its callback.
+                pub fn watch_extrinsic_value_untyped<T: ReadablePicamValue>(
+                    &self,
+                    parameter: Parameter,
+                ) -> Result<(Watch, Receiver<T>)> {
+                    T::check_type(RawHandle(self.handle), parameter)?;
+                    T::watch_extrinsic(RawHandle(self.extrinsic_handle()?), parameter)
+                }
+
+                /// Watches whether `parameter` is relevant, sending each change, such as
+                /// when another parameter's value makes it relevant (PICam manual 7.4.10.1).
+                /// Each change is sent before the call that caused it returns.
+                ///
+                /// # Errors
+                ///
+                /// Returns an error if PICam is unable to register its callback.
+                pub fn watch_relevance(
+                    &self,
+                    parameter: impl Into<Parameter>,
+                ) -> Result<(Watch, Receiver<bool>)> {
+                    watch::subscribe(self.handle, parameter.into(), Kind::IsRelevant, |event| match event {
+                        Event::IsRelevant(relevant) => Some(*relevant),
+                        _ => None,
+                    })
+                }
+
+                /// Watches how `parameter`'s value can be accessed, sending each change
+                /// (PICam manual 7.4.10.3). Each change is sent before the call that caused
+                /// it returns.
+                ///
+                /// # Errors
+                ///
+                /// Returns an error if PICam is unable to register its callback.
+                pub fn watch_value_access(
+                    &self,
+                    parameter: impl Into<Parameter>,
+                ) -> Result<(Watch, Receiver<ValueAccess>)> {
+                    watch::subscribe(self.handle, parameter.into(), Kind::ValueAccess, |event| match event {
+                        Event::ValueAccess(access) => Some(*access),
+                        _ => None,
+                    })
                 }
             }
         };

@@ -58,7 +58,8 @@ The crate only runs on Windows, the only platform the lab uses. The SDK also shi
 | `acquisition` | `Camera::acquire`, `Camera::start_acquisition` and the `Acquisition` guard, the borrowed data views (`Readouts`, `Readout`, `Frame`, `RoiData`, `Pixels`), `AcquisitionErrors` | done |
 | `validation` | `ValidationResult`, `ValidationResults`, `DependentValidationResult`, `FailedDependentParameter`, and `Camera`'s validation methods | done |
 | `defect` | `PixelDefectMap`, `StarDefectMap` and their parts, and `Camera`'s defect map methods | done |
-| advanced | the rest of `picam_advanced.h`: user state, acquisition buffers, callbacks and discovery | not started |
+| `watch` | `Watch` and the callback machinery: the registry, the trampolines, and the `watch_*` methods' halves | done |
+| advanced | the rest of `picam_advanced.h`: user state, acquisition buffers, the remaining callbacks and discovery | not started |
 | `accessory` | `Accessory`, `AccessoryId`, `AccessoryHandle`, `CalibrationPoint`: identifying, opening and querying accessories, the light source reference, and the parameter methods shared with `Camera` | done apart from discovery |
 | `em_calibration` | `EmCalibration`, `EmCalibrationHandle`, `EmCalibrationDate`: opening a camera for EM gain calibration and its sensor temperature | done apart from `Calibrate`, which needs a callback |
 | special | `picam_special.h`: residual erasure, as `Camera` methods in `camera` | done |
@@ -106,9 +107,9 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 
 ### Cameras and thread safety (settled)
 
-- `Camera` owns a `PicamHandle` and closes it on `Drop`. It is the camera *model* handle `Picam_OpenCamera` gives (manual 4.3.2.4): a copy of the camera's parameters in memory, whose changes reach the physical camera, the *device*, only when committed (manual 2.6.1). `Picam_CloseCamera` closes both handles (manual 4.3.2.6). `Camera::open_device` opens through `PicamAdvanced_OpenCameraDevice` instead and keeps the model handle the same way (decided with the maintainer on 2026-10-26).
+- `Camera` owns a `PicamHandle` and closes it on `Drop`, after clearing the watches on its model and device handles (see [Callbacks](#callbacks-settled)). It is the camera *model* handle `Picam_OpenCamera` gives (manual 4.3.2.4): a copy of the camera's parameters in memory, whose changes reach the physical camera, the *device*, only when committed (manual 2.6.1). `Picam_CloseCamera` closes both handles (manual 4.3.2.6). `Camera::open_device` opens through `PicamAdvanced_OpenCameraDevice` instead and keeps the model handle the same way (decided with the maintainer on 2026-10-26).
 - `Camera::device()` gives a `CameraDevice<'_>`, a view of the device handle with the parameter methods `Camera` and `Accessory` share. It borrows the camera, so it can't outlive it, and it has no `Drop`. Setting a value through it also sets it on the model (manual 5.4.1.3) (decided with the maintainer on 2026-10-26). One can be made between an acquisition's updates through `Acquisition::camera`, but PICam then refuses every change through it with `Error::AcquisitionInProgress`, except to the parameters it can set online, the same ones `Camera::set_online` changes (seen on three demo models with SDK 5.15, and checked on the PIXIS 100F by `tests/camera_device.rs`). So it can't change the data layout the acquisition views rely on.
-- The `picam_special.h` functions refuse the model handle with `Error::InvalidHandle` (seen on a demo camera with SDK 5.15), so those methods look the device handle up with `PicamAdvanced_GetCameraDevice` for each call.
+- `Camera` looks its device handle up once when it opens (`Camera::open_device` gets it directly) and keeps it, closing the camera again if the lookup fails. `Picam_CloseCamera` closes both handles, so the device handle needs no cleanup of its own. Keeping it assumes it stays the same for as long as the camera is open, which the manual doesn't say. This is on the README's "to test" list. The `picam_special.h` functions refuse the model handle with `Error::InvalidHandle` (seen on a demo camera with SDK 5.15), so they use it, as do `CameraDevice`, extrinsic watches and clearing watches on close, which therefore can't fail to find it (decided with the maintainer on 2026-10-26, replacing a lookup for each call).
 - `Camera` is deliberately **not** `Send` or `Sync`. This falls out naturally from the raw-pointer handle and must stay that way: downstream code decides how to manage thread safety (the same choice as `tlpm-rs`'s `PowerMeter`). Never add `unsafe impl Send/Sync` without the maintainer's approval.
 - `CameraId` identifies a camera whether or not it is open. It is spelled `CameraId`, not `CameraID`, following Rust naming conventions.
 - `CameraHandle<'a>` is a non-owning view of a handle that is open somewhere in the process, returned by `Camera::list_open_cameras` (model handles) and `Camera::list_open_camera_devices` (device handles). `handle_type` says which, and `model` and `device` look up the other. It never closes the handle, and its lifetime ties it to the `Library`. A call on a handle that has since been closed should fail with `Error::InvalidHandle`, which is listed in the README's "to test" list to confirm on hardware.
@@ -123,7 +124,7 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 - `ReadablePicamValue` (`Camera::read`) and `OnlineSettablePicamValue` (`Camera::set_online`) are sub-traits implemented only for the types PICam supports those operations for.
 - The value traits are sealed. Their methods that take a handle live on supertraits in the private `parameter::sealed` module (`RawPicamValue`, `RawReadablePicamValue`, `RawOnlineSettablePicamValue`) and take a `RawHandle`, a wrapper around the raw handle that only the crate can construct. So users can neither implement the traits nor call those methods. A plain sealed supertrait (a `pub trait` in a private module) is not enough on its own, because its methods can still be called through a generic bound (`T::get(ptr, ...)` with `T: PicamValue`), and the raw handle is just `*mut c_void`. A truly `pub(crate)` supertrait would need `#[allow(private_bounds)]`. Any future public trait whose methods need a PICam handle follows the same pattern.
 - Changes made with `set` are pending until `Camera::commit_parameters`, which returns the parameters that failed validation (an empty `Vec` means all were accepted). `Camera::commit_parameters_to_device` commits them through the advanced call, which returns an error instead and leaves the device as it was if it fails (manual 7.4.13.7), and `Camera::refresh_parameter_from_device` and `refresh_parameters_from_device` discard pending changes by copying the device's values back.
-- Accessories are configured through the same parameter calls as cameras. `impl_parameter_methods!` (in `src/device.rs`) generates the same inherent methods on `Camera`, `CameraDevice` and `Accessory`: every call `picam_accessory.h` lists for accessories (the value methods and their `_untyped` twins, `read`, the information and commit methods, status waiting, dynamics, and the collection and range constraints, one at a time or all at once). `set_online` and the ROI, pulse and modulation constraints stay `Camera`-only, since accessories don't support them, and so do validation and the defect maps, which `picam_advanced.h` defines for cameras only. The value methods stay generic over `PicamValue`, so an accessory call with a value type it doesn't use compiles and PICam refuses it.
+- Accessories are configured through the same parameter calls as cameras. `impl_parameter_methods!` (in `src/device.rs`) generates the same inherent methods on `Camera`, `CameraDevice` and `Accessory`: every call `picam_accessory.h` lists for accessories (the value methods and their `_untyped` twins, `read`, the information and commit methods, status waiting, dynamics, the collection and range constraints, one at a time or all at once, and the parameter watches, see [Callbacks](#callbacks-settled)). `set_online` and the ROI, pulse and modulation constraints stay `Camera`-only, since accessories don't support them, and so do validation and the defect maps, which `picam_advanced.h` defines for cameras only. The value methods stay generic over `PicamValue`, so an accessory call with a value type it doesn't use compiles and PICam refuses it.
 - Repetitive per-type wrappers are generated by macros (`impl_picam_value!`, `impl_bool_query!`, `impl_parameter_info!`, `impl_readable_value!`, `impl_online_settable_scalar!`, `impl_parameter_methods!`). Macros live in the module that uses them; `convert.rs` holds the small helpers shared across modules, and `device.rs` the parameter methods `Camera` and `Accessory` share.
 
 ### Acquisition (settled)
@@ -139,6 +140,17 @@ Designed with the maintainer on 2026-10-25, through the design discussion in `CL
 - **Timeouts and errors:** timeouts are `Option<Duration>`, rounded up to milliseconds, with `None` waiting forever. A timed-out wait returns `Ok(None)`, and the acquisition carries on. PICam's acquisition errors mask becomes `Error::AcquisitionFailed(AcquisitionErrors)`, and any partial data is dropped.
 - **Threads:** an acquisition is stopped from the thread that waits on it. Other threads signal that thread, which calls `stop` between bounded waits. A `Send` stop handle could be added later without breaking anything, but needs the maintainer's decision and a hardware test of PICam's thread safety.
 - **Not yet supported:** a readout count of 0, or one above `ExactReadoutCountMaximum`, needs a user-allocated buffer, which comes with `picam_advanced.h` (stage 4).
+
+### Callbacks (settled)
+
+Designed with the maintainer on 2026-10-26, through the design discussion in `CLAUDE.md`. The machinery lives in `src/watch.rs`, and every later callback chunk (dependent constraints, status notifications, discovery, `Calibrate`) reuses it. Acquisition callbacks go with user acquisition buffers, under the acquisition design.
+
+- **Delivery through channels:** each `watch_*` method returns a `Watch` guard and an unbounded `mpsc::Receiver` of typed values. PICam's callback, a crate trampoline, only copies the event and sends it, so no user code ever runs inside PICam: no re-entrancy, no panics across FFI, no blocking PICam's thread. The receiver is `Send` and can be read on any thread. Unbounded, so nothing is lost and sending never blocks; unread events only cost memory.
+- **Guard:** `Watch` doesn't borrow what it watches, so it can be kept during an acquisition, for example to follow the sensor temperature. It unregisters on drop. A camera or accessory clears every watch on its handles just before it closes (a camera both its model and its device handle): each callback is unregistered with PICam and each sink removed, so the receivers report the channel disconnected. A `Watch` dropped after that does nothing, so it never reaches PICam with a closed handle, or one a later camera has reused. Leaking one with `mem::forget` leaves nothing behind once its camera closes (decided with the maintainer on 2026-10-26, replacing a guard that borrowed the camera). It holds a raw handle, so it is neither `Send` nor `Sync`. `let (_, events) = ...` drops it at once, so the docs say to keep it as `_watch`.
+- **Methods:** `watch_value` and `watch_extrinsic_value` take a `params` handle, so the receiver's type comes from the parameter, with `_untyped` twins that check enum types like the other untyped methods. `watch_relevance` and `watch_value_access` take `impl Into<Parameter>`. They're shared methods from `impl_parameter_methods!`, with the per-type halves on the sealed value traits (`RawPicamValue::watch`, `RawReadablePicamValue::watch_extrinsic`), so the public traits gained no methods. PICam refuses watches an accessory doesn't support, as it does for values.
+- **Extrinsic watches** go on a device or accessory handle (manual 7.4.9.3), so `Camera` registers them on the device handle it keeps.
+- **Registry:** PICam passes callbacks no user pointer, so a global registry maps (handle, parameter, callback kind) to the watches' senders. One PICam registration is shared by every watch on a key, refcounted. Two locks keep it free of deadlocks: the registration lock is held across PICam's register and unregister calls and never taken by a callback, and the sink lock, the only one callbacks take, is never held across a PICam call.
+- **Trampolines** always report success to PICam, since the manual doesn't say what PICam does with an error, and copy any data behind a pointer before returning, since the manual doesn't say how long it stays valid. Each callback kind has its own trampoline, the extrinsic ones included, so a trampoline always knows which kind fired.
 
 ### Memory that PICam allocates (settled)
 
@@ -202,7 +214,7 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 
 ## Roadmap
 
-As of 2026-10-26: 144 / 199 functions wrapped.
+As of 2026-10-26: 164 / 199 functions wrapped.
 
 ### 1. Finish the `sys`-type refactor (done)
 
@@ -256,7 +268,12 @@ Callback registration (`Register*`/`Unregister*` pairs), parameter validation, c
 - [x] camera devices and handle types (`Camera::open_device`, `Camera::device` and `CameraDevice`, `Camera::list_open_camera_devices`, `HandleType` and `CameraHandle`'s `handle_type`, `model` and `device`)
 - [x] committing to and refreshing from the camera device
 - [ ] user-supplied acquisition buffers, under the acquisition design discussion
-- [ ] callbacks, discovery and user state (`Get/SetUserState`, whose pointer the callback trampolines may need), under the callback design discussion
+- callbacks, designed with the maintainer on 2026-10-26 (see [Callbacks](#callbacks-settled)):
+  - [x] parameter value, extrinsic value, relevance and access watches, with the machinery
+  - [ ] dependent constraint watches and status notifications
+  - [ ] camera and accessory discovery
+  - [ ] user state (`Get/SetUserState`) and `Calibrate`'s progress callback
+  - acquisition callbacks go with user acquisition buffers, above
 
 ### 5. `picam_accessory.h` (18), `picam_em_calibration.h` (11), `picam_special.h` (2)
 
@@ -272,9 +289,11 @@ These largely mirror patterns already in `camera.rs`.
 
 - a pass through the manual to fill in `# Errors` sections
 - a crate-level README with an experimental notice
+- revisit the shared `commit_parameters` and `are_parameters_committed` docs, which read oddly on a `CameraDevice`, where `set` isn't pending (left until then, decided with the maintainer on 2026-10-26)
 - hardware testing from the README's "to test" list, then publishing
 
 ## Open questions
 
-- **Callback design** for `picam_advanced.h`.
+- **Acquisition callbacks**, with user acquisition buffers, under the acquisition design discussion.
+- **`Camera::device` can't fail:** since `Camera` keeps its device handle, `Camera::device` always succeeds, but it still returns a `Result` so its merged signature stays the same. Dropping the `Result` is a candidate for the stage 6 API review.
 - **Ending an acquisition that never ends by itself:** `Acquisition`'s drain gives up only after 10 waits in a row bring no data. With stage 4's user buffers and `ReadoutCount = 0`, a camera that keeps sending data after a failed `stop` would keep it waiting forever, so stage 4 should also bound the time since `stop`.
