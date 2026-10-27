@@ -3,6 +3,7 @@
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 
+use crate::acquisition::AcquisitionBuffer;
 use crate::constraint::{
     ConstraintCategory, ModulationsConstraint, PulseConstraint, RoisConstraint,
 };
@@ -27,6 +28,9 @@ pub struct Camera {
     // the device handle, found once at open and closed with `handle`
     // by `Picam_CloseCamera` (manual 4.3.2.6)
     device: sys::PicamHandle,
+    // the memory picam acquires into instead of its own, if any. kept until
+    // picam has been given another or none, or the camera has closed
+    buffer: Option<AcquisitionBuffer>,
     // keeps the library alive for as long as any `Camera` exists, and lets
     // multiple `Camera`s share one `Library`
     _library: Arc<Library>,
@@ -77,6 +81,7 @@ impl Camera {
         Ok(Self {
             handle: model,
             device,
+            buffer: None,
             _library: library,
         })
     }
@@ -107,6 +112,7 @@ impl Camera {
         Ok(Self {
             handle: model,
             device,
+            buffer: None,
             _library: library,
         })
     }
@@ -280,6 +286,18 @@ impl Camera {
     /// 5.15). It's found once when the camera opens.
     pub(crate) fn device_handle(&self) -> sys::PicamHandle {
         self.device
+    }
+
+    /// The memory picam acquires into instead of its own, if any.
+    pub(crate) fn acquisition_buffer(&self) -> Option<&AcquisitionBuffer> {
+        self.buffer.as_ref()
+    }
+
+    /// Where the camera keeps its acquisition buffer, for
+    /// [`Camera::set_acquisition_buffer`] and
+    /// [`Camera::clear_acquisition_buffer`].
+    pub(crate) fn acquisition_buffer_slot(&mut self) -> &mut Option<AcquisitionBuffer> {
+        &mut self.buffer
     }
 
     /// Lists the camera models available for use with [`CameraId::connect_demo`].
@@ -621,6 +639,9 @@ impl Drop for Camera {
         watch::release(self.handle);
         if let Err(e) = picam_call!(sys::Picam_CloseCamera(self.handle)) {
             tracing::error!("failed to close PICam camera: {e}");
+            // picam may still be acquiring into the buffer, so leak it rather
+            // than free memory picam could write to
+            std::mem::forget(self.buffer.take());
         }
     }
 }

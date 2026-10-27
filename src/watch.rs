@@ -28,6 +28,7 @@ use std::sync::mpsc::{self, Receiver};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use crate::accessory::AccessoryId;
+use crate::acquisition::{AcquisitionState, AcquisitionStateErrors, AcquisitionStateUpdate};
 use crate::camera::CameraId;
 use crate::constraint::{
     CollectionConstraint, ModulationsConstraint, PulseConstraint, RangeConstraint, RoisConstraint,
@@ -60,6 +61,8 @@ pub(crate) enum Kind {
     Status(i32),
     CameraDiscovery,
     AccessoryDiscovery,
+    /// the acquisition state it watches for
+    AcquisitionState(i32),
 }
 
 /// A copy of what one callback reported, made before the callback returns.
@@ -80,6 +83,7 @@ pub(crate) enum Event {
     Status(Result<()>),
     CameraDiscovery(CameraDiscovery),
     AccessoryDiscovery(AccessoryDiscovery),
+    AcquisitionState(AcquisitionStateUpdate),
 }
 
 /// Sends one watch's events down its channel, as its value type.
@@ -144,7 +148,10 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 /// ([`Camera::notify_when_status`](crate::Camera::notify_when_status)) sends
 /// one result and then disconnects. A discovery watch
 /// ([`Camera::watch_discovery`](crate::Camera::watch_discovery)) belongs to
-/// the library, which clears it before it uninitializes.
+/// the library, which clears it before it uninitializes. An acquisition state
+/// watch
+/// ([`Camera::watch_acquisition_state`](crate::Camera::watch_acquisition_state))
+/// is on the camera's device, and ends when the camera closes.
 pub struct Watch {
     key: Key,
     id: u64,
@@ -295,6 +302,25 @@ pub(crate) fn subscribe_discovery<T: Send + 'static>(
     subscribe_raw(std::ptr::null_mut(), sys::PicamParameter(0), kind, convert)
 }
 
+/// Watches `device` for `state` through acquisition state callbacks, which
+/// have no parameter, so they're keyed by parameter 0.
+///
+/// # Errors
+///
+/// Returns an error if PICam is unable to register the callback.
+pub(crate) fn subscribe_acquisition_state<T: Send + 'static>(
+    device: sys::PicamHandle,
+    state: AcquisitionState,
+    convert: fn(&Event) -> Option<T>,
+) -> Result<(Watch, Receiver<T>)> {
+    subscribe_raw(
+        device,
+        sys::PicamParameter(0),
+        Kind::AcquisitionState(state.to_raw().0),
+        convert,
+    )
+}
+
 /// `subscribe`'s body, taking the raw parameter.
 fn subscribe_raw<T: Send + 'static>(
     handle: sys::PicamHandle,
@@ -369,6 +395,13 @@ macro_rules! callbacks {
                 Kind::AccessoryDiscovery => {
                     picam_call!(sys::PicamAccessory_RegisterForDiscovery(Some(accessory_discovered)))
                 }
+                Kind::AcquisitionState(state) => picam_call!(
+                    sys::PicamAdvanced_RegisterForAcquisitionStateUpdated(
+                        handle,
+                        sys::PicamAcquisitionState(state),
+                        Some(acquisition_state_updated)
+                    )
+                ),
             }
         }
 
@@ -391,6 +424,13 @@ macro_rules! callbacks {
                 Kind::AccessoryDiscovery => {
                     picam_call!(sys::PicamAccessory_UnregisterForDiscovery(Some(accessory_discovered)))
                 }
+                Kind::AcquisitionState(state) => picam_call!(
+                    sys::PicamAdvanced_UnregisterForAcquisitionStateUpdated(
+                        handle,
+                        sys::PicamAcquisitionState(state),
+                        Some(acquisition_state_updated)
+                    )
+                ),
             }
         }
     };
@@ -867,6 +907,40 @@ unsafe extern "C" fn accessory_discovered(
     )
 }
 
+/// PICam's acquisition state callback (manual 7.3.7.2).
+///
+/// # Safety
+///
+/// `counters` must be null or point to a valid
+/// `PicamAcquisitionStateCounters` for the duration of the call.
+unsafe extern "C" fn acquisition_state_updated(
+    device: sys::PicamHandle,
+    current: sys::PicamAcquisitionState,
+    counters: *const sys::PicamAcquisitionStateCounters,
+    errors: sys::PicamAcquisitionStateErrorsMask,
+) -> sys::PicamError {
+    if counters.is_null() {
+        tracing::warn!("PICam sent an acquisition state callback with no counters");
+        return sys::PicamError::PicamError_None;
+    }
+    // SAFETY: just checked `counters` is non-null, and the caller guarantees
+    // it points to a valid `PicamAcquisitionStateCounters` for this call,
+    // copied before it returns
+    let counters = unsafe { *counters };
+    let update = AcquisitionStateUpdate {
+        state: AcquisitionState::from_raw(current),
+        readout_started_count: counters.readout_started_count,
+        readout_ended_count: counters.readout_ended_count,
+        errors: AcquisitionStateErrors::from_bits_retain(errors.0),
+    };
+    dispatch(
+        device,
+        sys::PicamParameter(0),
+        Kind::AcquisitionState(current.0),
+        &Event::AcquisitionState(update),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::mpsc::TryRecvError;
@@ -1183,5 +1257,58 @@ mod tests {
         assert!(!remove_sink(key, id));
 
         assert!(remove_sink(kept_key, kept));
+    }
+
+    fn acquisition_state(event: &Event) -> Option<AcquisitionStateUpdate> {
+        match event {
+            Event::AcquisitionState(update) => Some(*update),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn acquisition_state_trampoline_copies_the_counters() {
+        let ended = sys::PicamAcquisitionState::PicamAcquisitionState_ReadoutEnded;
+        let key = Key::new(
+            fake_handle(0x100A),
+            sys::PicamParameter(0),
+            Kind::AcquisitionState(ended.0),
+        );
+        let (id, updates) = add_sink(key, acquisition_state);
+        let counters = sys::PicamAcquisitionStateCounters {
+            readout_started_count: 3,
+            readout_ended_count: 2,
+        };
+
+        // SAFETY: `counters` stays alive and unchanged until the call returns
+        unsafe {
+            acquisition_state_updated(
+                fake_handle(0x100A),
+                ended,
+                &counters,
+                sys::PicamAcquisitionStateErrorsMask::PicamAcquisitionStateErrorsMask_LostCount,
+            )
+        };
+        assert_eq!(
+            updates.try_recv(),
+            Ok(AcquisitionStateUpdate {
+                state: AcquisitionState::ReadoutEnded,
+                readout_started_count: 3,
+                readout_ended_count: 2,
+                errors: AcquisitionStateErrors::LOST_COUNT,
+            })
+        );
+        // SAFETY: a null pointer is allowed, and nothing is read through it
+        unsafe {
+            acquisition_state_updated(
+                fake_handle(0x100A),
+                ended,
+                std::ptr::null(),
+                sys::PicamAcquisitionStateErrorsMask::PicamAcquisitionStateErrorsMask_None,
+            )
+        };
+        assert_eq!(updates.try_recv(), Err(TryRecvError::Empty));
+
+        assert!(remove_sink(key, id));
     }
 }

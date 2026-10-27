@@ -78,6 +78,7 @@ fn main() {
         .newtype_enum("^PicamConstraintCategory") // same exception, same reason
         .newtype_enum("^PicamHandleType$") // same exception, same reason
         .newtype_enum("^PicamDiscoveryAction$") // same exception, same reason
+        .newtype_enum("^PicamAcquisitionState$") // same exception, same reason
         .newtype_enum("^PicamActiveShutter$") // a hardware value enum, same reason
         .newtype_enum("^PicamAdcAnalogGain$") // a hardware value enum, same reason
         .newtype_enum("^PicamAdcQuality$") // a hardware value enum, same reason
@@ -113,6 +114,7 @@ fn main() {
         .newtype_enum("^PicamVacuumStatus$") // a hardware value enum, same reason
         .bitfield_enum("^PicamRoisConstraintRulesMask$")
         .bitfield_enum("^PicamAcquisitionErrorsMask$")
+        .bitfield_enum("^PicamAcquisitionStateErrorsMask$")
         .bitfield_enum("^PicamDynamicsMask$")
         .bitfield_enum("^PicamCcdCharacteristicsMask$")
         .bitfield_enum("^PicamGateTrackingMask$")
