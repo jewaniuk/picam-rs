@@ -7,8 +7,8 @@ use std::borrow::Cow;
 use std::fmt;
 use std::ptr::{self, NonNull};
 use std::slice;
-use std::sync::Arc;
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use windows_sys::Win32::System::Memory::{
@@ -148,14 +148,17 @@ impl AcquisitionBuffer {
         }
     }
 
+    /// Where the buffer lies.
+    fn bounds(&self) -> BufferBounds {
+        BufferBounds {
+            base: self.memory.as_ptr().addr(),
+            len: self.len,
+        }
+    }
+
     /// Reports whether the `len` bytes from `start` lie inside the buffer.
     fn contains(&self, start: *const u8, len: usize) -> bool {
-        let base = self.memory.as_ptr().addr();
-        let start = start.addr();
-        start >= base
-            && start
-                .checked_add(len)
-                .is_some_and(|end| end <= base + self.len)
+        self.bounds().contains(start, len)
     }
 
     /// Copies the `len` bytes from `start` out of the buffer with volatile
@@ -175,38 +178,31 @@ impl AcquisitionBuffer {
         if self.copy.len() < words {
             self.copy.resize(words, 0);
         }
-        // SAFETY: `copy` holds at least `len` initialized bytes, any of which
-        // is a valid `u8`, and the view borrows `self` mutably, as `copy` is
-        let copy = unsafe { slice::from_raw_parts_mut(self.copy.as_mut_ptr().cast::<u8>(), len) };
-        // byte by byte up to the first 8-byte boundary, then 8 bytes at a time,
-        // then the rest. `wrapping_add` rather than `add`, whose rules are
-        // about rust allocations, which this memory isn't
-        let head = ((8 - start.addr() % 8) % 8).min(len);
-        let (head_bytes, rest) = copy.split_at_mut(head);
-        let mut words = rest.chunks_exact_mut(8);
-        let mut offset = 0;
-        for byte in head_bytes {
-            // SAFETY: `start + offset` lies inside the buffer (checked above),
-            // which the os allocated in `new` and keeps allocated while `self`
-            // is borrowed. it's outside every rust allocation and never
-            // referenced, and reading it doesn't trap or change rust memory,
-            // so `read_volatile` may read it however picam writes to it
-            *byte = unsafe { start.wrapping_add(offset).read_volatile() };
-            offset += 1;
-        }
-        for word in &mut words {
-            // SAFETY: as above, for 8 bytes inside the buffer, which `head`
-            // aligned to 8
-            let value = unsafe { start.wrapping_add(offset).cast::<u64>().read_volatile() };
-            word.copy_from_slice(&value.to_ne_bytes());
-            offset += 8;
-        }
-        for byte in words.into_remainder() {
-            // SAFETY: as above
-            *byte = unsafe { start.wrapping_add(offset).read_volatile() };
-            offset += 1;
-        }
+        let copy = as_bytes_mut(&mut self.copy, len);
+        // SAFETY: the bytes lie inside the buffer (checked above), which the
+        // os allocated in `new` and keeps allocated while `self` is borrowed,
+        // and which nothing references or reads but volatilely
+        unsafe { volatile_copy(start, copy) };
         Ok(copy)
+    }
+}
+
+/// Where the camera's buffer lies, as addresses, so a streaming
+/// acquisition's callback can check copies against it from PICam's thread.
+#[derive(Debug, Clone, Copy)]
+struct BufferBounds {
+    base: usize,
+    len: usize,
+}
+
+impl BufferBounds {
+    /// Reports whether the `len` bytes from `start` lie inside the buffer.
+    fn contains(&self, start: *const u8, len: usize) -> bool {
+        let start = start.addr();
+        start >= self.base
+            && start
+                .checked_add(len)
+                .is_some_and(|end| end <= self.base + self.len)
     }
 }
 
@@ -241,7 +237,10 @@ impl Camera {
     /// buffer for the next acquisition (manual 6.4.1), so the data borrows
     /// the camera: copy it, for example with `readouts.bytes().to_vec()`, to
     /// keep it longer. With a buffer from [`Camera::set_acquisition_buffer`],
-    /// the readouts are a copy of it.
+    /// the readouts are a copy of it. PICam leaves
+    /// [`params::READOUT_COUNT`](crate::params::READOUT_COUNT) at
+    /// `readout_count` afterwards, so set it again before
+    /// [`Camera::start_acquisition`] (seen with SDK 5.15).
     ///
     /// ```compile_fail,E0499
     /// # fn f(camera: &mut picam_rs::Camera) -> picam_rs::Result<()> {
@@ -328,8 +327,12 @@ impl Camera {
     /// - [`crate::Error::InvalidAcquisitionBuffer`] if the readout count needs
     ///   a buffer and the camera has none, or the camera's buffer is too
     ///   small (seen with SDK 5.15)
+    /// - [`crate::Error::AcquisitionUpdatedHandlerRegistered`] if an
+    ///   [`AcquisitionStream`] on this camera was leaked with
+    ///   [`std::mem::forget`]
     /// - otherwise an error if PICam is unable to start
     pub fn start_acquisition(&mut self) -> Result<Acquisition<'_>> {
+        self.refuse_while_streaming()?;
         let layout = Arc::new(Layout::read(self)?);
         picam_call!(sys::Picam_StartAcquisition(self.raw_handle()))?;
         Ok(Acquisition {
@@ -337,6 +340,119 @@ impl Camera {
             layout,
             running: true,
         })
+    }
+
+    /// Starts acquiring in the background, with PICam sending readouts
+    /// through a callback as they arrive, rather than through
+    /// [`Acquisition::wait`] (PICam manual 7.4.15).
+    ///
+    /// Returns the acquisition and a receiver of its updates. Each update is
+    /// a copy, so the receiver is `Send`: the data can be processed on
+    /// another thread while this one holds the acquisition, to stop or
+    /// [`finish`](AcquisitionStream::finish) it. PICam sends one update per
+    /// readout (seen with SDK 5.15), and a last one, with no readouts, once
+    /// the acquisition has ended. The receiver then disconnects, so iterating
+    /// over it ends with the acquisition. Updates nobody reads stay in memory.
+    ///
+    /// Parameters, the readout count and buffers work as for
+    /// [`Camera::start_acquisition`]. Data from the camera's buffer is copied
+    /// with the same check for PICam writing over it.
+    ///
+    /// ```no_run
+    /// # fn f(camera: &mut picam_rs::Camera) -> picam_rs::Result<()> {
+    /// use std::thread;
+    ///
+    /// let (stream, updates) = camera.start_acquisition_stream()?;
+    /// let worker = thread::spawn(move || -> picam_rs::Result<usize> {
+    ///     let mut readouts = 0;
+    ///     for update in updates {
+    ///         readouts += update?.readouts().len();
+    ///     }
+    ///     Ok(readouts)
+    /// });
+    /// // this thread could stop the acquisition early instead
+    /// stream.finish()?;
+    /// let readouts = worker.join().expect("the worker shouldn't panic")?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// The stream keeps the camera borrowed:
+    ///
+    /// ```compile_fail,E0499
+    /// # fn f(camera: &mut picam_rs::Camera) -> picam_rs::Result<()> {
+    /// let (stream, updates) = camera.start_acquisition_stream()?;
+    /// // picam would refuse to acquire while the stream runs, so it doesn't
+    /// // compile
+    /// let readouts = camera.acquire(1, None)?;
+    /// drop(stream);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// - [`crate::Error::ParametersNotCommitted`] if parameters have changed
+    ///   since the last commit
+    /// - [`crate::Error::InconsistentDataLayout`] if the camera's layout
+    ///   parameters don't fit together
+    /// - [`crate::Error::InvalidAcquisitionBuffer`] if the readout count
+    ///   needs a buffer and the camera has none, or the camera's buffer is
+    ///   too small (seen with SDK 5.15)
+    /// - [`crate::Error::AcquisitionUpdatedHandlerRegistered`] if an
+    ///   [`AcquisitionStream`] on this camera was leaked with
+    ///   [`std::mem::forget`]
+    /// - otherwise an error if PICam is unable to start
+    ///
+    /// An update is an `Err` with
+    /// - [`crate::Error::AcquisitionFailed`] if PICam reported errors, which
+    ///   end the acquisition, or with [`AcquisitionErrors::DATA_LOST`] if
+    ///   PICam wrote over the camera's buffer while it was copied
+    /// - [`crate::Error::InconsistentDataLayout`] if the data doesn't lie
+    ///   inside the camera's buffer
+    /// - an error if PICam was unable to report whether the buffer overran
+    pub fn start_acquisition_stream(
+        &mut self,
+    ) -> Result<(AcquisitionStream<'_>, Receiver<Result<StreamedUpdate>>)> {
+        self.refuse_while_streaming()?;
+        let layout = Arc::new(Layout::read(self)?);
+        let (updates_sender, updates) = mpsc::channel();
+        let (ended_sender, ended) = mpsc::channel();
+        let sink = Mutex::new(StreamSink {
+            layout,
+            buffer: self.acquisition_buffer().map(AcquisitionBuffer::bounds),
+            senders: Some((updates_sender, ended_sender)),
+            pending: None,
+        });
+        // registered before starting, so no readout is missed, on the device
+        // handle, the only one picam takes (seen with sdk 5.15)
+        let watch = watch::subscribe_acquisition_updated(self.device_handle(), move |event| {
+            sink.lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .handle(event);
+        })?;
+        // if starting fails, dropping `watch` unregisters the callback
+        picam_call!(sys::Picam_StartAcquisition(self.raw_handle()))?;
+        Ok((
+            AcquisitionStream {
+                camera: self,
+                ended,
+                running: true,
+                _watch: watch,
+            },
+            updates,
+        ))
+    }
+
+    /// Refuses to start an acquisition while an acquisition-updated callback
+    /// is registered on the camera, which only a leaked
+    /// [`AcquisitionStream`] leaves behind. It would take the acquisition's
+    /// data, copying it with a layout that may no longer hold.
+    fn refuse_while_streaming(&self) -> Result<()> {
+        if watch::is_acquisition_updated_registered(self.device_handle()) {
+            return Err(Error::AcquisitionUpdatedHandlerRegistered);
+        }
+        Ok(())
     }
 
     /// Gives the camera `len` bytes of memory from the OS to acquire into
@@ -793,6 +909,269 @@ impl<'a> Update<'a> {
     }
 }
 
+/// An acquisition whose readouts PICam sends through a callback rather than
+/// [`Acquisition::wait`], from [`Camera::start_acquisition_stream`] (PICam
+/// manual 7.4.15).
+///
+/// It keeps the camera borrowed, like [`Acquisition`]. Use
+/// [`AcquisitionStream::camera`] for calls while it runs.
+/// [`finish`](Self::finish) stops it and waits for it to end. Dropping it does
+/// the same, but can only log errors. Either one gives up 10 seconds after
+/// asking it to stop. Once it has ended, the callback is unregistered.
+#[derive(Debug)]
+pub struct AcquisitionStream<'a> {
+    camera: &'a mut Camera,
+    // disconnects once picam has reported the acquisition ended, since the
+    // callback's sink then drops its senders. nothing is ever sent
+    ended: Receiver<()>,
+    // whether the end hasn't been seen yet
+    running: bool,
+    // unregisters the callback, dropped after `Drop` has ended the
+    // acquisition
+    _watch: Watch,
+}
+
+impl AcquisitionStream<'_> {
+    /// Asks PICam to stop the acquisition, which happens some time later. The
+    /// receiver disconnects once it has.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to stop it.
+    pub fn stop(&mut self) -> Result<()> {
+        picam_call!(sys::Picam_StopAcquisition(self.camera.raw_handle()))
+    }
+
+    /// Reports whether PICam says the acquisition is running.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to check this.
+    pub fn is_running(&self) -> Result<bool> {
+        let mut running: sys::pibln = 0;
+        picam_call!(sys::Picam_IsAcquisitionRunning(
+            self.camera.raw_handle(),
+            &mut running
+        ))?;
+        Ok(running != 0)
+    }
+
+    /// The camera, for calls while the acquisition runs such as
+    /// [`Camera::read`] or [`Camera::set_online`].
+    pub fn camera(&self) -> &Camera {
+        self.camera
+    }
+
+    /// Stops the acquisition if it's still running, and waits for it to end.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error met while stopping, or
+    /// [`crate::Error::TimeOutOccurred`] if it still hadn't ended 10 seconds
+    /// after being asked to stop.
+    pub fn finish(mut self) -> Result<()> {
+        self.end()
+    }
+
+    /// Stops the acquisition and waits for it to end, see `finish`.
+    fn end(&mut self) -> Result<()> {
+        if !self.running {
+            return Ok(());
+        }
+        self.running = false;
+        // ended already, by itself or after an error
+        if let Err(TryRecvError::Disconnected) = self.ended.try_recv() {
+            return Ok(());
+        }
+        let stopped = match self.stop() {
+            // it ended between the check and the stop
+            Err(Error::AcquisitionNotInProgress) => Ok(()),
+            result => result,
+        };
+        // give up rather than hang on a camera that has stopped responding
+        if let Err(RecvTimeoutError::Timeout) = self.ended.recv_timeout(DRAIN_LIMIT) {
+            return Err(stopped.err().unwrap_or(Error::TimeOutOccurred));
+        }
+        stopped
+    }
+}
+
+impl Drop for AcquisitionStream<'_> {
+    fn drop(&mut self) {
+        // nowhere to hand a `Result` back to from `Drop`, so just report it
+        if let Err(e) = self.end() {
+            tracing::error!("failed to end acquisition stream: {e}");
+        }
+    }
+}
+
+/// One readout's worth of an [`AcquisitionStream`]: a copy of the readouts
+/// that arrived, and the acquisition's status.
+///
+/// It owns its data, so it can be kept, or sent to another thread.
+pub struct StreamedUpdate {
+    // the copy, 8-byte aligned so pixels borrow rather than copy
+    words: Vec<u64>,
+    // how many bytes of `words` hold readouts
+    len: usize,
+    count: usize,
+    layout: Arc<Layout>,
+    running: bool,
+    readout_rate: f64,
+}
+
+impl StreamedUpdate {
+    /// The readouts that arrived. There are none in the last update, which
+    /// only says the acquisition has ended.
+    pub fn readouts(&self) -> Readouts<'_> {
+        Readouts::from_copy(
+            as_bytes(&self.words, self.len),
+            self.count,
+            Arc::clone(&self.layout),
+        )
+    }
+
+    /// Whether the acquisition was still running. The last update says it
+    /// isn't, and the receiver disconnects after it.
+    pub fn running(&self) -> bool {
+        self.running
+    }
+
+    /// How fast readouts are arriving, in readouts per second, when more than
+    /// one is acquired (manual 6.3.2).
+    pub fn readout_rate(&self) -> f64 {
+        self.readout_rate
+    }
+}
+
+impl fmt::Debug for StreamedUpdate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // the length is enough, the copy itself can be megabytes
+        f.debug_struct("StreamedUpdate")
+            .field("len", &self.len)
+            .field("count", &self.count)
+            .field("running", &self.running)
+            .field("readout_rate", &self.readout_rate)
+            .finish_non_exhaustive()
+    }
+}
+
+/// What a streaming acquisition's callback keeps between PICam's calls.
+struct StreamSink {
+    layout: Arc<Layout>,
+    buffer: Option<BufferBounds>,
+    // the user's updates and the guard's end signal, dropped once picam
+    // reports the acquisition ended, so both receivers disconnect
+    senders: Option<(Sender<Result<StreamedUpdate>>, Sender<()>)>,
+    // an update copied but not yet checked for overrun, with whether the
+    // acquisition was still running
+    pending: Option<(Result<StreamedUpdate>, bool)>,
+}
+
+impl StreamSink {
+    /// Handles one event from the acquisition-updated trampoline.
+    fn handle(&mut self, event: &Event) {
+        match event {
+            Event::AcquisitionUpdated { available, status } => {
+                let running = status.running != 0;
+                // SAFETY: the trampoline dispatches this event inside picam's
+                // callback, which passed `available`, for this camera's
+                // acquisition, whose layout and buffer the sink holds
+                let update = unsafe { self.copy(available.as_ref(), status) };
+                match available {
+                    // checked for overrun next, outside the sink lock
+                    Some(_) => self.pending = Some((update, running)),
+                    None => self.send(update, running),
+                }
+            }
+            Event::AcquisitionChecked(overran) => {
+                let Some((update, running)) = self.pending.take() else {
+                    return;
+                };
+                // a copy picam may have written over midway is never sent
+                let update = match overran {
+                    Ok(false) => update,
+                    Ok(true) => Err(Error::AcquisitionFailed(AcquisitionErrors::DATA_LOST)),
+                    Err(e) => Err(*e),
+                };
+                self.send(update, running);
+            }
+            _ => {}
+        }
+    }
+
+    /// Sends `update`, then drops the senders if the acquisition has ended.
+    fn send(&mut self, update: Result<StreamedUpdate>, running: bool) {
+        if let Some((updates, _)) = &self.senders {
+            // a dropped receiver only means nobody is listening
+            let _ = updates.send(update);
+        }
+        if !running {
+            self.senders = None;
+        }
+    }
+
+    /// Copies `available`'s readouts, from the camera's buffer or PICam's own
+    /// memory.
+    ///
+    /// # Safety
+    ///
+    /// Must be called inside the acquisition-updated callback that passed
+    /// `available`, for an acquisition on a camera whose committed parameters
+    /// `self.layout` was read from and whose buffer, if any, `self.buffer`
+    /// describes.
+    unsafe fn copy(
+        &self,
+        available: Option<&sys::PicamAvailableData>,
+        status: &sys::PicamAcquisitionStatus,
+    ) -> Result<StreamedUpdate> {
+        check_errors(status.errors)?;
+        let extent = match available {
+            Some(available) => Readouts::extent(available, &self.layout)?,
+            None => None,
+        };
+        let (words, len, count) = match extent {
+            None => (Vec::new(), 0, 0),
+            Some((start, len, count)) => {
+                let mut words = vec![0u64; len.div_ceil(8)];
+                let bytes = as_bytes_mut(&mut words, len);
+                match self.buffer {
+                    Some(buffer) => {
+                        if !buffer.contains(start, len) {
+                            return Err(Error::InconsistentDataLayout);
+                        }
+                        // SAFETY: the bytes lie inside the camera's buffer
+                        // (checked above), which the os allocated, which no
+                        // rust code references or reads but volatilely, and
+                        // which stays allocated while the acquisition runs,
+                        // since replacing or freeing it needs `&mut Camera`,
+                        // which the stream holds, or a running acquisition's
+                        // end
+                        unsafe { volatile_copy(start, bytes) };
+                    }
+                    // SAFETY: picam passed these readouts in its own memory to
+                    // this callback, laid out as `layout` describes (manual 6.1
+                    // and 6.3.1), and they stay valid while it runs (seen past
+                    // the callback with sdk 5.15). that memory isn't circular,
+                    // since clearing the readout count online needs a buffer,
+                    // so picam isn't writing to them. `bytes` is a fresh copy
+                    // of `len` bytes
+                    None => unsafe { ptr::copy_nonoverlapping(start, bytes.as_mut_ptr(), len) },
+                }
+                (words, len, count)
+            }
+        };
+        Ok(StreamedUpdate {
+            words,
+            len,
+            count,
+            layout: Arc::clone(&self.layout),
+            running: status.running != 0,
+            readout_rate: status.readout_rate,
+        })
+    }
+}
+
 /// Acquired readouts, borrowed from the memory PICam acquired them into, or
 /// from a copy of it (see [`Camera::set_acquisition_buffer`]).
 ///
@@ -1243,13 +1622,68 @@ fn copy_from_buffer<'a>(
 
 /// Reports whether `device`'s buffer has overrun, see
 /// [`Camera::has_acquisition_buffer_overrun`].
-fn has_overrun(device: sys::PicamHandle) -> Result<bool> {
+pub(crate) fn has_overrun(device: sys::PicamHandle) -> Result<bool> {
     let mut overran: sys::pibln = 0;
     picam_call!(sys::PicamAdvanced_HasAcquisitionBufferOverrun(
         device,
         &mut overran
     ))?;
     Ok(overran != 0)
+}
+
+/// Copies `into.len()` bytes from `start` with volatile reads: byte by byte
+/// up to the first 8-byte boundary, then 8 bytes at a time, then the rest.
+/// `wrapping_add` rather than `add`, whose rules are about rust allocations.
+///
+/// # Safety
+///
+/// The bytes from `start` must lie inside memory outside every Rust
+/// allocation that no Rust code references or reads but volatilely, such as
+/// the camera's buffer (see [`AcquisitionBuffer`]), and must stay allocated
+/// for the call. Reading them must not trap.
+unsafe fn volatile_copy(start: *const u8, into: &mut [u8]) {
+    let head = ((8 - start.addr() % 8) % 8).min(into.len());
+    let (head_bytes, rest) = into.split_at_mut(head);
+    let mut words = rest.chunks_exact_mut(8);
+    let mut offset = 0;
+    for byte in head_bytes {
+        // SAFETY: inside the memory the caller guarantees, which
+        // `read_volatile` may read however picam writes to it
+        *byte = unsafe { start.wrapping_add(offset).read_volatile() };
+        offset += 1;
+    }
+    for word in &mut words {
+        // SAFETY: as above, for 8 bytes, which `head` aligned to 8
+        let value = unsafe { start.wrapping_add(offset).cast::<u64>().read_volatile() };
+        word.copy_from_slice(&value.to_ne_bytes());
+        offset += 8;
+    }
+    for byte in words.into_remainder() {
+        // SAFETY: as above
+        *byte = unsafe { start.wrapping_add(offset).read_volatile() };
+        offset += 1;
+    }
+}
+
+/// The first `len` bytes of `words`.
+fn as_bytes(words: &[u64], len: usize) -> &[u8] {
+    assert!(
+        len <= words.len() * 8,
+        "`words` holds fewer than `len` bytes"
+    );
+    // SAFETY: `words` holds at least `len` initialized bytes, any of which is
+    // a valid `u8`, and the view borrows `words`
+    unsafe { slice::from_raw_parts(words.as_ptr().cast(), len) }
+}
+
+/// The first `len` bytes of `words`, to write.
+fn as_bytes_mut(words: &mut [u64], len: usize) -> &mut [u8] {
+    assert!(
+        len <= words.len() * 8,
+        "`words` holds fewer than `len` bytes"
+    );
+    // SAFETY: as in `as_bytes`, borrowing `words` mutably
+    unsafe { slice::from_raw_parts_mut(words.as_mut_ptr().cast(), len) }
 }
 
 #[cfg(test)]
@@ -1600,5 +2034,138 @@ mod tests {
             Arc::new(test_layout()),
         );
         assert!(matches!(refused, Err(Error::InconsistentDataLayout)));
+    }
+
+    /// A streaming sink over `test_layout`, with the receivers of its updates
+    /// and its end.
+    fn stream_sink(
+        buffer: Option<BufferBounds>,
+    ) -> (StreamSink, Receiver<Result<StreamedUpdate>>, Receiver<()>) {
+        let (updates_sender, updates) = mpsc::channel();
+        let (ended_sender, ended) = mpsc::channel();
+        let sink = StreamSink {
+            layout: Arc::new(test_layout()),
+            buffer,
+            senders: Some((updates_sender, ended_sender)),
+            pending: None,
+        };
+        (sink, updates, ended)
+    }
+
+    /// An acquisition status with no readout rate.
+    fn status(
+        running: bool,
+        errors: sys::PicamAcquisitionErrorsMask,
+    ) -> sys::PicamAcquisitionStatus {
+        sys::PicamAcquisitionStatus {
+            running: running.into(),
+            errors,
+            readout_rate: 0.0,
+        }
+    }
+
+    #[test]
+    fn stream_sink_sends_checked_copies() {
+        let none = sys::PicamAcquisitionErrorsMask::PicamAcquisitionErrorsMask_None;
+        let mut storage = [0u8; 72 + 8];
+        let start = storage.as_ptr().align_offset(align_of::<u32>());
+        fill(&mut storage[start..start + 72]);
+        // two readouts laid out as `test_layout` describes, which outlive
+        // every event below, as picam's data outlives its callback
+        let available = Some(sys::PicamAvailableData {
+            initial_readout: storage[start..].as_mut_ptr().cast(),
+            readout_count: 2,
+        });
+        let (mut sink, updates, ended) = stream_sink(None);
+
+        sink.handle(&Event::AcquisitionUpdated {
+            available,
+            status: status(true, none),
+        });
+        // held until the overrun check
+        assert!(matches!(updates.try_recv(), Err(TryRecvError::Empty)));
+        sink.handle(&Event::AcquisitionChecked(Ok(false)));
+        let update = updates
+            .try_recv()
+            .expect("the update should be sent")
+            .expect("the update should be a copy");
+        assert!(update.running());
+        let readouts = update.readouts();
+        assert_eq!(readouts.len(), 2);
+        assert_eq!(readouts.bytes(), &storage[start..start + 72]);
+        assert!(readouts.bytes().as_ptr().cast::<u64>().is_aligned());
+
+        sink.handle(&Event::AcquisitionUpdated {
+            available,
+            status: status(true, none),
+        });
+        sink.handle(&Event::AcquisitionChecked(Ok(true)));
+        assert!(matches!(
+            updates.try_recv(),
+            Ok(Err(Error::AcquisitionFailed(errors))) if errors == AcquisitionErrors::DATA_LOST
+        ));
+
+        sink.handle(&Event::AcquisitionUpdated {
+            available: None,
+            status: status(false, none),
+        });
+        let last = updates
+            .try_recv()
+            .expect("the last update should be sent")
+            .expect("the last update should be empty");
+        assert!(!last.running());
+        assert!(last.readouts().is_empty());
+        assert!(matches!(
+            updates.try_recv(),
+            Err(TryRecvError::Disconnected)
+        ));
+        assert!(matches!(ended.try_recv(), Err(TryRecvError::Disconnected)));
+    }
+
+    #[test]
+    fn stream_sink_refuses_data_outside_the_buffer() {
+        let none = sys::PicamAcquisitionErrorsMask::PicamAcquisitionErrorsMask_None;
+        let mut storage = [0u8; 72 + 8];
+        let start = storage.as_ptr().align_offset(align_of::<u32>());
+        let base = storage[start..].as_ptr().addr();
+        // the two readouts take 72 bytes, more than the buffer's 60, so
+        // they're refused before being read
+        let available = Some(sys::PicamAvailableData {
+            initial_readout: storage[start..].as_mut_ptr().cast(),
+            readout_count: 2,
+        });
+        let (mut sink, updates, _ended) = stream_sink(Some(BufferBounds { base, len: 60 }));
+        sink.handle(&Event::AcquisitionUpdated {
+            available,
+            status: status(true, none),
+        });
+        sink.handle(&Event::AcquisitionChecked(Ok(false)));
+        assert!(matches!(
+            updates.try_recv(),
+            Ok(Err(Error::InconsistentDataLayout))
+        ));
+    }
+
+    #[test]
+    fn stream_sink_reports_acquisition_errors() {
+        let data_lost = sys::PicamAcquisitionErrorsMask::PicamAcquisitionErrorsMask_DataLost;
+        let mut storage = [0u8; 72 + 8];
+        let start = storage.as_ptr().align_offset(align_of::<u32>());
+        let available = Some(sys::PicamAvailableData {
+            initial_readout: storage[start..].as_mut_ptr().cast(),
+            readout_count: 2,
+        });
+        let (mut sink, updates, ended) = stream_sink(None);
+        sink.handle(&Event::AcquisitionUpdated {
+            available,
+            status: status(true, data_lost),
+        });
+        sink.handle(&Event::AcquisitionChecked(Ok(false)));
+        assert!(matches!(
+            updates.try_recv(),
+            Ok(Err(Error::AcquisitionFailed(errors))) if errors == AcquisitionErrors::DATA_LOST
+        ));
+        // still running, so nothing has disconnected
+        assert!(matches!(ended.try_recv(), Err(TryRecvError::Empty)));
     }
 }
