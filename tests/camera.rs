@@ -5,7 +5,7 @@ mod common;
 
 use std::sync::Arc;
 
-use picam_rs::{Camera, CameraId, Error, params};
+use picam_rs::{Camera, CameraId, Error, Model, params};
 
 /// Connects, opens, queries, closes and disconnects a demo camera, as a
 /// smoke test of the whole chain from `Library` through to a parameter read.
@@ -144,6 +144,45 @@ fn residual_erasure_on_demo_camera() {
         camera.erase_residual().expect("residual should be erased");
     }
 
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that user state tags a camera: 0 until set, then shared by the
+/// camera's model and device handles, and separate for each camera (seen with
+/// sdk 5.15).
+#[test]
+fn user_state_tags_a_camera() {
+    let test_library = common::library();
+    let library = &test_library.library;
+
+    // each camera uses its own serial number so demo cameras never collide
+    let id = CameraId::connect_demo(library, Model::PIXIS_100F, "USERSTATE1")
+        .expect("demo camera should connect");
+    let camera = Camera::open(&id, Arc::clone(library)).expect("demo camera should open");
+    assert_eq!(camera.user_state(), Ok(0));
+    camera
+        .set_user_state(42)
+        .expect("the user state should be set");
+    assert_eq!(camera.user_state(), Ok(42));
+    let models = Camera::list_open_cameras(library).expect("open cameras should be listed");
+    assert_eq!(models.len(), 1);
+    assert_eq!(models[0].user_state(), Ok(42));
+    let devices =
+        Camera::list_open_camera_devices(library).expect("open camera devices should be listed");
+    assert_eq!(devices.len(), 1);
+    assert_eq!(devices[0].user_state(), Ok(42));
+
+    let other_id = CameraId::connect_demo(library, Model::PIXIS_100F, "USERSTATE2")
+        .expect("demo camera should connect");
+    let other = Camera::open(&other_id, Arc::clone(library)).expect("demo camera should open");
+    assert_eq!(other.user_state(), Ok(0));
+
+    drop(other);
+    other_id
+        .disconnect_demo(library)
+        .expect("demo camera should disconnect");
     drop(camera);
     id.disconnect_demo(library)
         .expect("demo camera should disconnect");

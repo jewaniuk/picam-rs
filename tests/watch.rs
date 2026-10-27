@@ -1,6 +1,7 @@
 //! Tests for parameter watches (`watch_value`, `watch_extrinsic_value`,
-//! `watch_relevance`, `watch_value_access` and their `_untyped` twins, and
-//! `Watch`), using demo cameras.
+//! `watch_relevance`, `watch_value_access` and their `_untyped` twins, the
+//! dependent constraint watches, `notify_when_status` and `Watch`), using
+//! demo cameras.
 
 mod common;
 
@@ -9,8 +10,8 @@ use std::sync::mpsc::{RecvTimeoutError, TryRecvError};
 use std::time::Duration;
 
 use picam_rs::{
-    Camera, CameraId, ConstraintCategory, Error, Library, Model, Modulation, Parameter, Pulse,
-    ReadoutControlMode, Roi, ShutterTimingMode, params,
+    Camera, CameraId, ConstraintCategory, Error, GatingMode, Library, Model, Modulation, Parameter,
+    Pulse, ReadoutControlMode, Roi, SensorTemperatureStatus, ShutterTimingMode, params,
 };
 
 /// Connects and opens a demo camera of `model`.
@@ -486,6 +487,208 @@ fn extrinsic_watch_lives_through_an_acquisition() {
     assert_eq!(exposures.try_recv(), Ok(30.0));
 
     drop((reading_watch, exposure_watch));
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that the dependent constraint watches send the new constraint when
+/// setting another parameter changes it, before that `set` returns, equal to
+/// the required constraint read afterwards (PICam manual 7.4.11 and 7.4.12).
+/// On a PIXIS 100F, the active height bounds the ROIs and kinetics readout
+/// changes the allowed trigger responses. On a PI-MAX4, sequential gating
+/// caps the accumulations and DIF readout changes the aux output's pulse
+/// (all seen with sdk 5.15).
+#[test]
+fn dependent_constraint_watches() {
+    let test_library = common::library();
+    let library = &test_library.library;
+
+    // each camera uses its own serial number so demo cameras never collide
+    let (id, camera) = open(library, Model::PIXIS_100F, "WATCH0013");
+    let (rois_watch, rois) = camera
+        .watch_rois_constraint(Parameter::Rois)
+        .expect("the rois constraint should be watched");
+    let (response_watch, responses) = camera
+        .watch_collection_constraint(Parameter::TriggerResponse)
+        .expect("the trigger response constraint should be watched");
+    let height = camera
+        .get(params::ACTIVE_HEIGHT)
+        .expect("the active height should be read");
+    camera
+        .set(params::ACTIVE_HEIGHT, height / 2)
+        .expect("the active height should be set");
+    assert_eq!(
+        rois.try_recv(),
+        Ok(camera
+            .rois_constraint(Parameter::Rois, ConstraintCategory::Required)
+            .expect("the rois constraint should be read"))
+    );
+    assert_eq!(rois.try_recv(), Err(TryRecvError::Empty));
+    // the trigger responses don't depend on the active height
+    assert_eq!(responses.try_recv(), Err(TryRecvError::Empty));
+    camera
+        .set(params::READOUT_CONTROL_MODE, ReadoutControlMode::Kinetics)
+        .expect("kinetics readout should be set");
+    assert_eq!(
+        responses.try_recv(),
+        Ok(camera
+            .collection_constraint(Parameter::TriggerResponse, ConstraintCategory::Required)
+            .expect("the trigger response constraint should be read"))
+    );
+    assert_eq!(responses.try_recv(), Err(TryRecvError::Empty));
+    drop((rois_watch, response_watch));
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+
+    let (id, camera) = open(library, Model::PI_MAX4_1024IRF, "WATCH0014");
+    let (accumulations_watch, accumulations) = camera
+        .watch_range_constraint(Parameter::Accumulations)
+        .expect("the accumulations constraint should be watched");
+    let (aux_watch, aux) = camera
+        .watch_pulse_constraint(Parameter::AuxOutput)
+        .expect("the aux output constraint should be watched");
+    let (sequence_watch, sequences) = camera
+        .watch_modulations_constraint(Parameter::CustomModulationSequence)
+        .expect("the modulation sequence constraint should be watched");
+    camera
+        .set(params::GATING_MODE, GatingMode::Sequential)
+        .expect("sequential gating should be set");
+    assert_eq!(
+        accumulations.try_recv(),
+        Ok(camera
+            .range_constraint(Parameter::Accumulations, ConstraintCategory::Required)
+            .expect("the accumulations constraint should be read"))
+    );
+    assert_eq!(accumulations.try_recv(), Err(TryRecvError::Empty));
+    camera
+        .set(params::READOUT_CONTROL_MODE, ReadoutControlMode::Dif)
+        .expect("dif readout should be set");
+    assert_eq!(
+        aux.try_recv(),
+        Ok(camera
+            .pulse_constraint(Parameter::AuxOutput, ConstraintCategory::Required)
+            .expect("the aux output constraint should be read"))
+    );
+    assert_eq!(aux.try_recv(), Err(TryRecvError::Empty));
+    // no demo setting changes the modulation sequence's constraint, so this
+    // only checks it registers (seen with sdk 5.15)
+    assert_eq!(sequences.try_recv(), Err(TryRecvError::Empty));
+    drop(sequence_watch);
+    assert_eq!(sequences.try_recv(), Err(TryRecvError::Disconnected));
+    drop((accumulations_watch, aux_watch));
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that a status notification sends one result once the status
+/// reaches the value, then disconnects, and that a second one on the same
+/// status and value registers again and fires too. The demo's sensor
+/// temperature is always locked (seen with sdk 5.15).
+#[test]
+fn status_notification() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "WATCH0015";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, camera) = open(library, Model::PIXIS_100F, SERIAL_NUMBER);
+    let status = Parameter::SensorTemperatureStatus;
+    assert_eq!(camera.can_wait_for_status(status), Ok(true));
+    assert_eq!(
+        camera.get(params::SENSOR_TEMPERATURE_STATUS),
+        Ok(SensorTemperatureStatus::Locked)
+    );
+    let locked: i32 = camera
+        .get_untyped(status)
+        .expect("the temperature status should be read");
+
+    let wait = Duration::from_secs(2);
+    let (first_watch, first) = camera
+        .notify_when_status(status, locked)
+        .expect("the notification should be set");
+    assert_eq!(first.recv_timeout(wait), Ok(Ok(())));
+    assert_eq!(first.try_recv(), Err(TryRecvError::Disconnected));
+    let (second_watch, second) = camera
+        .notify_when_status(status, locked)
+        .expect("the notification should be set again");
+    assert_eq!(second.recv_timeout(wait), Ok(Ok(())));
+    assert_eq!(second.try_recv(), Err(TryRecvError::Disconnected));
+
+    // dropping watches that already fired does nothing
+    drop((first_watch, second_watch));
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that dropping a status notification before it fires cancels it:
+/// the demo's sensor temperature never unlocks (seen with sdk 5.15).
+#[test]
+fn status_notification_cancels_on_drop() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "WATCH0016";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, camera) = open(library, Model::PIXIS_100F, SERIAL_NUMBER);
+    let status = Parameter::SensorTemperatureStatus;
+    assert_eq!(
+        camera.get(params::SENSOR_TEMPERATURE_STATUS),
+        Ok(SensorTemperatureStatus::Locked)
+    );
+    let locked: i32 = camera
+        .get_untyped(status)
+        .expect("the temperature status should be read");
+
+    // unlocked is one below locked (picam.h)
+    let (unlocked_watch, unlocked) = camera
+        .notify_when_status(status, locked - 1)
+        .expect("the notification should be set");
+    assert_eq!(
+        unlocked.recv_timeout(Duration::from_millis(500)),
+        Err(RecvTimeoutError::Timeout)
+    );
+    // this checks the crate's side only: the receiver disconnects whether or
+    // not picam's cancel succeeds, which `Watch` can only log
+    drop(unlocked_watch);
+    assert_eq!(unlocked.try_recv(), Err(TryRecvError::Disconnected));
+
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that constraint watches and status notifications are refused on a
+/// parameter of the wrong kind (seen with sdk 5.15).
+#[test]
+fn constraint_and_status_watch_errors() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "WATCH0017";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, camera) = open(library, Model::PIXIS_100F, SERIAL_NUMBER);
+
+    assert!(matches!(
+        camera.watch_rois_constraint(Parameter::ExposureTime),
+        Err(Error::ParameterHasInvalidConstraintType)
+    ));
+    assert!(matches!(
+        camera.watch_collection_constraint(Parameter::ExposureTime),
+        Err(Error::ParameterHasInvalidConstraintType)
+    ));
+    assert!(matches!(
+        camera.watch_range_constraint(Parameter::AdcQuality),
+        Err(Error::ParameterHasInvalidConstraintType)
+    ));
+    assert!(matches!(
+        camera.notify_when_status(Parameter::ExposureTime, 0),
+        Err(Error::ParameterHasInvalidValueType)
+    ));
+
     drop(camera);
     id.disconnect_demo(library)
         .expect("demo camera should disconnect");

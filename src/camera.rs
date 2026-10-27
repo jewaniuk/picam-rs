@@ -1,6 +1,7 @@
 //! Camera lifecycle.
 
 use std::sync::Arc;
+use std::sync::mpsc::Receiver;
 
 use crate::constraint::{
     ConstraintCategory, ModulationsConstraint, PulseConstraint, RoisConstraint,
@@ -16,7 +17,8 @@ use crate::model::Model;
 use crate::parameter::sealed::RawHandle;
 use crate::parameter::{ComputerInterface, OnlineSettablePicamValue, Parameter, TypedParameter};
 use crate::sys;
-use crate::watch;
+use crate::user_state;
+use crate::watch::{self, Event, Kind, Watch};
 
 /// An open connection to a PICam camera.
 #[derive(Debug)]
@@ -222,6 +224,28 @@ impl Camera {
     /// Returns an error if PICam is unable to query the camera's identity.
     pub fn id(&self) -> Result<CameraId> {
         handle_id(self.handle)
+    }
+
+    /// The number [`Camera::set_user_state`] last stored with this camera, or
+    /// 0 if none has been (PICam manual 7.4.7.1).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to read it.
+    pub fn user_state(&self) -> Result<usize> {
+        user_state::get(self.handle)
+    }
+
+    /// Stores `state`, a number of your choosing, with this camera, for
+    /// example to recognize it later among [`Camera::list_open_cameras`]
+    /// (PICam manual 7.4.7.2). The camera's model and device handles share
+    /// it, so [`CameraHandle::user_state`] reads it back from either.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to store it.
+    pub fn set_user_state(&self, state: usize) -> Result<()> {
+        user_state::set(self.handle, state)
     }
 
     /// Reports whether the camera can erase residual charge from its sensor
@@ -519,6 +543,72 @@ impl Camera {
         }
         Ok(constraints)
     }
+
+    /// Watches `parameter`'s ROIs constraint, sending the new constraint
+    /// each time setting another parameter changes it (PICam manual 7.4.11.2). Each
+    /// change is sent before the `set` that caused it returns.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to register its callback.
+    pub fn watch_rois_constraint(
+        &self,
+        parameter: impl Into<Parameter>,
+    ) -> Result<(Watch, Receiver<RoisConstraint>)> {
+        watch::subscribe(
+            self.handle,
+            parameter.into(),
+            Kind::RoisConstraint,
+            |event| match event {
+                Event::RoisConstraint(constraint) => Some(constraint.clone()),
+                _ => None,
+            },
+        )
+    }
+
+    /// Watches `parameter`'s pulse constraint, sending the new constraint
+    /// each time setting another parameter changes it (PICam manual 7.4.11.5). Each
+    /// change is sent before the `set` that caused it returns.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to register its callback.
+    pub fn watch_pulse_constraint(
+        &self,
+        parameter: impl Into<Parameter>,
+    ) -> Result<(Watch, Receiver<PulseConstraint>)> {
+        watch::subscribe(
+            self.handle,
+            parameter.into(),
+            Kind::PulseConstraint,
+            |event| match event {
+                Event::PulseConstraint(constraint) => Some(constraint.clone()),
+                _ => None,
+            },
+        )
+    }
+
+    /// Watches `parameter`'s modulations constraint, sending the new constraint
+    /// each time setting another parameter changes it (PICam manual 7.4.11.8). Each
+    /// change is sent before the `set` that caused it returns.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to register its callback.
+    pub fn watch_modulations_constraint(
+        &self,
+        parameter: impl Into<Parameter>,
+    ) -> Result<(Watch, Receiver<ModulationsConstraint>)> {
+        watch::subscribe(
+            self.handle,
+            parameter.into(),
+            Kind::ModulationsConstraint,
+            |event| match event {
+                Event::ModulationsConstraint(constraint) => Some(constraint.clone()),
+                _ => None,
+            },
+        )
+    }
 }
 
 impl_parameter_methods!(Camera, "camera");
@@ -625,6 +715,18 @@ impl<'a> CameraHandle<'a> {
     /// Returns an error if PICam is unable to query the camera's identity.
     pub fn id(&self) -> Result<CameraId> {
         handle_id(self.handle)
+    }
+
+    /// The number stored with this handle's camera by
+    /// [`Camera::set_user_state`], or 0 if none has been (PICam manual
+    /// 7.4.7.1). The camera's model and device handles share it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to read it, for example if the
+    /// handle has since been closed.
+    pub fn user_state(&self) -> Result<usize> {
+        user_state::get(self.handle)
     }
 }
 

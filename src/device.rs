@@ -5,8 +5,8 @@
 /// lists for accessories, which cameras support too. `$noun` names the type
 /// in the docs. `$ty` must also have a private
 /// `extrinsic_handle(&self) -> Result<sys::PicamHandle>`, the handle PICam
-/// registers extrinsic value callbacks on: a device or accessory handle
-/// (PICam manual 7.4.9.3).
+/// registers extrinsic value callbacks and status notifications on: a device
+/// or accessory handle (PICam manual 7.4.9.3 and 7.4.9.9).
 macro_rules! impl_parameter_methods {
     ($ty:ty, $noun:literal) => {
         // the method bodies name these directly, so they're imported here
@@ -739,6 +739,77 @@ macro_rules! impl_parameter_methods {
                         Event::ValueAccess(access) => Some(*access),
                         _ => None,
                     })
+                }
+
+                /// Watches `parameter`'s collection constraint, sending the new constraint
+                /// each time setting another parameter changes it (PICam manual 7.4.12.2).
+                /// Each change is sent before the `set` that caused it returns.
+                ///
+                /// # Errors
+                ///
+                /// Returns an error if PICam is unable to register its callback.
+                pub fn watch_collection_constraint(
+                    &self,
+                    parameter: impl Into<Parameter>,
+                ) -> Result<(Watch, Receiver<CollectionConstraint>)> {
+                    watch::subscribe(
+                        self.handle,
+                        parameter.into(),
+                        Kind::CollectionConstraint,
+                        |event| match event {
+                            Event::CollectionConstraint(constraint) => Some(constraint.clone()),
+                            _ => None,
+                        },
+                    )
+                }
+
+                /// Watches `parameter`'s range constraint, sending the new constraint each
+                /// time setting another parameter changes it (PICam manual 7.4.12.5). Each
+                /// change is sent before the `set` that caused it returns.
+                ///
+                /// # Errors
+                ///
+                /// Returns an error if PICam is unable to register its callback.
+                pub fn watch_range_constraint(
+                    &self,
+                    parameter: impl Into<Parameter>,
+                ) -> Result<(Watch, Receiver<RangeConstraint>)> {
+                    watch::subscribe(
+                        self.handle,
+                        parameter.into(),
+                        Kind::RangeConstraint,
+                        |event| match event {
+                            Event::RangeConstraint(constraint) => Some(constraint.clone()),
+                            _ => None,
+                        },
+                    )
+                }
+
+                /// Notifies once when status `parameter` reaches `value`, or when an error
+                /// stops it from doing so (PICam manual 7.4.9.9). The receiver gets `Ok(())`
+                /// or the error, then reports the channel disconnected. Dropping the watch
+                /// first cancels the notification. [`Self::can_wait_for_status`] says which
+                /// parameters can be waited on, and
+                /// [`Self::wait_for_status_parameter_value`] waits in place instead.
+                ///
+                /// # Errors
+                ///
+                /// Returns an error if PICam is unable to set the notification, for example
+                /// because `parameter` isn't a status that can be waited on.
+                pub fn notify_when_status(
+                    &self,
+                    parameter: impl Into<Parameter>,
+                    value: i32,
+                ) -> Result<(Watch, Receiver<Result<()>>)> {
+                    watch::subscribe(
+                        self.extrinsic_handle()?,
+                        parameter.into(),
+                        Kind::Status(value),
+                        |event| match event {
+                            Event::Status(result) => Some(*result),
+                            _ => None,
+                        },
+                    )
                 }
             }
         };

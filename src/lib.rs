@@ -33,6 +33,7 @@ mod constraint;
 mod convert;
 mod defect;
 mod device;
+mod discovery;
 mod em_calibration;
 mod enums;
 mod error;
@@ -40,6 +41,7 @@ mod library;
 mod model;
 mod parameter;
 mod sys;
+mod user_state;
 mod validation;
 mod watch;
 
@@ -57,6 +59,7 @@ pub use convert::FirmwareDetail;
 pub use defect::{
     ColumnDefect, PixelDefectMap, PixelLocation, RowDefect, StarDefect, StarDefectMap,
 };
+pub use discovery::{AccessoryDiscovery, CameraDiscovery, DiscoveryAction};
 pub use em_calibration::{EmCalibration, EmCalibrationDate, EmCalibrationHandle};
 pub use enums::*;
 pub use error::{Error, Result};

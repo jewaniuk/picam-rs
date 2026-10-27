@@ -1,5 +1,6 @@
-//! Watching parameters for changes through PICam's callbacks
-//! (`picam_advanced.h`, PICam manual 7.3, 7.4.8, 7.4.9 and 7.4.10).
+//! Watching parameters, statuses and discovery through PICam's callbacks
+//! (`picam_advanced.h` and `picam_accessory.h`, PICam manual 7.3, 7.4.1,
+//! 7.4.2 and 7.4.8 to 7.4.12).
 //!
 //! PICam passes a callback only the handle, the parameter and the new value,
 //! never a pointer of the caller's. So there is one trampoline per kind of
@@ -13,6 +14,12 @@
 //! - `SINKS` holds the senders, and is the only lock a trampoline takes. It's
 //!   never held across a PICam call, so a PICam unregister that waits for a
 //!   running callback can't wait on this lock.
+//!
+//! Discovery callbacks have no handle or parameter, so they're keyed by a null
+//! handle and parameter 0, and the library clears them before it
+//! uninitializes. A status notification fires once: its trampoline takes the
+//! key's sinks as it sends, so a key with no sinks has nothing registered with
+//! PICam, whatever `REGISTRATIONS` still counts.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -20,8 +27,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
+use crate::accessory::AccessoryId;
+use crate::camera::CameraId;
+use crate::constraint::{
+    CollectionConstraint, ModulationsConstraint, PulseConstraint, RangeConstraint, RoisConstraint,
+};
 use crate::convert::collect_raw_array;
-use crate::error::{Result, picam_call};
+use crate::discovery::{AccessoryDiscovery, CameraDiscovery, DiscoveryAction};
+use crate::error::{Error, Result, picam_call};
 use crate::parameter::{Modulation, Parameter, Pulse, Roi, ValueAccess};
 use crate::sys;
 
@@ -38,6 +51,15 @@ pub(crate) enum Kind {
     Modulations,
     IsRelevant,
     ValueAccess,
+    CollectionConstraint,
+    RangeConstraint,
+    RoisConstraint,
+    PulseConstraint,
+    ModulationsConstraint,
+    /// a one-shot notification for the status value it holds
+    Status(i32),
+    CameraDiscovery,
+    AccessoryDiscovery,
 }
 
 /// A copy of what one callback reported, made before the callback returns.
@@ -50,6 +72,14 @@ pub(crate) enum Event {
     Modulations(Vec<Modulation>),
     IsRelevant(bool),
     ValueAccess(ValueAccess),
+    CollectionConstraint(CollectionConstraint),
+    RangeConstraint(RangeConstraint),
+    RoisConstraint(RoisConstraint),
+    PulseConstraint(PulseConstraint),
+    ModulationsConstraint(ModulationsConstraint),
+    Status(Result<()>),
+    CameraDiscovery(CameraDiscovery),
+    AccessoryDiscovery(AccessoryDiscovery),
 }
 
 /// Sends one watch's events down its channel, as its value type.
@@ -91,8 +121,8 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// A watch on a parameter, which ends when dropped, or when the camera or
-/// accessory it watches closes.
+/// A watch on a parameter, a status or discovery, which ends when dropped,
+/// or when the camera, accessory or library it watches closes.
 ///
 /// The `watch_*` methods of [`Camera`](crate::Camera),
 /// [`CameraDevice`](crate::CameraDevice) and [`Accessory`](crate::Accessory)
@@ -109,6 +139,12 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 /// Dropping a watch after that does nothing. Events already sent stay
 /// readable either way, and leaking a watch with [`std::mem::forget`] leaves
 /// nothing behind once its camera closes.
+///
+/// A status notification
+/// ([`Camera::notify_when_status`](crate::Camera::notify_when_status)) sends
+/// one result and then disconnects. A discovery watch
+/// ([`Camera::watch_discovery`](crate::Camera::watch_discovery)) belongs to
+/// the library, which clears it before it uninitializes.
 pub struct Watch {
     key: Key,
     id: u64,
@@ -117,18 +153,34 @@ pub struct Watch {
 
 impl Watch {
     /// Adds `sink` for `kind` callbacks on `handle`'s `parameter`, and
-    /// registers PICam's callback if no other watch has.
-    fn new(handle: sys::PicamHandle, parameter: Parameter, kind: Kind, sink: Sink) -> Result<Self> {
-        let raw = parameter.to_raw();
-        let key = Key::new(handle, raw, kind);
+    /// registers PICam's callback if the key has nothing registered.
+    fn new(
+        handle: sys::PicamHandle,
+        parameter: sys::PicamParameter,
+        kind: Kind,
+        sink: Sink,
+    ) -> Result<Self> {
+        let key = Key::new(handle, parameter, kind);
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         let mut registrations = lock(&REGISTRATIONS);
         // the sink goes in first, so no event between picam registering the
-        // callback and this returning is lost
-        lock(&SINKS).entry(key).or_default().push((id, sink));
-        let count = registrations.get(&key).copied().unwrap_or(0);
+        // callback and this returning is lost. a key with no sinks has
+        // nothing registered with picam, even if counted: a status
+        // notification that fired took them all
+        let live = {
+            let mut sinks = lock(&SINKS);
+            let list = sinks.entry(key).or_default();
+            let live = !list.is_empty();
+            list.push((id, sink));
+            live
+        };
+        let count = if live {
+            registrations.get(&key).copied().unwrap_or(0)
+        } else {
+            0
+        };
         if count == 0
-            && let Err(e) = register(handle, raw, kind)
+            && let Err(e) = register(handle, parameter, kind)
         {
             remove_sink(key, id);
             return Err(e);
@@ -201,6 +253,11 @@ pub(crate) fn release(handle: sys::PicamHandle) {
         .collect();
     for key in keys {
         registrations.remove(&key);
+        // a status notification that fired has no sinks left, and nothing
+        // registered with picam to cancel
+        if !lock(&SINKS).contains_key(&key) {
+            continue;
+        }
         let parameter = sys::PicamParameter(key.parameter);
         if let Err(e) = unregister(handle, parameter, key.kind) {
             tracing::error!("failed to unregister a PICam callback: {e}");
@@ -218,6 +275,30 @@ pub(crate) fn release(handle: sys::PicamHandle) {
 pub(crate) fn subscribe<T: Send + 'static>(
     handle: sys::PicamHandle,
     parameter: Parameter,
+    kind: Kind,
+    convert: fn(&Event) -> Option<T>,
+) -> Result<(Watch, Receiver<T>)> {
+    subscribe_raw(handle, parameter.to_raw(), kind, convert)
+}
+
+/// Watches discovery through `kind` callbacks, which have no handle or
+/// parameter, so they're keyed by a null handle and parameter 0.
+/// [`crate::Library`] clears them before it uninitializes.
+///
+/// # Errors
+///
+/// Returns an error if PICam is unable to register the callback.
+pub(crate) fn subscribe_discovery<T: Send + 'static>(
+    kind: Kind,
+    convert: fn(&Event) -> Option<T>,
+) -> Result<(Watch, Receiver<T>)> {
+    subscribe_raw(std::ptr::null_mut(), sys::PicamParameter(0), kind, convert)
+}
+
+/// `subscribe`'s body, taking the raw parameter.
+fn subscribe_raw<T: Send + 'static>(
+    handle: sys::PicamHandle,
+    parameter: sys::PicamParameter,
     kind: Kind,
     convert: fn(&Event) -> Option<T>,
 ) -> Result<(Watch, Receiver<T>)> {
@@ -249,6 +330,22 @@ fn dispatch(
     sys::PicamError::PicamError_None
 }
 
+/// Sends `event` to every sink on `handle`'s `parameter` for `kind`, then
+/// drops them, for a callback PICam calls only once. Always reports success
+/// to PICam.
+fn dispatch_once(
+    handle: sys::PicamHandle,
+    parameter: sys::PicamParameter,
+    kind: Kind,
+    event: &Event,
+) -> sys::PicamError {
+    let list = lock(&SINKS).remove(&Key::new(handle, parameter, kind));
+    for (_, sink) in list.into_iter().flatten() {
+        sink(event);
+    }
+    sys::PicamError::PicamError_None
+}
+
 /// Defines `register` and `unregister`, which hand each kind's trampoline to
 /// PICam.
 macro_rules! callbacks {
@@ -261,6 +358,17 @@ macro_rules! callbacks {
         ) -> Result<()> {
             match kind {
                 $(Kind::$kind => picam_call!(sys::$register(handle, parameter, Some($trampoline))),)*
+                Kind::Status(value) => picam_call!(
+                    sys::PicamAdvanced_NotifyWhenStatusParameterValue(
+                        handle, parameter, value, Some(status_reached)
+                    )
+                ),
+                Kind::CameraDiscovery => {
+                    picam_call!(sys::PicamAdvanced_RegisterForDiscovery(Some(camera_discovered)))
+                }
+                Kind::AccessoryDiscovery => {
+                    picam_call!(sys::PicamAccessory_RegisterForDiscovery(Some(accessory_discovered)))
+                }
             }
         }
 
@@ -272,6 +380,17 @@ macro_rules! callbacks {
         ) -> Result<()> {
             match kind {
                 $(Kind::$kind => picam_call!(sys::$unregister(handle, parameter, Some($trampoline))),)*
+                Kind::Status(value) => picam_call!(
+                    sys::PicamAdvanced_CancelNotifyWhenStatusParameterValue(
+                        handle, parameter, value, Some(status_reached)
+                    )
+                ),
+                Kind::CameraDiscovery => {
+                    picam_call!(sys::PicamAdvanced_UnregisterForDiscovery(Some(camera_discovered)))
+                }
+                Kind::AccessoryDiscovery => {
+                    picam_call!(sys::PicamAccessory_UnregisterForDiscovery(Some(accessory_discovered)))
+                }
             }
         }
     };
@@ -299,6 +418,18 @@ callbacks! {
         PicamAdvanced_UnregisterForIsRelevantChanged, is_relevant_changed;
     ValueAccess => PicamAdvanced_RegisterForValueAccessChanged,
         PicamAdvanced_UnregisterForValueAccessChanged, value_access_changed;
+    CollectionConstraint => PicamAdvanced_RegisterForDependentCollectionConstraintChanged,
+        PicamAdvanced_UnregisterForDependentCollectionConstraintChanged,
+        collection_constraint_changed;
+    RangeConstraint => PicamAdvanced_RegisterForDependentRangeConstraintChanged,
+        PicamAdvanced_UnregisterForDependentRangeConstraintChanged, range_constraint_changed;
+    RoisConstraint => PicamAdvanced_RegisterForDependentRoisConstraintChanged,
+        PicamAdvanced_UnregisterForDependentRoisConstraintChanged, rois_constraint_changed;
+    PulseConstraint => PicamAdvanced_RegisterForDependentPulseConstraintChanged,
+        PicamAdvanced_UnregisterForDependentPulseConstraintChanged, pulse_constraint_changed;
+    ModulationsConstraint => PicamAdvanced_RegisterForDependentModulationsConstraintChanged,
+        PicamAdvanced_UnregisterForDependentModulationsConstraintChanged,
+        modulations_constraint_changed;
 }
 
 /// PICam's integer value callback (manual 7.3.4.1).
@@ -509,6 +640,233 @@ unsafe extern "C" fn modulations_changed(
     )
 }
 
+/// PICam's dependent collection constraint callback (manual 7.3.6.1).
+///
+/// # Safety
+///
+/// `constraint` must be null or point to a valid `PicamCollectionConstraint`,
+/// whose array is valid too, for the duration of the call.
+unsafe extern "C" fn collection_constraint_changed(
+    handle: sys::PicamHandle,
+    parameter: sys::PicamParameter,
+    constraint: *const sys::PicamCollectionConstraint,
+) -> sys::PicamError {
+    if constraint.is_null() {
+        tracing::warn!("PICam sent a collection constraint callback with no constraint");
+        return sys::PicamError::PicamError_None;
+    }
+    // SAFETY: just checked `constraint` is non-null, and the caller
+    // guarantees it and its array are valid for this call, copied before it
+    // returns
+    let constraint = CollectionConstraint::from_raw(unsafe { &*constraint });
+    dispatch(
+        handle,
+        parameter,
+        Kind::CollectionConstraint,
+        &Event::CollectionConstraint(constraint),
+    )
+}
+
+/// PICam's dependent range constraint callback (manual 7.3.6.2).
+///
+/// # Safety
+///
+/// `constraint` must be null or point to a valid `PicamRangeConstraint`,
+/// whose arrays are valid too, for the duration of the call.
+unsafe extern "C" fn range_constraint_changed(
+    handle: sys::PicamHandle,
+    parameter: sys::PicamParameter,
+    constraint: *const sys::PicamRangeConstraint,
+) -> sys::PicamError {
+    if constraint.is_null() {
+        tracing::warn!("PICam sent a range constraint callback with no constraint");
+        return sys::PicamError::PicamError_None;
+    }
+    // SAFETY: just checked `constraint` is non-null, and the caller
+    // guarantees it and its arrays are valid for this call, copied before it
+    // returns
+    let constraint = RangeConstraint::from_raw(unsafe { &*constraint });
+    dispatch(
+        handle,
+        parameter,
+        Kind::RangeConstraint,
+        &Event::RangeConstraint(constraint),
+    )
+}
+
+/// PICam's dependent ROIs constraint callback (manual 7.3.5.1).
+///
+/// # Safety
+///
+/// `constraint` must be null or point to a valid `PicamRoisConstraint`, whose
+/// arrays are valid too, for the duration of the call.
+unsafe extern "C" fn rois_constraint_changed(
+    handle: sys::PicamHandle,
+    parameter: sys::PicamParameter,
+    constraint: *const sys::PicamRoisConstraint,
+) -> sys::PicamError {
+    if constraint.is_null() {
+        tracing::warn!("PICam sent a ROIs constraint callback with no constraint");
+        return sys::PicamError::PicamError_None;
+    }
+    // SAFETY: just checked `constraint` is non-null, and the caller
+    // guarantees it and its arrays are valid for this call, copied before it
+    // returns
+    let constraint = RoisConstraint::from_raw(unsafe { &*constraint });
+    dispatch(
+        handle,
+        parameter,
+        Kind::RoisConstraint,
+        &Event::RoisConstraint(constraint),
+    )
+}
+
+/// PICam's dependent pulse constraint callback (manual 7.3.5.2).
+///
+/// # Safety
+///
+/// `constraint` must be null or point to a valid `PicamPulseConstraint` for
+/// the duration of the call.
+unsafe extern "C" fn pulse_constraint_changed(
+    handle: sys::PicamHandle,
+    parameter: sys::PicamParameter,
+    constraint: *const sys::PicamPulseConstraint,
+) -> sys::PicamError {
+    if constraint.is_null() {
+        tracing::warn!("PICam sent a pulse constraint callback with no constraint");
+        return sys::PicamError::PicamError_None;
+    }
+    // SAFETY: just checked `constraint` is non-null, and the caller
+    // guarantees it's valid for this call, copied before it returns
+    let constraint = PulseConstraint::from_raw(unsafe { &*constraint });
+    dispatch(
+        handle,
+        parameter,
+        Kind::PulseConstraint,
+        &Event::PulseConstraint(constraint),
+    )
+}
+
+/// PICam's dependent modulations constraint callback (manual 7.3.5.3).
+///
+/// # Safety
+///
+/// `constraint` must be null or point to a valid `PicamModulationsConstraint`,
+/// whose arrays are valid too, for the duration of the call.
+unsafe extern "C" fn modulations_constraint_changed(
+    handle: sys::PicamHandle,
+    parameter: sys::PicamParameter,
+    constraint: *const sys::PicamModulationsConstraint,
+) -> sys::PicamError {
+    if constraint.is_null() {
+        tracing::warn!("PICam sent a modulations constraint callback with no constraint");
+        return sys::PicamError::PicamError_None;
+    }
+    // SAFETY: just checked `constraint` is non-null, and the caller
+    // guarantees it and its arrays are valid for this call, copied before it
+    // returns
+    let constraint = ModulationsConstraint::from_raw(unsafe { &*constraint });
+    dispatch(
+        handle,
+        parameter,
+        Kind::ModulationsConstraint,
+        &Event::ModulationsConstraint(constraint),
+    )
+}
+
+/// PICam's status notification callback (manual 7.3.4.3), which PICam calls
+/// once per notification, when the value is reached or an error stops it.
+///
+/// # Safety
+///
+/// None: it reads no pointer. It's `unsafe` only to match
+/// `PicamWhenStatusParameterValueCallback`, the type bindgen gives PICam's
+/// callback.
+unsafe extern "C" fn status_reached(
+    handle: sys::PicamHandle,
+    parameter: sys::PicamParameter,
+    value: sys::piint,
+    error: sys::PicamError,
+) -> sys::PicamError {
+    let result = if error == sys::PicamError::PicamError_None {
+        Ok(())
+    } else {
+        Err(Error::from_raw(error))
+    };
+    dispatch_once(
+        handle,
+        parameter,
+        Kind::Status(value),
+        &Event::Status(result),
+    )
+}
+
+/// PICam's camera discovery callback (manual 7.3.1.1).
+///
+/// # Safety
+///
+/// `id` must be null or point to a valid `PicamCameraID` for the duration of
+/// the call.
+unsafe extern "C" fn camera_discovered(
+    id: *const sys::PicamCameraID,
+    device: sys::PicamHandle,
+    action: sys::PicamDiscoveryAction,
+) -> sys::PicamError {
+    if id.is_null() {
+        tracing::warn!("PICam sent a camera discovery callback with no camera");
+        return sys::PicamError::PicamError_None;
+    }
+    let discovery = CameraDiscovery {
+        // SAFETY: just checked `id` is non-null, and the caller guarantees it
+        // points to a valid `PicamCameraID` for this call, copied before it
+        // returns
+        id: CameraId::from_raw(unsafe { &*id }),
+        action: DiscoveryAction::from_raw(action),
+        // picam passes the device handle only when the camera is open in
+        // this process (manual 7.3.1.1)
+        open_in_this_process: !device.is_null(),
+    };
+    dispatch(
+        std::ptr::null_mut(),
+        sys::PicamParameter(0),
+        Kind::CameraDiscovery,
+        &Event::CameraDiscovery(discovery),
+    )
+}
+
+/// PICam's accessory discovery callback (manual 7.3.2.1).
+///
+/// # Safety
+///
+/// `id` must be null or point to a valid `PicamAccessoryID` for the duration
+/// of the call.
+unsafe extern "C" fn accessory_discovered(
+    id: *const sys::PicamAccessoryID,
+    accessory: sys::PicamHandle,
+    action: sys::PicamDiscoveryAction,
+) -> sys::PicamError {
+    if id.is_null() {
+        tracing::warn!("PICam sent an accessory discovery callback with no accessory");
+        return sys::PicamError::PicamError_None;
+    }
+    let discovery = AccessoryDiscovery {
+        // SAFETY: just checked `id` is non-null, and the caller guarantees it
+        // points to a valid `PicamAccessoryID` for this call, copied before
+        // it returns
+        id: AccessoryId::from_raw(unsafe { &*id }),
+        action: DiscoveryAction::from_raw(action),
+        // picam passes the accessory handle only when the accessory is open
+        // in this process (manual 7.3.2.1)
+        open_in_this_process: !accessory.is_null(),
+    };
+    dispatch(
+        std::ptr::null_mut(),
+        sys::PicamParameter(0),
+        Kind::AccessoryDiscovery,
+        &Event::AccessoryDiscovery(discovery),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::mpsc::TryRecvError;
@@ -667,5 +1025,163 @@ mod tests {
         assert!(!remove_sink(second_key, second));
 
         assert!(remove_sink(kept_key, other));
+    }
+
+    fn status(event: &Event) -> Option<Result<()>> {
+        match event {
+            Event::Status(result) => Some(*result),
+            _ => None,
+        }
+    }
+
+    fn range(event: &Event) -> Option<RangeConstraint> {
+        match event {
+            Event::RangeConstraint(constraint) => Some(constraint.clone()),
+            _ => None,
+        }
+    }
+
+    fn camera_discovery(event: &Event) -> Option<CameraDiscovery> {
+        match event {
+            Event::CameraDiscovery(discovery) => Some(discovery.clone()),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn status_trampoline_sends_once_then_disconnects() {
+        let handle = fake_handle(0x1006);
+        let parameter = Parameter::SensorTemperatureStatus.to_raw();
+        let key = Key::new(handle, parameter, Kind::Status(2));
+        let (_, first) = add_sink(key, status);
+        let (_, second) = add_sink(key, status);
+
+        // SAFETY: a scalar trampoline has no requirements beyond being
+        // called with plain values, as here
+        let error =
+            unsafe { status_reached(handle, parameter, 2, sys::PicamError::PicamError_None) };
+        assert_eq!(error, sys::PicamError::PicamError_None);
+        assert_eq!(first.try_recv(), Ok(Ok(())));
+        assert_eq!(second.try_recv(), Ok(Ok(())));
+        assert_eq!(first.try_recv(), Err(TryRecvError::Disconnected));
+        assert_eq!(second.try_recv(), Err(TryRecvError::Disconnected));
+        assert!(!lock(&SINKS).contains_key(&key));
+        // SAFETY: as above
+        unsafe { status_reached(handle, parameter, 2, sys::PicamError::PicamError_None) };
+
+        let failing_key = Key::new(handle, parameter, Kind::Status(1));
+        let (_, failing) = add_sink(failing_key, status);
+        // SAFETY: as above
+        unsafe {
+            status_reached(
+                handle,
+                parameter,
+                1,
+                sys::PicamError::PicamError_TimeOutOccurred,
+            )
+        };
+        assert_eq!(failing.try_recv(), Ok(Err(Error::TimeOutOccurred)));
+        assert_eq!(failing.try_recv(), Err(TryRecvError::Disconnected));
+    }
+
+    #[test]
+    fn range_constraint_trampoline_copies_the_constraint() {
+        let handle = fake_handle(0x1007);
+        let parameter = Parameter::ExposureTime.to_raw();
+        let key = Key::new(handle, parameter, Kind::RangeConstraint);
+        let (id, constraints) = add_sink(key, range);
+
+        let excluded = [5.0];
+        let raw = sys::PicamRangeConstraint {
+            scope: sys::PicamConstraintScope::PicamConstraintScope_Dependent,
+            severity: sys::PicamConstraintSeverity::PicamConstraintSeverity_Error,
+            empty_set: 0,
+            minimum: 1.0,
+            maximum: 10.0,
+            increment: 1.0,
+            excluded_values_array: excluded.as_ptr(),
+            excluded_values_count: 1,
+            outlying_values_array: std::ptr::null(),
+            outlying_values_count: 0,
+        };
+        // SAFETY: `raw` points to `excluded`, and both stay alive and
+        // unchanged until the call returns
+        unsafe { range_constraint_changed(handle, parameter, &raw) };
+        let sent = constraints
+            .try_recv()
+            .expect("the constraint should be sent");
+        assert_eq!(
+            (sent.minimum, sent.maximum, sent.increment),
+            (1.0, 10.0, 1.0)
+        );
+        assert_eq!(sent.excluded_values, vec![5.0]);
+        assert!(sent.outlying_values.is_empty());
+        assert!(!sent.empty_set);
+
+        // SAFETY: a null constraint is allowed
+        unsafe { range_constraint_changed(handle, parameter, std::ptr::null()) };
+        assert_eq!(constraints.try_recv(), Err(TryRecvError::Empty));
+
+        assert!(remove_sink(key, id));
+    }
+
+    #[test]
+    fn camera_discovery_trampoline_copies_the_id() {
+        let key = Key::new(
+            std::ptr::null_mut(),
+            sys::PicamParameter(0),
+            Kind::CameraDiscovery,
+        );
+        let (id, events) = add_sink(key, camera_discovery);
+        let camera = CameraId {
+            model: crate::Model::PIXIS_100F,
+            computer_interface: crate::ComputerInterface::Usb2,
+            sensor_name: "sensor".to_string(),
+            serial_number: "DISCOVERY1".to_string(),
+        };
+        let raw = camera.to_raw().expect("the id should convert");
+
+        // SAFETY: `raw` stays alive and unchanged until each call returns
+        unsafe {
+            camera_discovered(
+                &raw,
+                fake_handle(0x1008),
+                sys::PicamDiscoveryAction::PicamDiscoveryAction_Found,
+            )
+        };
+        let found = events.try_recv().expect("the event should be sent");
+        assert_eq!(found.id.serial_number, "DISCOVERY1");
+        assert_eq!(found.id.sensor_name, "sensor");
+        assert_eq!(found.action, DiscoveryAction::Found);
+        assert!(found.open_in_this_process);
+        // SAFETY: as above
+        unsafe {
+            camera_discovered(
+                &raw,
+                std::ptr::null_mut(),
+                sys::PicamDiscoveryAction::PicamDiscoveryAction_Lost,
+            )
+        };
+        let lost = events.try_recv().expect("the event should be sent");
+        assert_eq!(lost.action, DiscoveryAction::Lost);
+        assert!(!lost.open_in_this_process);
+
+        // releasing the null handle, as the library does, clears discovery
+        // watches only. it's checked here because the discovery key is
+        // global, so a separate test running in parallel could clear this
+        // one's sink
+        let kept_key = Key::new(
+            fake_handle(0x1009),
+            Parameter::ExposureTime.to_raw(),
+            Kind::Integer,
+        );
+        let (kept, kept_values) = add_sink(kept_key, integer);
+        // no registration was made with picam, so this calls no picam function
+        release(std::ptr::null_mut());
+        assert_eq!(events.try_recv().err(), Some(TryRecvError::Disconnected));
+        assert_eq!(kept_values.try_recv(), Err(TryRecvError::Empty));
+        assert!(!remove_sink(key, id));
+
+        assert!(remove_sink(kept_key, kept));
     }
 }
