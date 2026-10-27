@@ -22,7 +22,7 @@ use crate::watch;
 #[derive(Debug)]
 pub struct Camera {
     handle: sys::PicamHandle,
-    // the device handle, looked up once at open and closed with `handle`
+    // the device handle, found once at open and closed with `handle`
     // by `Picam_CloseCamera` (manual 4.3.2.6)
     device: sys::PicamHandle,
     // keeps the library alive for as long as any `Camera` exists, and lets
@@ -253,7 +253,7 @@ impl Camera {
     /// calls need instead of the camera model handle `Picam_OpenCamera`
     /// gives (manual 4.3.2.4): the `picam_special.h` functions refuse the
     /// model handle with `InvalidHandle` (seen on a demo camera with SDK
-    /// 5.15). It's looked up once when the camera opens.
+    /// 5.15). It's found once when the camera opens.
     pub(crate) fn device_handle(&self) -> sys::PicamHandle {
         self.device
     }

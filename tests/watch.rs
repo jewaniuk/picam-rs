@@ -264,8 +264,8 @@ fn value_access_watch_registers() {
         .expect("demo camera should disconnect");
 }
 
-/// Checks that extrinsic watches register through the camera, which looks
-/// up its device, and through the device itself, sharing one registration
+/// Checks that extrinsic watches register through the camera, on the device
+/// handle it keeps, and through the device itself, sharing one registration
 /// for the same parameter. The demo camera sends no readings (seen with sdk
 /// 5.15).
 #[test]
@@ -284,7 +284,7 @@ fn extrinsic_watch_registers() {
     let (status_watch, statuses) = device
         .watch_extrinsic_value(params::SENSOR_TEMPERATURE_STATUS)
         .expect("the temperature status should be watched");
-    // the same key as the camera's watch, since the camera looks up this device
+    // the same key as the camera's watch, since the camera keeps this device's handle
     let (device_watch, from_device) = device
         .watch_extrinsic_value(params::SENSOR_TEMPERATURE_READING)
         .expect("the temperature reading should be watched through the device");
