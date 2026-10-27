@@ -448,7 +448,7 @@ fn acquisition_buffer_is_set_and_cleared() {
         .acquire(3, Some(TIMEOUT))
         .expect("demo camera should acquire into the buffer");
     assert_eq!(readouts.len(), 3);
-    // a copy of the buffer, laid out the same way
+    // copied out of the buffer, laid out as the camera's parameters say
     for readout in readouts.iter() {
         assert_eq!(readout.bytes().len(), stride);
     }
@@ -703,13 +703,15 @@ fn readout_count_is_cleared_online() {
         camera.start_acquisition(),
         Err(Error::InvalidAcquisitionBuffer)
     ));
-    let failed = camera
-        .commit_parameters()
-        .expect("parameters should be committed");
-    assert!(
-        failed.is_empty(),
-        "parameters failed validation: {failed:?}"
-    );
+    // `acquire` runs its own count instead, into picam's own memory, and
+    // leaves `READOUT_COUNT` at that count afterwards (seen with sdk 5.15)
+    let readouts = camera
+        .acquire(3, Some(TIMEOUT))
+        .expect("acquire should take its own count");
+    assert_eq!(readouts.len(), 3);
+    drop(readouts);
+    assert_eq!(camera.get(params::READOUT_COUNT), Ok(3));
+    configure(&camera, 5, 20.0);
     let mut acquisition = camera
         .start_acquisition()
         .expect("acquisition should start");
