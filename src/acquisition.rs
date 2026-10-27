@@ -408,8 +408,8 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to register its callback. PICam
-    /// accepts a watch for a state the camera can't detect, and then sends
-    /// nothing (seen with SDK 5.15), so check
+    /// accepts a watch even for a state the camera says it can't detect (seen
+    /// with SDK 5.15), and what it sends then isn't documented, so check
     /// [`Camera::can_watch_acquisition_state`] first.
     pub fn watch_acquisition_state(
         &self,

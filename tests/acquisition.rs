@@ -1,5 +1,6 @@
 //! Tests for acquiring data from demo cameras: `Camera::acquire` and
-//! `Camera::start_acquisition`.
+//! `Camera::start_acquisition`, into PICam's memory or a buffer the camera
+//! keeps, and acquisition state watches.
 //!
 //! Every test uses a PIXIS 100F demo camera: one 1340 × 100 region of 16-bit
 //! pixels, one frame per readout, a 100 ms exposure by default, and time
@@ -8,9 +9,14 @@
 mod common;
 
 use std::sync::Arc;
+use std::sync::mpsc::TryRecvError;
+use std::thread;
 use std::time::Duration;
 
-use picam_rs::{Camera, CameraId, Error, Library, Model, Pixels, Roi, TimeStamps, params};
+use picam_rs::{
+    AcquisitionErrors, AcquisitionState, Camera, CameraId, Error, Library, Model, Pixels, Roi,
+    TimeStamps, params,
+};
 
 /// How long any test waits for one readout, far longer than a demo camera
 /// takes.
@@ -386,6 +392,321 @@ fn commit_is_refused_while_acquiring() {
         .expect("an ended acquisition should finish cleanly");
 
     drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// The committed readout stride in bytes. Read it after committing, since
+/// metadata such as time stamps lengthens it.
+fn readout_stride(camera: &Camera) -> usize {
+    usize::try_from(
+        camera
+            .get(params::READOUT_STRIDE)
+            .expect("readout stride should be read"),
+    )
+    .expect("readout stride should be positive")
+}
+
+/// Checks that a buffer is set, used, reported and cleared.
+#[test]
+fn acquisition_buffer_is_set_and_cleared() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "ACQ0009";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, mut camera) = open(library, SERIAL_NUMBER);
+    configure(&camera, 1, 20.0);
+    let stride = readout_stride(&camera);
+
+    assert_eq!(camera.acquisition_buffer_len(), Ok(0));
+    camera
+        .set_acquisition_buffer(3 * stride)
+        .expect("the buffer should be set");
+    assert_eq!(camera.acquisition_buffer_len(), Ok(3 * stride));
+    let readouts = camera
+        .acquire(3, Some(TIMEOUT))
+        .expect("demo camera should acquire into the buffer");
+    assert_eq!(readouts.len(), 3);
+    drop(readouts);
+
+    camera
+        .clear_acquisition_buffer()
+        .expect("the buffer should be cleared");
+    assert_eq!(camera.acquisition_buffer_len(), Ok(0));
+    camera
+        .clear_acquisition_buffer()
+        .expect("clearing with no buffer should do nothing");
+    camera
+        .set_acquisition_buffer(stride)
+        .expect("the buffer should be set");
+    camera
+        .set_acquisition_buffer(0)
+        .expect("a length of 0 should clear the buffer");
+    assert_eq!(camera.acquisition_buffer_len(), Ok(0));
+
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that PICam takes a buffer too small for a readout, then refuses to
+/// acquire into it.
+#[test]
+fn buffer_smaller_than_a_readout_is_refused() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "ACQ0010";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, mut camera) = open(library, SERIAL_NUMBER);
+    configure(&camera, 1, 20.0);
+
+    // picam only checks the size when acquiring (seen with sdk 5.15)
+    camera
+        .set_acquisition_buffer(1)
+        .expect("picam should take the buffer");
+    assert_eq!(camera.acquisition_buffer_len(), Ok(1));
+    assert!(matches!(
+        camera.acquire(1, Some(TIMEOUT)),
+        Err(Error::InvalidAcquisitionBuffer)
+    ));
+    assert!(matches!(
+        camera.start_acquisition(),
+        Err(Error::InvalidAcquisitionBuffer)
+    ));
+
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that acquiring until stopped needs a buffer.
+#[test]
+fn readout_count_zero_needs_a_buffer() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "ACQ0011";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, mut camera) = open(library, SERIAL_NUMBER);
+    // the count sets and commits, and only starting is refused (seen with
+    // sdk 5.15)
+    configure(&camera, 0, 20.0);
+    assert!(matches!(
+        camera.start_acquisition(),
+        Err(Error::InvalidAcquisitionBuffer)
+    ));
+
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that an acquisition into a buffer runs until stopped, going round
+/// the buffer more than once.
+#[test]
+fn acquisition_runs_until_stopped_with_a_buffer() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "ACQ0012";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, mut camera) = open(library, SERIAL_NUMBER);
+    configure(&camera, 0, 10.0);
+    let stride = readout_stride(&camera);
+    camera
+        .set_acquisition_buffer(4 * stride)
+        .expect("the buffer should be set");
+
+    let mut acquisition = camera
+        .start_acquisition()
+        .expect("acquisition should start");
+    let mut total = 0;
+    // three times what the buffer holds, so it wraps
+    while total < 12 {
+        let update = acquisition
+            .wait(Some(TIMEOUT))
+            .expect("wait should work")
+            .expect("a demo readout should arrive within the timeout");
+        assert!(update.running(), "it should run until stopped");
+        for readout in update.readouts().iter() {
+            assert_eq!(readout.bytes().len(), stride);
+            let frame = readout.frame(0).expect("the readout should hold a frame");
+            let roi = frame.roi(0).expect("the frame should hold a region");
+            assert_eq!(roi.bytes().len(), roi.width() * roi.height() * 2);
+        }
+        total += update.readouts().len();
+    }
+    assert_eq!(
+        acquisition.camera().has_acquisition_buffer_overrun(),
+        Ok(false)
+    );
+    acquisition
+        .finish()
+        .expect("a stopped acquisition should finish cleanly");
+
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that an update held while PICam overruns the buffer keeps its
+/// data, since it's a copy, and that the overrun is reported rather than
+/// handed out.
+#[test]
+fn overrun_is_reported_not_handed_out() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "ACQ0013";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, mut camera) = open(library, SERIAL_NUMBER);
+    configure(&camera, 0, 5.0);
+    let stride = readout_stride(&camera);
+    camera
+        .set_acquisition_buffer(2 * stride)
+        .expect("the buffer should be set");
+
+    let mut acquisition = camera
+        .start_acquisition()
+        .expect("acquisition should start");
+    let update = loop {
+        let update = acquisition
+            .wait(Some(TIMEOUT))
+            .expect("wait should work")
+            .expect("a demo readout should arrive within the timeout");
+        if !update.readouts().is_empty() {
+            break update;
+        }
+    };
+    let copy = update.readouts().bytes().to_vec();
+    // long enough for picam to go round the 2-readout buffer many times,
+    // writing over this update's readout in picam's memory (seen with sdk
+    // 5.15)
+    thread::sleep(Duration::from_secs(2));
+    assert!(
+        update.readouts().bytes() == copy,
+        "a held update should keep its data"
+    );
+    drop(update);
+    assert_eq!(
+        acquisition.camera().has_acquisition_buffer_overrun(),
+        Ok(true)
+    );
+    let next = acquisition.wait(Some(TIMEOUT));
+    assert!(
+        matches!(
+            next,
+            Err(Error::AcquisitionFailed(errors)) if errors.contains(AcquisitionErrors::DATA_LOST)
+        ),
+        "the overrun should be reported as lost data"
+    );
+    acquisition
+        .finish()
+        .expect("a failed acquisition should finish cleanly");
+
+    // the flag clears when the next acquisition starts (seen with sdk 5.15)
+    let readouts = camera
+        .acquire(1, Some(TIMEOUT))
+        .expect("demo camera should acquire again");
+    assert_eq!(readouts.len(), 1);
+    drop(readouts);
+    assert_eq!(camera.has_acquisition_buffer_overrun(), Ok(false));
+
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that clearing the readout count online keeps an acquisition going
+/// past its count.
+#[test]
+fn readout_count_is_cleared_online() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "ACQ0014";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, mut camera) = open(library, SERIAL_NUMBER);
+    assert_eq!(camera.can_clear_readout_count_online(), Ok(true));
+    configure(&camera, 5, 20.0);
+    let stride = readout_stride(&camera);
+    camera
+        .set_acquisition_buffer(8 * stride)
+        .expect("the buffer should be set");
+
+    let mut acquisition = camera
+        .start_acquisition()
+        .expect("acquisition should start");
+    assert_eq!(acquisition.clear_readout_count_online(), Ok(true));
+    let mut total = 0;
+    while total <= 5 {
+        let update = acquisition
+            .wait(Some(TIMEOUT))
+            .expect("wait should work")
+            .expect("a demo readout should arrive within the timeout");
+        total += update.readouts().len();
+        assert!(
+            update.running() || total > 5,
+            "the acquisition should run past its count of 5, ended after {total}"
+        );
+    }
+    acquisition
+        .finish()
+        .expect("a stopped acquisition should finish cleanly");
+
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks the acquisition state watches on a demo camera, which says it can
+/// detect neither state (seen with SDK 5.15): they still register, each
+/// sends only its own state, and both disconnect when the camera closes.
+#[test]
+fn acquisition_state_watches() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "ACQ0015";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, mut camera) = open(library, SERIAL_NUMBER);
+    for state in [
+        AcquisitionState::ReadoutStarted,
+        AcquisitionState::ReadoutEnded,
+    ] {
+        assert_eq!(camera.can_watch_acquisition_state(state), Ok(false));
+    }
+    let (_started_watch, started) = camera
+        .watch_acquisition_state(AcquisitionState::ReadoutStarted)
+        .expect("picam should take the watch");
+    let (_ended_watch, ended) = camera
+        .watch_acquisition_state(AcquisitionState::ReadoutEnded)
+        .expect("picam should take the watch");
+    configure(&camera, 3, 20.0);
+
+    let readouts = camera
+        .acquire(3, Some(TIMEOUT))
+        .expect("demo camera should acquire");
+    assert_eq!(readouts.len(), 3);
+    drop(readouts);
+    // the demo sends nothing when this test runs alone, but after other
+    // acquisitions in the same process it sends one `ReadoutEnded` per
+    // readout, with both counters 0 (seen with sdk 5.15), so either is
+    // accepted
+    for (updates, state) in [
+        (&started, AcquisitionState::ReadoutStarted),
+        (&ended, AcquisitionState::ReadoutEnded),
+    ] {
+        let updates: Vec<_> = updates.try_iter().collect();
+        assert!(updates.len() <= 3, "at most one {state:?} per readout");
+        assert!(updates.iter().all(|update| update.state == state));
+    }
+
+    drop(camera);
+    assert_eq!(started.try_recv(), Err(TryRecvError::Disconnected));
+    assert_eq!(ended.try_recv(), Err(TryRecvError::Disconnected));
     id.disconnect_demo(library)
         .expect("demo camera should disconnect");
 }
