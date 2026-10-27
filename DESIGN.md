@@ -303,4 +303,5 @@ These largely mirror patterns already in `camera.rs`.
 
 - **Acquisition callbacks**, with user acquisition buffers, under the acquisition design discussion.
 - **`Camera::device` can't fail:** since `Camera` keeps its device handle, `Camera::device` always succeeds, but it still returns a `Result` so its merged signature stays the same. Dropping the `Result` is a candidate for the stage 6 API review.
+- **Typed status values:** `notify_when_status` and `wait_for_status_parameter_value` take the status value as a raw `i32`. A version taking a `TypedParameter<T>` with an enum `T`, such as `params::SENSOR_TEMPERATURE_STATUS` with `SensorTemperatureStatus::Locked`, would catch a value of the wrong enum at compile time. A candidate for the stage 6 API review.
 - **Ending an acquisition that never ends by itself:** `Acquisition`'s drain gives up only after 10 waits in a row bring no data. With stage 4's user buffers and `ReadoutCount = 0`, a camera that keeps sending data after a failed `stop` would keep it waiting forever, so stage 4 should also bound the time since `stop`.
