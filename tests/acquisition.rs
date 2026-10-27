@@ -14,8 +14,8 @@ use std::thread;
 use std::time::Duration;
 
 use picam_rs::{
-    AcquisitionErrors, AcquisitionState, Camera, CameraId, Error, Library, Model, Pixels, Roi,
-    TimeStamps, params,
+    Acquisition, AcquisitionErrors, AcquisitionState, Camera, CameraId, Error, Library, Model,
+    Pixels, Roi, TimeStamps, params,
 };
 
 /// How long any test waits for one readout, far longer than a demo camera
@@ -407,6 +407,26 @@ fn readout_stride(camera: &Camera) -> usize {
     .expect("readout stride should be positive")
 }
 
+/// Waits until more than 5 readouts, each `stride` bytes, have arrived from
+/// an acquisition whose readout count of 5 was cleared online.
+fn run_past_five(acquisition: &mut Acquisition<'_>, stride: usize) {
+    let mut total = 0;
+    while total <= 5 {
+        let update = acquisition
+            .wait(Some(TIMEOUT))
+            .expect("wait should work")
+            .expect("a demo readout should arrive within the timeout");
+        for readout in update.readouts().iter() {
+            assert_eq!(readout.bytes().len(), stride);
+        }
+        total += update.readouts().len();
+        assert!(
+            update.running() || total > 5,
+            "the acquisition should run past its count of 5, ended after {total}"
+        );
+    }
+}
+
 /// Checks that a buffer is set, used, reported and cleared.
 #[test]
 fn acquisition_buffer_is_set_and_cleared() {
@@ -476,12 +496,25 @@ fn buffer_smaller_than_a_readout_is_refused() {
         Err(Error::InvalidAcquisitionBuffer)
     ));
 
+    // `acquire` needs room for every readout, so it never wraps (seen with
+    // sdk 5.15), which its zero-copy view relies on
+    let stride = readout_stride(&camera);
+    camera
+        .set_acquisition_buffer(2 * stride)
+        .expect("the buffer should be set");
+    assert!(matches!(
+        camera.acquire(3, Some(TIMEOUT)),
+        Err(Error::InvalidAcquisitionBuffer)
+    ));
+
     drop(camera);
     id.disconnect_demo(library)
         .expect("demo camera should disconnect");
 }
 
-/// Checks that acquiring until stopped needs a buffer.
+/// Checks that acquiring until stopped, or more readouts than the camera
+/// counts exactly, needs a buffer, so PICam's own memory never wraps while
+/// `wait` views it in place.
 #[test]
 fn readout_count_zero_needs_a_buffer() {
     // each test uses its own serial number so demo cameras never collide
@@ -493,6 +526,14 @@ fn readout_count_zero_needs_a_buffer() {
     // the count sets and commits, and only starting is refused (seen with
     // sdk 5.15)
     configure(&camera, 0, 20.0);
+    assert!(matches!(
+        camera.start_acquisition(),
+        Err(Error::InvalidAcquisitionBuffer)
+    ));
+    let maximum = camera
+        .get(params::EXACT_READOUT_COUNT_MAXIMUM)
+        .expect("exact readout count maximum should be read");
+    configure(&camera, maximum + 1, 20.0);
     assert!(matches!(
         camera.start_acquisition(),
         Err(Error::InvalidAcquisitionBuffer)
@@ -620,7 +661,8 @@ fn overrun_is_reported_not_handed_out() {
 }
 
 /// Checks that clearing the readout count online keeps an acquisition going
-/// past its count.
+/// past its count, with a buffer and without one. Without one, PICam's own
+/// memory becomes circular (seen with SDK 5.15), so updates are copied.
 #[test]
 fn readout_count_is_cleared_online() {
     // each test uses its own serial number so demo cameras never collide
@@ -640,18 +682,35 @@ fn readout_count_is_cleared_online() {
         .start_acquisition()
         .expect("acquisition should start");
     assert_eq!(acquisition.clear_readout_count_online(), Ok(true));
-    let mut total = 0;
-    while total <= 5 {
-        let update = acquisition
-            .wait(Some(TIMEOUT))
-            .expect("wait should work")
-            .expect("a demo readout should arrive within the timeout");
-        total += update.readouts().len();
-        assert!(
-            update.running() || total > 5,
-            "the acquisition should run past its count of 5, ended after {total}"
-        );
-    }
+    run_past_five(&mut acquisition, stride);
+    acquisition
+        .finish()
+        .expect("a stopped acquisition should finish cleanly");
+
+    camera
+        .clear_acquisition_buffer()
+        .expect("the buffer should be cleared");
+    // the device keeps the cleared count, though `READOUT_COUNT` still reads
+    // 5 and the parameters read as committed, so without a buffer the next
+    // start is refused until they're committed again (seen with sdk 5.15)
+    assert_eq!(camera.get(params::READOUT_COUNT), Ok(5));
+    assert_eq!(camera.are_parameters_committed(), Ok(true));
+    assert!(matches!(
+        camera.start_acquisition(),
+        Err(Error::InvalidAcquisitionBuffer)
+    ));
+    let failed = camera
+        .commit_parameters()
+        .expect("parameters should be committed");
+    assert!(
+        failed.is_empty(),
+        "parameters failed validation: {failed:?}"
+    );
+    let mut acquisition = camera
+        .start_acquisition()
+        .expect("acquisition should start");
+    assert_eq!(acquisition.clear_readout_count_online(), Ok(true));
+    run_past_five(&mut acquisition, stride);
     acquisition
         .finish()
         .expect("a stopped acquisition should finish cleanly");

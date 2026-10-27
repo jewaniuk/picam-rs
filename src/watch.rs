@@ -1,6 +1,6 @@
-//! Watching parameters, statuses and discovery through PICam's callbacks
-//! (`picam_advanced.h` and `picam_accessory.h`, PICam manual 7.3, 7.4.1,
-//! 7.4.2 and 7.4.8 to 7.4.12).
+//! Watching parameters, statuses, discovery and acquisition states through
+//! PICam's callbacks (`picam_advanced.h` and `picam_accessory.h`, PICam
+//! manual 7.3, 7.4.1, 7.4.2, 7.4.8 to 7.4.12 and 7.4.16).
 //!
 //! PICam passes a callback only the handle, the parameter and the new value,
 //! never a pointer of the caller's. So there is one trampoline per kind of
@@ -17,7 +17,9 @@
 //!
 //! Discovery callbacks have no handle or parameter, so they're keyed by a null
 //! handle and parameter 0, and the library clears them before it
-//! uninitializes. A status notification fires once: its trampoline takes the
+//! uninitializes. Acquisition state callbacks have no parameter, so they're
+//! keyed by the device handle, parameter 0 and the state. A status
+//! notification fires once: its trampoline takes the
 //! key's sinks as it sends, so a key with no sinks has nothing registered with
 //! PICam, whatever `REGISTRATIONS` still counts.
 
@@ -125,8 +127,9 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// A watch on a parameter, a status or discovery, which ends when dropped,
-/// or when the camera, accessory or library it watches closes.
+/// A watch on a parameter, a status, discovery or an acquisition state, which
+/// ends when dropped, or when the camera, accessory or library it watches
+/// closes.
 ///
 /// The `watch_*` methods of [`Camera`](crate::Camera),
 /// [`CameraDevice`](crate::CameraDevice) and [`Accessory`](crate::Accessory)

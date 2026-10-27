@@ -111,12 +111,14 @@ pub(crate) struct AcquisitionBuffer {
 }
 
 impl AcquisitionBuffer {
-    /// The memory's alignment, enough for every pixel type, so pixels always
-    /// borrow rather than copy.
+    /// The memory's alignment, enough for every pixel type, so pixels viewed
+    /// in place borrow rather than copy.
     const ALIGN: usize = 8;
 
-    /// Allocates `len` zeroed bytes, where `len` isn't 0.
+    /// Allocates `len` zeroed bytes. Panics if `len` is 0, which callers
+    /// clear the buffer for instead.
     fn new(len: usize) -> Result<Self> {
+        assert!(len != 0, "an acquisition buffer can't be empty");
         let layout = Self::layout(len)?;
         // SAFETY: `layout` isn't zero-sized, since `len` isn't 0
         let memory = unsafe { alloc::alloc_zeroed(layout) };
@@ -188,6 +190,8 @@ impl Camera {
     ///   which case any data is dropped
     /// - [`crate::Error::InconsistentDataLayout`] if the camera's layout
     ///   parameters don't fit together
+    /// - [`crate::Error::InvalidAcquisitionBuffer`] if the camera's buffer
+    ///   can't hold `readout_count` readouts (seen with SDK 5.15)
     /// - otherwise an error if PICam is unable to acquire
     pub fn acquire(
         &mut self,
@@ -241,6 +245,9 @@ impl Camera {
     ///   since the last commit
     /// - [`crate::Error::InconsistentDataLayout`] if the camera's layout
     ///   parameters don't fit together
+    /// - [`crate::Error::InvalidAcquisitionBuffer`] if the readout count needs
+    ///   a buffer and the camera has none, or the camera's buffer is too
+    ///   small (seen with SDK 5.15)
     /// - otherwise an error if PICam is unable to start
     pub fn start_acquisition(&mut self) -> Result<Acquisition<'_>> {
         let layout = Arc::new(Layout::read(self)?);
@@ -266,8 +273,9 @@ impl Camera {
     /// SDK 5.15). Read [`params::READOUT_STRIDE`](crate::params::READOUT_STRIDE)
     /// after setting the other parameters, since metadata such as time stamps
     /// lengthens it. Updates from the buffer are copied out, see
-    /// [`Acquisition::wait`]. PICam fills it as a circular buffer, so room for several readouts leaves time
-    /// to read each update before PICam needs its space again, and
+    /// [`Acquisition::wait`]. PICam fills it as a circular buffer, so room
+    /// for several readouts leaves time to read each update before PICam
+    /// needs its space again, and
     /// [`Camera::has_acquisition_buffer_overrun`] says whether it ran out. The
     /// camera keeps the memory until it's replaced or cleared, or the camera
     /// closes. Replacing it needs the camera free of any acquisition:
@@ -285,7 +293,8 @@ impl Camera {
     /// # Errors
     ///
     /// - [`crate::Error::AcquisitionInProgress`] if PICam says an acquisition
-    ///   is still running, after ending one gave up
+    ///   is still running, after ending one gave up or an [`Acquisition`] was
+    ///   leaked with [`std::mem::forget`]
     /// - [`crate::Error::InsufficientMemory`] if the memory can't be allocated
     /// - otherwise an error if PICam is unable to use it, and the previous
     ///   buffer stays in use
@@ -353,7 +362,9 @@ impl Camera {
 
     /// Reports whether the camera's buffer has overrun: whether, while
     /// acquiring, PICam needed its space for new data before the old was read
-    /// (PICam manual 7.4.17.1).
+    /// (PICam manual 7.4.17.1). It reports the same for PICam's own memory
+    /// once the readout count has been cleared online (seen with SDK 5.15).
+    /// The flag clears when the next acquisition starts.
     ///
     /// # Errors
     ///
@@ -584,9 +595,14 @@ impl Acquisition<'_> {
         // SAFETY: `start` came from a successful wait, and its `len` bytes lie
         // inside the camera's buffer (checked by `extent`) or picam's own
         // memory, both allocated while the acquisition runs. `copy` has room
-        // for `len` bytes and doesn't overlap them. no reference to picam's
-        // memory is made: picam may be writing to it only if it has overrun,
-        // which is checked next, and the copy is then thrown away
+        // for `len` bytes and doesn't overlap them. picam doesn't write to
+        // them unless it overruns. if it has, this read races picam's
+        // non-atomic writes, which rust's memory model counts as undefined
+        // behaviour however the read is made, and no code here can avoid it
+        // for memory foreign code writes. that risk is accepted (decided with
+        // the maintainer on 2026-10-27): the read goes through a raw pointer
+        // into owned memory, the overrun is checked next, and the bytes are
+        // then thrown away without being looked at
         unsafe {
             ptr::copy_nonoverlapping(start, self.copy.as_mut_ptr(), len);
             self.copy.set_len(len);
@@ -641,7 +657,11 @@ impl Acquisition<'_> {
     /// whether it did: it can lose a race with the acquisition reaching its
     /// readout count. PICam then reuses memory circularly, even without a
     /// buffer (seen with SDK 5.15), so later updates are copied out, see
-    /// [`Acquisition::wait`]. Check
+    /// [`Acquisition::wait`]. The camera keeps the cleared count for later
+    /// acquisitions too, even though
+    /// [`params::READOUT_COUNT`](crate::params::READOUT_COUNT) still reads
+    /// the old count and the parameters read as committed, until
+    /// [`Camera::commit_parameters`] runs again (seen with SDK 5.15). Check
     /// [`Camera::can_clear_readout_count_online`] first.
     ///
     /// # Errors
@@ -859,7 +879,7 @@ impl<'a> Readouts<'a> {
         (0..self.count).map(|index| self.readout(index))
     }
 
-    // `index` must be below `count`, and `from_raw` checked the bytes cover it
+    // `index` must be below `count`, and `extent` checked the bytes cover it
     fn readout(&self, index: usize) -> Readout<'_> {
         let start = index * self.layout.readout_stride;
         Readout {
@@ -994,9 +1014,9 @@ impl<'a> RoiData<'a> {
     /// The region's pixels, in the order PICam stores them, or `None` for a
     /// pixel format this crate doesn't know.
     ///
-    /// They're borrowed from PICam's buffer when it's aligned for the pixel
-    /// type, and copied when it isn't, since PICam doesn't document its
-    /// alignment.
+    /// They're borrowed from the readouts' memory when it's aligned for the
+    /// pixel type, and copied when it isn't, since PICam doesn't document
+    /// its alignment.
     pub fn pixels(&self) -> Option<Pixels<'a>> {
         match (self.pixel_format, self.pixel_size) {
             (PixelFormat::Monochrome16Bit, 2) => Some(Pixels::Mono16(as_u16s(self.bytes))),
