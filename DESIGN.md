@@ -221,7 +221,7 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 
 ## Roadmap
 
-As of 2026-10-26: 189 / 199 functions wrapped.
+As of 2026-10-27: 189 / 199 functions wrapped.
 
 ### 1. Finish the `sys`-type refactor (done)
 

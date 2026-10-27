@@ -202,7 +202,8 @@ impl EmCalibration {
     /// 100, and returning `false` cancels the calibration. The manual doesn't
     /// say which thread PICam calls it on, so it must be `Send`. If it
     /// panics, the calibration is cancelled, and the panic resumes here once
-    /// PICam returns.
+    /// PICam returns. The manual doesn't say whether `progress` may call
+    /// PICam itself, so it's best kept to reporting and deciding.
     ///
     /// # Errors
     ///
@@ -215,7 +216,9 @@ impl EmCalibration {
             panic: None,
         });
         // `state` outlives the call, and picam hands it only to
-        // `calibration_progress::<F>`, during the call (manual 8.3.1.1)
+        // `calibration_progress::<F>` (manual 8.3.1.1). calibrate blocks
+        // until calibration ends (manual 8.4.4.1), so picam is assumed never
+        // to call it afterwards, which the readme lists to check on hardware
         let result = picam_call!(sys::PicamEMCalibration_Calibrate(
             self.handle,
             Some(calibration_progress::<F>),

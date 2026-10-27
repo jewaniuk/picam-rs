@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use picam_rs::{
     Camera, CameraId, ConstraintCategory, Error, GatingMode, Library, Model, Modulation, Parameter,
-    Pulse, ReadoutControlMode, Roi, ShutterTimingMode, params,
+    Pulse, ReadoutControlMode, Roi, SensorTemperatureStatus, ShutterTimingMode, params,
 };
 
 /// Connects and opens a demo camera of `model`.
@@ -597,6 +597,10 @@ fn status_notification() {
     let (id, camera) = open(library, Model::PIXIS_100F, SERIAL_NUMBER);
     let status = Parameter::SensorTemperatureStatus;
     assert_eq!(camera.can_wait_for_status(status), Ok(true));
+    assert_eq!(
+        camera.get(params::SENSOR_TEMPERATURE_STATUS),
+        Ok(SensorTemperatureStatus::Locked)
+    );
     let locked: i32 = camera
         .get_untyped(status)
         .expect("the temperature status should be read");
@@ -631,6 +635,10 @@ fn status_notification_cancels_on_drop() {
     let library = &test_library.library;
     let (id, camera) = open(library, Model::PIXIS_100F, SERIAL_NUMBER);
     let status = Parameter::SensorTemperatureStatus;
+    assert_eq!(
+        camera.get(params::SENSOR_TEMPERATURE_STATUS),
+        Ok(SensorTemperatureStatus::Locked)
+    );
     let locked: i32 = camera
         .get_untyped(status)
         .expect("the temperature status should be read");
@@ -643,6 +651,8 @@ fn status_notification_cancels_on_drop() {
         unlocked.recv_timeout(Duration::from_millis(500)),
         Err(RecvTimeoutError::Timeout)
     );
+    // this checks the crate's side only: the receiver disconnects whether or
+    // not picam's cancel succeeds, which `Watch` can only log
     drop(unlocked_watch);
     assert_eq!(unlocked.try_recv(), Err(TryRecvError::Disconnected));
 

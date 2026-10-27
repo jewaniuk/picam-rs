@@ -544,8 +544,8 @@ impl Camera {
         Ok(constraints)
     }
 
-    /// Watches `parameter`'s ROIs constraint, sending the new constraint each
-    /// time setting another parameter changes it (PICam manual 7.4.11.2). Each
+    /// Watches `parameter`'s ROIs constraint, sending the new constraint
+    /// each time setting another parameter changes it (PICam manual 7.4.11.2). Each
     /// change is sent before the `set` that caused it returns.
     ///
     /// # Errors
@@ -566,8 +566,8 @@ impl Camera {
         )
     }
 
-    /// Watches `parameter`'s pulse constraint, sending the new constraint each
-    /// time setting another parameter changes it (PICam manual 7.4.11.5). Each
+    /// Watches `parameter`'s pulse constraint, sending the new constraint
+    /// each time setting another parameter changes it (PICam manual 7.4.11.5). Each
     /// change is sent before the `set` that caused it returns.
     ///
     /// # Errors
@@ -588,8 +588,8 @@ impl Camera {
         )
     }
 
-    /// Watches `parameter`'s modulations constraint, sending the new constraint each
-    /// time setting another parameter changes it (PICam manual 7.4.11.8). Each
+    /// Watches `parameter`'s modulations constraint, sending the new constraint
+    /// each time setting another parameter changes it (PICam manual 7.4.11.8). Each
     /// change is sent before the `set` that caused it returns.
     ///
     /// # Errors
