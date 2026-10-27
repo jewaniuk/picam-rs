@@ -946,6 +946,9 @@ fn leaked_stream_blocks_other_acquisitions() {
     let (id, mut camera) = open(library, SERIAL_NUMBER);
     configure(&camera, 3, 20.0);
     let stride = readout_stride(&camera);
+    camera
+        .set_acquisition_buffer(4 * stride)
+        .expect("the buffer should be set");
 
     let (stream, updates) = camera
         .start_acquisition_stream()
@@ -975,9 +978,13 @@ fn leaked_stream_blocks_other_acquisitions() {
         camera.acquire(1, Some(TIMEOUT)),
         Err(Error::AcquisitionUpdatedHandlerRegistered)
     ));
-    // the leaked callback could still read a buffer
+    // the leaked callback could still read the buffer
     assert!(matches!(
         camera.set_acquisition_buffer(2 * stride),
+        Err(Error::AcquisitionUpdatedHandlerRegistered)
+    ));
+    assert!(matches!(
+        camera.clear_acquisition_buffer(),
         Err(Error::AcquisitionUpdatedHandlerRegistered)
     ));
 

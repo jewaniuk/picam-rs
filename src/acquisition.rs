@@ -472,8 +472,8 @@ impl Camera {
     /// after setting the other parameters, since metadata such as time stamps
     /// lengthens it. Data from the buffer, by [`Camera::acquire`],
     /// [`Acquisition::wait`] or [`Camera::start_acquisition_stream`], is
-    /// always a copy, so the crate never views
-    /// memory PICam may be writing to. The camera keeps that copy, up to
+    /// always a copy, so the crate never views memory PICam may be writing
+    /// to. The camera keeps that copy, up to
     /// `len` bytes, until the buffer is replaced or cleared. PICam fills the
     /// buffer circularly, so room for several readouts leaves time to read
     /// each update before PICam needs its space again, and
@@ -1050,8 +1050,8 @@ impl StreamedUpdate {
     }
 
     /// Whether the acquisition was still running. The last update says it
-    /// isn't, unless the acquisition ended with errors and the last update
-    /// is an `Err`, and the receiver disconnects after it.
+    /// isn't. If the acquisition ended with errors, the last update is an
+    /// `Err` instead. The receiver disconnects after the last update.
     pub fn running(&self) -> bool {
         self.running
     }
