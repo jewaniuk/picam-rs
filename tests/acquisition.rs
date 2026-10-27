@@ -448,6 +448,10 @@ fn acquisition_buffer_is_set_and_cleared() {
         .acquire(3, Some(TIMEOUT))
         .expect("demo camera should acquire into the buffer");
     assert_eq!(readouts.len(), 3);
+    // a copy of the buffer, laid out the same way
+    for readout in readouts.iter() {
+        assert_eq!(readout.bytes().len(), stride);
+    }
     drop(readouts);
 
     camera
@@ -497,7 +501,7 @@ fn buffer_smaller_than_a_readout_is_refused() {
     ));
 
     // `acquire` needs room for every readout, so it never wraps (seen with
-    // sdk 5.15), which its zero-copy view relies on
+    // sdk 5.15)
     let stride = readout_stride(&camera);
     camera
         .set_acquisition_buffer(2 * stride)
@@ -660,9 +664,9 @@ fn overrun_is_reported_not_handed_out() {
         .expect("demo camera should disconnect");
 }
 
-/// Checks that clearing the readout count online keeps an acquisition going
-/// past its count, with a buffer and without one. Without one, PICam's own
-/// memory becomes circular (seen with SDK 5.15), so updates are copied.
+/// Checks that clearing the readout count online keeps an acquisition with a
+/// buffer going past its count, and that it's refused without a buffer, since
+/// PICam's own memory would then become circular (seen with SDK 5.15).
 #[test]
 fn readout_count_is_cleared_online() {
     // each test uses its own serial number so demo cameras never collide
@@ -709,11 +713,26 @@ fn readout_count_is_cleared_online() {
     let mut acquisition = camera
         .start_acquisition()
         .expect("acquisition should start");
-    assert_eq!(acquisition.clear_readout_count_online(), Ok(true));
-    run_past_five(&mut acquisition, stride);
+    assert!(matches!(
+        acquisition.clear_readout_count_online(),
+        Err(Error::InvalidAcquisitionBuffer)
+    ));
+    // the refused clear leaves the count, so it ends by itself after 5
+    let mut total = 0;
+    loop {
+        let update = acquisition
+            .wait(Some(TIMEOUT))
+            .expect("wait should work")
+            .expect("a demo readout should arrive within the timeout");
+        total += update.readouts().len();
+        if !update.running() {
+            break;
+        }
+    }
+    assert_eq!(total, 5);
     acquisition
         .finish()
-        .expect("a stopped acquisition should finish cleanly");
+        .expect("an ended acquisition should finish cleanly");
 
     drop(camera);
     id.disconnect_demo(library)

@@ -3,13 +3,16 @@
 //! ([`Camera::set_acquisition_buffer`]), and watching acquisition states
 //! (`picam_advanced.h`, PICam manual chapter 6 and 7.4.14 to 7.4.17).
 
-use std::alloc;
 use std::borrow::Cow;
 use std::ptr::{self, NonNull};
 use std::slice;
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
+
+use windows_sys::Win32::System::Memory::{
+    MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_READWRITE, VirtualAlloc, VirtualFree,
+};
 
 use crate::camera::Camera;
 use crate::convert::define_picam_enum;
@@ -101,35 +104,40 @@ const DRAIN_ATTEMPTS: u32 = 10;
 const DRAIN_LIMIT: Duration = Duration::from_secs(10);
 
 /// Memory the camera acquires into instead of PICam's own, from
-/// [`Camera::set_acquisition_buffer`]. It's a raw allocation rather than a
-/// `Box`, since PICam writes to parts of it while the crate holds views of
-/// others, so nothing may claim the whole of it.
+/// [`Camera::set_acquisition_buffer`].
+///
+/// PICam writes to it circularly, and once it runs out of room it writes over
+/// data not yet read, possibly while the crate is copying that data (seen on
+/// a demo camera with SDK 5.15). So the OS allocates it, not Rust's
+/// allocator, and the crate never makes a reference to it or reads it except
+/// with volatile reads through raw pointers ([`AcquisitionBuffer::copy_out`]).
+/// That keeps it outside every Rust allocation, where the `read_volatile`
+/// docs leave such reads to the hardware: one racing PICam's writes returns
+/// wrong bytes, not undefined behaviour, and the overrun check catches them.
 #[derive(Debug)]
 pub(crate) struct AcquisitionBuffer {
     memory: NonNull<u8>,
     len: usize,
+    // where data is copied out of `memory`, reused across copies and grown as
+    // needed. `u64`s keep it 8-byte aligned, so pixels borrow rather than copy
+    copy: Vec<u64>,
 }
 
 impl AcquisitionBuffer {
-    /// The memory's alignment, enough for every pixel type, so pixels viewed
-    /// in place borrow rather than copy.
-    const ALIGN: usize = 8;
-
-    /// Allocates `len` zeroed bytes. Panics if `len` is 0, which callers
-    /// clear the buffer for instead.
+    /// Allocates `len` zeroed bytes from the OS. Panics if `len` is 0, which
+    /// callers clear the buffer for instead.
     fn new(len: usize) -> Result<Self> {
         assert!(len != 0, "an acquisition buffer can't be empty");
-        let layout = Self::layout(len)?;
-        // SAFETY: `layout` isn't zero-sized, since `len` isn't 0
-        let memory = unsafe { alloc::alloc_zeroed(layout) };
-        let memory = NonNull::new(memory).ok_or(Error::InsufficientMemory)?;
-        Ok(Self { memory, len })
-    }
-
-    /// The allocation's layout, or `InsufficientMemory` for a size no
-    /// allocation can have.
-    fn layout(len: usize) -> Result<alloc::Layout> {
-        alloc::Layout::from_size_align(len, Self::ALIGN).map_err(|_| Error::InsufficientMemory)
+        // SAFETY: a null address lets the OS choose where, and `len` isn't 0.
+        // the OS returns null or `len` committed, zeroed, page-aligned bytes
+        let memory =
+            unsafe { VirtualAlloc(ptr::null(), len, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE) };
+        let memory = NonNull::new(memory.cast()).ok_or(Error::InsufficientMemory)?;
+        Ok(Self {
+            memory,
+            len,
+            copy: Vec::new(),
+        })
     }
 
     /// The buffer as PICam takes it.
@@ -149,14 +157,66 @@ impl AcquisitionBuffer {
                 .checked_add(len)
                 .is_some_and(|end| end <= base + self.len)
     }
+
+    /// Copies the `len` bytes from `start` out of the buffer with volatile
+    /// reads, refusing any that don't lie inside it.
+    ///
+    /// PICam may be writing to them, if it has overrun. A racing write gives
+    /// wrong bytes rather than undefined behaviour (see [`AcquisitionBuffer`]),
+    /// so check the overrun flag before trusting the copy.
+    fn copy_out(&mut self, start: *const u8, len: usize) -> Result<&[u8]> {
+        // picam reports readouts that sit one after another (manual 6.3.1).
+        // checking they lie inside the buffer turns any misunderstanding of
+        // how it wraps into an error rather than a read out of bounds
+        if !self.contains(start, len) {
+            return Err(Error::InconsistentDataLayout);
+        }
+        let words = len.div_ceil(8);
+        if self.copy.len() < words {
+            self.copy.resize(words, 0);
+        }
+        // SAFETY: `copy` holds at least `len` initialized bytes, any of which
+        // is a valid `u8`, and the view borrows `self` mutably, as `copy` is
+        let copy = unsafe { slice::from_raw_parts_mut(self.copy.as_mut_ptr().cast::<u8>(), len) };
+        // byte by byte up to the first 8-byte boundary, then 8 bytes at a time,
+        // then the rest. `wrapping_add` rather than `add`, whose rules are
+        // about rust allocations, which this memory isn't
+        let head = ((8 - start.addr() % 8) % 8).min(len);
+        let (head_bytes, rest) = copy.split_at_mut(head);
+        let mut words = rest.chunks_exact_mut(8);
+        let mut offset = 0;
+        for byte in head_bytes {
+            // SAFETY: `start + offset` lies inside the buffer (checked above),
+            // which the os allocated in `new` and keeps allocated while `self`
+            // is borrowed. it's outside every rust allocation and never
+            // referenced, and reading it doesn't trap or change rust memory,
+            // so `read_volatile` may read it however picam writes to it
+            *byte = unsafe { start.wrapping_add(offset).read_volatile() };
+            offset += 1;
+        }
+        for word in &mut words {
+            // SAFETY: as above, for 8 bytes inside the buffer, which `head`
+            // aligned to 8
+            let value = unsafe { start.wrapping_add(offset).cast::<u64>().read_volatile() };
+            word.copy_from_slice(&value.to_ne_bytes());
+            offset += 8;
+        }
+        for byte in words.into_remainder() {
+            // SAFETY: as above
+            *byte = unsafe { start.wrapping_add(offset).read_volatile() };
+            offset += 1;
+        }
+        Ok(copy)
+    }
 }
 
 impl Drop for AcquisitionBuffer {
     fn drop(&mut self) {
-        let layout = Self::layout(self.len).expect("checked when allocated");
-        // SAFETY: `memory` was allocated in `new` with this layout, and only
-        // this drop frees it
-        unsafe { alloc::dealloc(self.memory.as_ptr(), layout) }
+        // SAFETY: `memory` came from `VirtualAlloc` in `new`, and only this
+        // drop frees it. releasing takes a size of 0
+        if unsafe { VirtualFree(self.memory.as_ptr().cast(), 0, MEM_RELEASE) } == 0 {
+            tracing::error!("failed to free an acquisition buffer");
+        }
     }
 }
 
@@ -168,7 +228,8 @@ impl Camera {
     /// to wait between readouts, and `None` waits forever. PICam reuses its
     /// buffer for the next acquisition (manual 6.4.1), so the data borrows
     /// the camera: copy it, for example with `readouts.bytes().to_vec()`, to
-    /// keep it longer.
+    /// keep it longer. With a buffer from [`Camera::set_acquisition_buffer`],
+    /// the readouts are a copy of it.
     ///
     /// ```compile_fail,E0499
     /// # fn f(camera: &mut picam_rs::Camera) -> picam_rs::Result<()> {
@@ -212,17 +273,18 @@ impl Camera {
             &mut errors
         ))?;
         check_errors(errors)?;
-        // SAFETY: `available` came from a successful `Picam_Acquire` on this
-        // camera, whose committed parameters `layout` was read from and whose
-        // buffer, if any, is the one passed. picam keeps the data valid and
-        // unchanged until the next acquisition starts or the camera closes
-        // (manual 6.4.1), whether the data is in picam's memory or the
-        // camera's buffer. with the camera's buffer, picam only acquires as
-        // many readouts as fit, refusing more with `InvalidAcquisitionBuffer`
-        // (seen on a demo camera with sdk 5.15), so the memory never wraps.
-        // those, and replacing the buffer, need `&mut self` or ownership, and
-        // the returned `Readouts` keeps `self` mutably borrowed
-        unsafe { Readouts::from_raw(&available, layout, self.acquisition_buffer()) }
+        let device = self.device_handle();
+        match self.acquisition_buffer_slot() {
+            Some(buffer) => copy_from_buffer(buffer, device, &available, layout),
+            // SAFETY: `available` came from a successful `Picam_Acquire` on
+            // this camera, whose committed parameters `layout` was read from,
+            // into picam's own memory, since the camera has no buffer. picam
+            // keeps the data valid and unchanged until the next acquisition
+            // starts or the camera closes (manual 6.4.1). those need `&mut
+            // self` or ownership, and the returned `Readouts` keeps `self`
+            // mutably borrowed
+            None => unsafe { Readouts::from_raw(&available, layout) },
+        }
     }
 
     /// Starts acquiring in the background, stopping after
@@ -253,17 +315,15 @@ impl Camera {
         let layout = Arc::new(Layout::read(self)?);
         picam_call!(sys::Picam_StartAcquisition(self.raw_handle()))?;
         Ok(Acquisition {
-            circular: self.acquisition_buffer().is_some(),
             camera: self,
             layout,
             running: true,
-            copy: Vec::new(),
         })
     }
 
-    /// Gives the camera `len` bytes of memory to acquire into instead of
-    /// PICam's own (PICam manual 7.4.14.2), or with `len` 0 goes back to
-    /// PICam's, like [`Camera::clear_acquisition_buffer`].
+    /// Gives the camera `len` bytes of memory from the OS to acquire into
+    /// instead of PICam's own (PICam manual 7.4.14.2), or with `len` 0 goes
+    /// back to PICam's, like [`Camera::clear_acquisition_buffer`].
     ///
     /// Acquiring until stopped (a readout count of 0) or more readouts than
     /// [`params::EXACT_READOUT_COUNT_MAXIMUM`](crate::params::EXACT_READOUT_COUNT_MAXIMUM)
@@ -272,10 +332,11 @@ impl Camera {
     /// or they fail with [`crate::Error::InvalidAcquisitionBuffer`] (seen with
     /// SDK 5.15). Read [`params::READOUT_STRIDE`](crate::params::READOUT_STRIDE)
     /// after setting the other parameters, since metadata such as time stamps
-    /// lengthens it. Updates from the buffer are copied out, see
-    /// [`Acquisition::wait`]. PICam fills it as a circular buffer, so room
-    /// for several readouts leaves time to read each update before PICam
-    /// needs its space again, and
+    /// lengthens it. Data from the buffer, by [`Camera::acquire`] or
+    /// [`Acquisition::wait`], is always a copy, so the crate never views
+    /// memory PICam may be writing to. PICam fills it as a circular buffer,
+    /// so room for several readouts leaves time to read each update before
+    /// PICam needs its space again, and
     /// [`Camera::has_acquisition_buffer_overrun`] says whether it ran out. The
     /// camera keeps the memory until it's replaced or cleared, or the camera
     /// closes. Replacing it needs the camera free of any acquisition:
@@ -362,20 +423,14 @@ impl Camera {
 
     /// Reports whether the camera's buffer has overrun: whether, while
     /// acquiring, PICam needed its space for new data before the old was read
-    /// (PICam manual 7.4.17.1). It reports the same for PICam's own memory
-    /// once the readout count has been cleared online (seen with SDK 5.15).
-    /// The flag clears when the next acquisition starts.
+    /// (PICam manual 7.4.17.1). The flag clears when the next acquisition
+    /// starts.
     ///
     /// # Errors
     ///
     /// Returns an error if PICam is unable to check this.
     pub fn has_acquisition_buffer_overrun(&self) -> Result<bool> {
-        let mut overran: sys::pibln = 0;
-        picam_call!(sys::PicamAdvanced_HasAcquisitionBufferOverrun(
-            self.device_handle(),
-            &mut overran
-        ))?;
-        Ok(overran != 0)
+        has_overrun(self.device_handle())
     }
 
     /// Reports whether [`Acquisition::clear_readout_count_online`] can work
@@ -490,13 +545,6 @@ pub struct Acquisition<'a> {
     layout: Arc<Layout>,
     // whether picam last said the acquisition is running
     running: bool,
-    // whether picam may reuse memory it has handed out: the camera has a
-    // buffer, or the readout count was cleared online. picam then writes
-    // over readouts not yet read once it runs out of room (seen on a demo
-    // camera with sdk 5.15), so each update is copied out
-    circular: bool,
-    // where updates from circular memory are copied, reused across waits
-    copy: Vec<u8>,
 }
 
 impl Acquisition<'_> {
@@ -507,8 +555,7 @@ impl Acquisition<'_> {
     /// carries on (manual 6.4.5). Each update's data lasts until the next
     /// call.
     ///
-    /// When the memory is circular (the camera has a buffer, or the readout
-    /// count was cleared online), each update is a copy, since PICam writes
+    /// When the camera has a buffer, each update is a copy, since PICam writes
     /// over readouts not yet read once it runs out of room. If it did, `wait`
     /// returns [`crate::Error::AcquisitionFailed`] with
     /// [`AcquisitionErrors::DATA_LOST`] rather than data that may be torn.
@@ -527,7 +574,7 @@ impl Acquisition<'_> {
     ///
     /// - [`crate::Error::AcquisitionFailed`] if PICam reported errors, which
     ///   halt the acquisition, or with [`AcquisitionErrors::DATA_LOST`] if
-    ///   PICam wrote over circular memory before it was read. Keep waiting, or
+    ///   PICam wrote over the camera's buffer before it was read. Keep waiting, or
     ///   call [`finish`](Self::finish), until it has ended.
     /// - [`crate::Error::InconsistentDataLayout`] if the data doesn't fit the
     ///   layout read when the acquisition started
@@ -555,67 +602,26 @@ impl Acquisition<'_> {
         }
         self.running = status.running != 0;
         check_errors(status.errors)?;
-        let readouts = if self.circular {
-            self.copy_update(&available)?
-        } else {
+        let device = self.camera.device_handle();
+        let layout = Arc::clone(&self.layout);
+        let readouts = match self.camera.acquisition_buffer_slot() {
+            Some(buffer) => copy_from_buffer(buffer, device, &available, layout)?,
             // SAFETY: `available` came from a successful wait on this camera,
             // whose committed parameters `layout` was read from when the
-            // acquisition started. picam keeps the data valid and unchanged
-            // until the next wait (manual 6.4.5). the memory isn't circular:
-            // picam's own memory for a counted acquisition holds every readout
-            // and isn't reused while it runs (seen on a demo camera with sdk
-            // 5.15). the next wait needs `&mut self`, as do `stop` and
+            // acquisition started, into picam's own memory, since the camera
+            // has no buffer. picam keeps the data valid and unchanged until
+            // the next wait (manual 6.4.5). that memory never becomes
+            // circular, since clearing the readout count online needs a
+            // buffer. the next wait needs `&mut self`, as do `stop` and
             // `finish`, and the returned `Update` keeps `self` mutably
             // borrowed
-            unsafe {
-                Readouts::from_raw(
-                    &available,
-                    Arc::clone(&self.layout),
-                    self.camera.acquisition_buffer(),
-                )
-            }?
+            None => unsafe { Readouts::from_raw(&available, layout) }?,
         };
         Ok(Some(Update {
             readouts,
             running: status.running != 0,
             readout_rate: status.readout_rate,
         }))
-    }
-
-    /// Copies an update out of circular memory, which PICam writes over once
-    /// it runs out of room, then checks it didn't.
-    fn copy_update(&mut self, available: &sys::PicamAvailableData) -> Result<Readouts<'_>> {
-        let Some((start, len, count)) =
-            Readouts::extent(available, &self.layout, self.camera.acquisition_buffer())?
-        else {
-            return Ok(Readouts::empty(Arc::clone(&self.layout)));
-        };
-        self.copy.clear();
-        self.copy.reserve(len);
-        // SAFETY: `start` came from a successful wait, and its `len` bytes lie
-        // inside the camera's buffer (checked by `extent`) or picam's own
-        // memory, both allocated while the acquisition runs. `copy` has room
-        // for `len` bytes and doesn't overlap them. picam doesn't write to
-        // them unless it overruns. if it has, this read races picam's
-        // non-atomic writes, which rust's memory model counts as undefined
-        // behaviour however the read is made, and no code here can avoid it
-        // for memory foreign code writes. that risk is accepted (decided with
-        // the maintainer on 2026-10-27): the read goes through a raw pointer
-        // into owned memory, the overrun is checked next, and the bytes are
-        // then thrown away without being looked at
-        unsafe {
-            ptr::copy_nonoverlapping(start, self.copy.as_mut_ptr(), len);
-            self.copy.set_len(len);
-        }
-        // a copy picam may have written over midway is never handed out
-        if self.camera.has_acquisition_buffer_overrun()? {
-            return Err(Error::AcquisitionFailed(AcquisitionErrors::DATA_LOST));
-        }
-        Ok(Readouts::from_copy(
-            &self.copy,
-            count,
-            Arc::clone(&self.layout),
-        ))
     }
 
     /// Asks PICam to stop the acquisition, which happens some time later.
@@ -655,21 +661,25 @@ impl Acquisition<'_> {
     /// Tries to make the acquisition run until stopped, by setting its
     /// readout count to 0 while it runs (PICam manual 7.4.17.3). Returns
     /// whether it did: it can lose a race with the acquisition reaching its
-    /// readout count. PICam then reuses memory circularly, even without a
-    /// buffer (seen with SDK 5.15), so later updates are copied out, see
-    /// [`Acquisition::wait`]. The camera keeps the cleared count for later
-    /// acquisitions too, even though
-    /// [`params::READOUT_COUNT`](crate::params::READOUT_COUNT) still reads
-    /// the old count and the parameters read as committed, until
+    /// readout count. It needs a buffer from
+    /// [`Camera::set_acquisition_buffer`], which PICam then fills
+    /// circularly. The camera keeps the cleared count for later acquisitions
+    /// too, even though [`params::READOUT_COUNT`](crate::params::READOUT_COUNT)
+    /// still reads the old count and the parameters read as committed, until
     /// [`Camera::commit_parameters`] runs again (seen with SDK 5.15). Check
     /// [`Camera::can_clear_readout_count_online`] first.
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to try.
+    /// - [`crate::Error::InvalidAcquisitionBuffer`] if the camera has no
+    ///   buffer
+    /// - otherwise an error if PICam is unable to try
     pub fn clear_readout_count_online(&mut self) -> Result<bool> {
-        // conservatively, even if picam reports it lost the race
-        self.circular = true;
+        // without a buffer, picam reuses its own memory circularly (seen on a
+        // demo camera with sdk 5.15), which `wait` views in place
+        if self.camera.acquisition_buffer().is_none() {
+            return Err(Error::InvalidAcquisitionBuffer);
+        }
         let mut cleared: sys::pibln = 0;
         picam_call!(sys::PicamAdvanced_ClearReadoutCountOnline(
             self.camera.device_handle(),
@@ -776,21 +786,16 @@ pub struct Readouts<'a> {
 }
 
 impl<'a> Readouts<'a> {
-    /// Views `available`'s readouts, which must lie inside `buffer` when the
-    /// camera has one.
+    /// Views `available`'s readouts in PICam's own memory.
     ///
     /// # Safety
     ///
     /// `available` must come from a successful `Picam_Acquire` or
-    /// `Picam_WaitForAcquisitionUpdate` on a camera whose committed
-    /// parameters `layout` was read from, and whose buffer, if any, is
-    /// `buffer`. Its data must stay valid and unchanged for `'a`.
-    unsafe fn from_raw(
-        available: &sys::PicamAvailableData,
-        layout: Arc<Layout>,
-        buffer: Option<&AcquisitionBuffer>,
-    ) -> Result<Self> {
-        let Some((start, len, count)) = Self::extent(available, &layout, buffer)? else {
+    /// `Picam_WaitForAcquisitionUpdate` into PICam's own memory, on a camera
+    /// whose committed parameters `layout` was read from. Its data must stay
+    /// valid and unchanged for `'a`.
+    unsafe fn from_raw(available: &sys::PicamAvailableData, layout: Arc<Layout>) -> Result<Self> {
+        let Some((start, len, count)) = Self::extent(available, &layout)? else {
             return Ok(Self::empty(layout));
         };
         // SAFETY: picam puts `count` readouts at `initial_readout`, each
@@ -807,12 +812,10 @@ impl<'a> Readouts<'a> {
     }
 
     /// Where `available`'s readouts lie: their start, length and count, or
-    /// `None` if there are none. They must lie inside `buffer` when the
-    /// camera has one.
+    /// `None` if there are none.
     fn extent(
         available: &sys::PicamAvailableData,
         layout: &Layout,
-        buffer: Option<&AcquisitionBuffer>,
     ) -> Result<Option<(*const u8, usize, usize)>> {
         let count =
             usize::try_from(available.readout_count).map_err(|_| Error::InconsistentDataLayout)?;
@@ -824,13 +827,6 @@ impl<'a> Readouts<'a> {
             .and_then(|start| start.checked_add(layout.readout_len))
             .ok_or(Error::InconsistentDataLayout)?;
         let start = available.initial_readout.cast::<u8>().cast_const();
-        // picam reports readouts that sit one after another (manual 6.3.1).
-        // checking they lie inside the camera's buffer turns any
-        // misunderstanding of how it wraps into an error rather than a read
-        // out of bounds
-        if buffer.is_some_and(|buffer| !buffer.contains(start, len)) {
-            return Err(Error::InconsistentDataLayout);
-        }
         Ok(Some((start, len, count)))
     }
 
@@ -1202,6 +1198,38 @@ fn check_errors(errors: sys::PicamAcquisitionErrorsMask) -> Result<()> {
     }
 }
 
+/// Copies `available`'s readouts out of the camera's `buffer`, then checks
+/// PICam didn't write over them meanwhile.
+fn copy_from_buffer<'a>(
+    buffer: &'a mut AcquisitionBuffer,
+    device: sys::PicamHandle,
+    available: &sys::PicamAvailableData,
+    layout: Arc<Layout>,
+) -> Result<Readouts<'a>> {
+    let Some((start, len, count)) = Readouts::extent(available, &layout)? else {
+        return Ok(Readouts::empty(layout));
+    };
+    let bytes = buffer.copy_out(start, len)?;
+    // picam writes over readouts not yet read once it runs out of room, then
+    // sets the overrun flag (seen on a demo camera with sdk 5.15). a copy it
+    // may have written over midway is never handed out
+    if has_overrun(device)? {
+        return Err(Error::AcquisitionFailed(AcquisitionErrors::DATA_LOST));
+    }
+    Ok(Readouts::from_copy(bytes, count, layout))
+}
+
+/// Reports whether `device`'s buffer has overrun, see
+/// [`Camera::has_acquisition_buffer_overrun`].
+fn has_overrun(device: sys::PicamHandle) -> Result<bool> {
+    let mut overran: sys::pibln = 0;
+    picam_call!(sys::PicamAdvanced_HasAcquisitionBufferOverrun(
+        device,
+        &mut overran
+    ))?;
+    Ok(overran != 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1341,9 +1369,8 @@ mod tests {
 
         // SAFETY: `pointer` starts 72 bytes laid out as `test_layout`
         // describes two readouts, and `storage` outlives `readouts`
-        let readouts =
-            unsafe { Readouts::from_raw(&data(pointer, 2), Arc::new(test_layout()), None) }
-                .expect("two readouts should be viewed");
+        let readouts = unsafe { Readouts::from_raw(&data(pointer, 2), Arc::new(test_layout())) }
+            .expect("two readouts should be viewed");
         // two readouts, without padding after the last frame
         assert_eq!(readouts.bytes().len(), 72);
         assert_eq!(readouts.len(), 2);
@@ -1352,8 +1379,8 @@ mod tests {
         // SAFETY: neither pointer is read, since a null pointer or no
         // readouts give an empty view
         let empty = [
-            unsafe { Readouts::from_raw(&data(ptr::null_mut(), 2), Arc::new(test_layout()), None) },
-            unsafe { Readouts::from_raw(&data(pointer, 0), Arc::new(test_layout()), None) },
+            unsafe { Readouts::from_raw(&data(ptr::null_mut(), 2), Arc::new(test_layout())) },
+            unsafe { Readouts::from_raw(&data(pointer, 0), Arc::new(test_layout())) },
         ];
         for readouts in empty {
             let readouts = readouts.expect("no data should be an empty view");
@@ -1362,8 +1389,7 @@ mod tests {
         }
 
         // SAFETY: a negative count is refused before the pointer is used
-        let negative =
-            unsafe { Readouts::from_raw(&data(pointer, -1), Arc::new(test_layout()), None) };
+        let negative = unsafe { Readouts::from_raw(&data(pointer, -1), Arc::new(test_layout())) };
         assert!(matches!(negative, Err(Error::InconsistentDataLayout)));
     }
 
@@ -1483,7 +1509,7 @@ mod tests {
 
     #[test]
     fn buffer_holds_only_its_own_bytes() {
-        let buffer = AcquisitionBuffer::new(64).expect("64 bytes should be allocated");
+        let mut buffer = AcquisitionBuffer::new(64).expect("64 bytes should be allocated");
         let base = buffer.memory.as_ptr().cast_const();
         assert!(base.cast::<u64>().is_aligned());
         assert!(buffer.contains(base, 64));
@@ -1492,9 +1518,10 @@ mod tests {
         assert!(!buffer.contains(base.wrapping_sub(1), 1));
         assert_eq!(buffer.to_raw().memory_size, 64);
 
-        // SAFETY: the buffer's 64 bytes were allocated zeroed, and nothing
-        // else writes to them while this view lives
-        let bytes = unsafe { slice::from_raw_parts(base, 64) };
+        // read through a copy, since a view would make the buffer rust memory
+        let bytes = buffer
+            .copy_out(base, 64)
+            .expect("the buffer should be copied");
         assert!(bytes.iter().all(|&byte| byte == 0));
 
         assert!(matches!(
@@ -1504,28 +1531,52 @@ mod tests {
     }
 
     #[test]
-    fn readouts_outside_the_buffer_are_refused() {
-        // two readouts in `test_layout`'s shape take 72 bytes
-        let available = |buffer: &AcquisitionBuffer| sys::PicamAvailableData {
+    fn copies_out_every_byte_at_any_alignment() {
+        let mut buffer = AcquisitionBuffer::new(64).expect("64 bytes should be allocated");
+        let base = buffer.memory.as_ptr();
+        for i in 0..64u8 {
+            // SAFETY: the byte lies inside the buffer, which nothing else
+            // writes to, and like reads, writes to it are volatile only
+            unsafe { base.wrapping_add(usize::from(i)).write_volatile(i) };
+        }
+        let base = base.cast_const();
+        for offset in 0..8 {
+            for len in [0, 1, 7, 8, 9, 15, 16, 17, 64 - offset] {
+                let copy = buffer
+                    .copy_out(base.wrapping_add(offset), len)
+                    .expect("bytes inside the buffer should be copied");
+                assert!(copy.as_ptr().cast::<u64>().is_aligned());
+                let expected: Vec<u8> = (offset..offset + len).map(|i| i as u8).collect();
+                assert_eq!(copy, expected, "offset {offset}, length {len}");
+            }
+        }
+    }
+
+    #[test]
+    fn copies_outside_the_buffer_are_refused() {
+        let mut buffer = AcquisitionBuffer::new(60).expect("60 bytes should be allocated");
+        let base = buffer.memory.as_ptr().cast_const();
+        assert!(matches!(
+            buffer.copy_out(base, 61),
+            Err(Error::InconsistentDataLayout)
+        ));
+        assert!(matches!(
+            buffer.copy_out(base.wrapping_sub(1), 1),
+            Err(Error::InconsistentDataLayout)
+        ));
+
+        // two readouts in `test_layout`'s shape take 72 bytes, so they're
+        // refused before the handle, which isn't a camera's, is used
+        let available = sys::PicamAvailableData {
             initial_readout: buffer.memory.as_ptr().cast(),
             readout_count: 2,
         };
-        let short = AcquisitionBuffer::new(60).expect("60 bytes should be allocated");
-        // SAFETY: the readouts don't fit in `short`, so they're refused
-        // before the pointer is used
-        let refused = unsafe {
-            Readouts::from_raw(&available(&short), Arc::new(test_layout()), Some(&short))
-        };
+        let refused = copy_from_buffer(
+            &mut buffer,
+            ptr::null_mut(),
+            &available,
+            Arc::new(test_layout()),
+        );
         assert!(matches!(refused, Err(Error::InconsistentDataLayout)));
-
-        let exact = AcquisitionBuffer::new(72).expect("72 bytes should be allocated");
-        // SAFETY: `exact` holds 72 zeroed bytes, enough for two readouts, and
-        // outlives `readouts`
-        let readouts = unsafe {
-            Readouts::from_raw(&available(&exact), Arc::new(test_layout()), Some(&exact))
-        }
-        .expect("two readouts should fit");
-        assert_eq!(readouts.len(), 2);
-        assert_eq!(readouts.bytes().len(), 72);
     }
 }

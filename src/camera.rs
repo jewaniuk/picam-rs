@@ -293,9 +293,8 @@ impl Camera {
         self.buffer.as_ref()
     }
 
-    /// Where the camera keeps its acquisition buffer, for
-    /// [`Camera::set_acquisition_buffer`] and
-    /// [`Camera::clear_acquisition_buffer`].
+    /// Where the camera keeps its acquisition buffer, for setting, clearing
+    /// and copying out of it.
     pub(crate) fn acquisition_buffer_slot(&mut self) -> &mut Option<AcquisitionBuffer> {
         &mut self.buffer
     }
