@@ -22,6 +22,9 @@ use crate::watch;
 #[derive(Debug)]
 pub struct Camera {
     handle: sys::PicamHandle,
+    // the device handle, looked up once at open and closed with `handle`
+    // by `Picam_CloseCamera` (manual 4.3.2.6)
+    device: sys::PicamHandle,
     // keeps the library alive for as long as any `Camera` exists, and lets
     // multiple `Camera`s share one `Library`
     _library: Arc<Library>,
@@ -32,15 +35,13 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::NoCamerasAvailable`] if no camera is connected.
+    /// Returns [`crate::Error::NoCamerasAvailable`] if no camera is connected,
+    /// or an error if PICam is unable to find its device.
     pub fn open_first(library: Arc<Library>) -> Result<Self> {
         tracing::debug!("opening first available camera");
         let mut handle: sys::PicamHandle = std::ptr::null_mut();
         picam_call!(sys::Picam_OpenFirstCamera(&mut handle))?;
-        Ok(Self {
-            handle,
-            _library: library,
-        })
+        Self::from_model(handle, library)
     }
 
     /// Opens a specific camera, as identified by [`Camera::available_ids`].
@@ -50,14 +51,30 @@ impl Camera {
     /// Returns [`crate::Error::InvalidCameraId`] if `id` doesn't
     /// match a currently available camera, or
     /// [`crate::Error::CameraAlreadyOpened`] if it's already open
-    /// elsewhere in this process.
+    /// elsewhere in this process, or an error if PICam is unable to find its
+    /// device.
     pub fn open(id: &CameraId, library: Arc<Library>) -> Result<Self> {
         tracing::debug!("opening camera: {}", id.serial_number);
         let raw_id = id.to_raw()?;
         let mut handle: sys::PicamHandle = std::ptr::null_mut();
         picam_call!(sys::Picam_OpenCamera(&raw_id, &mut handle))?;
+        Self::from_model(handle, library)
+    }
+
+    /// Wraps a newly opened camera's model handle, looking up its device
+    /// handle once (PICam manual 7.4.3.5) and keeping it until the camera
+    /// closes. If the lookup fails, the camera is closed again.
+    fn from_model(model: sys::PicamHandle, library: Arc<Library>) -> Result<Self> {
+        let mut device: sys::PicamHandle = std::ptr::null_mut();
+        if let Err(e) = picam_call!(sys::PicamAdvanced_GetCameraDevice(model, &mut device)) {
+            if let Err(close) = picam_call!(sys::Picam_CloseCamera(model)) {
+                tracing::error!("failed to close PICam camera: {close}");
+            }
+            return Err(e);
+        }
         Ok(Self {
-            handle,
+            handle: model,
+            device,
             _library: library,
         })
     }
@@ -87,6 +104,7 @@ impl Camera {
         }
         Ok(Self {
             handle: model,
+            device,
             _library: library,
         })
     }
@@ -213,7 +231,7 @@ impl Camera {
     ///
     /// Returns an error if PICam is unable to check this.
     pub fn can_erase_residual(&self) -> Result<bool> {
-        let device = self.device_handle()?;
+        let device = self.device_handle();
         let mut erasable: sys::pibln = 0;
         picam_call!(sys::PicamSpecial_CanEraseResidual(device, &mut erasable))?;
         Ok(erasable != 0)
@@ -227,7 +245,7 @@ impl Camera {
     ///
     /// Returns an error if PICam is unable to erase it.
     pub fn erase_residual(&self) -> Result<()> {
-        let device = self.device_handle()?;
+        let device = self.device_handle();
         picam_call!(sys::PicamSpecial_EraseResidual(device))
     }
 
@@ -235,12 +253,9 @@ impl Camera {
     /// calls need instead of the camera model handle `Picam_OpenCamera`
     /// gives (manual 4.3.2.4): the `picam_special.h` functions refuse the
     /// model handle with `InvalidHandle` (seen on a demo camera with SDK
-    /// 5.15). It's only stored by [`crate::CameraDevice`], which borrows the
-    /// camera.
-    pub(crate) fn device_handle(&self) -> Result<sys::PicamHandle> {
-        let mut device: sys::PicamHandle = std::ptr::null_mut();
-        picam_call!(sys::PicamAdvanced_GetCameraDevice(self.handle, &mut device))?;
-        Ok(device)
+    /// 5.15). It's looked up once when the camera opens.
+    pub(crate) fn device_handle(&self) -> sys::PicamHandle {
+        self.device
     }
 
     /// Lists the camera models available for use with [`CameraId::connect_demo`].
@@ -274,7 +289,7 @@ impl Camera {
     /// The handle PICam registers extrinsic value callbacks on, the camera's
     /// device (PICam manual 7.4.9.3), for `impl_parameter_methods!`.
     fn extrinsic_handle(&self) -> Result<sys::PicamHandle> {
-        self.device_handle()
+        Ok(self.device_handle())
     }
 
     /// Sets `parameter`, a handle from [`params`](crate::params), to `value`
@@ -512,10 +527,7 @@ impl Drop for Camera {
     fn drop(&mut self) {
         // watches on the device (extrinsic ones, and those made through
         // `CameraDevice`) are registered on its handle, so both are cleared
-        match self.device_handle() {
-            Ok(device) => watch::release(device),
-            Err(e) => tracing::error!("failed to find the camera device to clear its watches: {e}"),
-        }
+        watch::release(self.device);
         watch::release(self.handle);
         if let Err(e) = picam_call!(sys::Picam_CloseCamera(self.handle)) {
             tracing::error!("failed to close PICam camera: {e}");

@@ -44,10 +44,10 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to look it up.
+    /// Doesn't fail now; the `Result` is kept so the signature stays the same.
     pub fn device(&self) -> Result<CameraDevice<'_>> {
         Ok(CameraDevice {
-            handle: self.device_handle()?,
+            handle: self.device_handle(),
             _camera: PhantomData,
         })
     }
