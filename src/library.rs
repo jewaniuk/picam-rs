@@ -7,6 +7,7 @@ use std::sync::{Mutex, PoisonError};
 use crate::error::{Error, Result, picam_call};
 use crate::model::Model;
 use crate::sys;
+use crate::watch;
 
 /// An open handle to the PICam library itself.
 ///
@@ -133,6 +134,8 @@ impl fmt::Debug for Library {
 
 impl Drop for Library {
     fn drop(&mut self) {
+        // discovery watches belong to the library rather than to any camera
+        watch::release(std::ptr::null_mut());
         // nowhere to hand a `Result` back to from `Drop`, so just report it
         if let Err(e) = picam_call!(sys::Picam_UninitializeLibrary()) {
             tracing::error!("failed to uninitialize PICam library: {e}");

@@ -12,6 +12,7 @@ use crate::library::Library;
 use crate::model::Model;
 use crate::parameter::ComputerInterface;
 use crate::sys;
+use crate::user_state;
 use crate::watch;
 
 /// An open connection to a PICam accessory, such as a light source.
@@ -171,6 +172,28 @@ impl Accessory {
         handle_id(self.handle)
     }
 
+    /// The number [`Accessory::set_user_state`] last stored with this
+    /// accessory, or 0 if none has been (PICam manual 7.4.7.1).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to read it.
+    pub fn user_state(&self) -> Result<usize> {
+        user_state::get(self.handle)
+    }
+
+    /// Stores `state`, a number of your choosing, with this accessory, for
+    /// example to recognize it later among [`Accessory::list_open_accessories`]
+    /// (PICam manual 7.4.7.2), where [`AccessoryHandle::user_state`] reads it
+    /// back.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to store it.
+    pub fn set_user_state(&self, state: usize) -> Result<()> {
+        user_state::set(self.handle, state)
+    }
+
     /// Gets the accessory's light source reference: the intensity in counts
     /// (`y`) at each wavelength in nanometres (`x`) (PICam manual 7.4.6.1).
     ///
@@ -257,6 +280,17 @@ impl AccessoryHandle<'_> {
     pub fn id(&self) -> Result<AccessoryId> {
         handle_id(self.handle)
     }
+
+    /// The number stored with this accessory by [`Accessory::set_user_state`],
+    /// or 0 if none has been (PICam manual 7.4.7.1).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to read it, for example if the
+    /// handle has since been closed.
+    pub fn user_state(&self) -> Result<usize> {
+        user_state::get(self.handle)
+    }
 }
 
 fn handle_is_connected(handle: sys::PicamHandle) -> Result<bool> {
@@ -291,7 +325,7 @@ pub struct AccessoryId {
 }
 
 impl AccessoryId {
-    fn from_raw(raw: &sys::PicamAccessoryID) -> Self {
+    pub(crate) fn from_raw(raw: &sys::PicamAccessoryID) -> Self {
         Self {
             model: Model::from_raw(raw.model),
             computer_interface: ComputerInterface::from_raw(raw.computer_interface),

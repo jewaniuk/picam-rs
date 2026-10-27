@@ -1,10 +1,11 @@
-//! EM gain calibration: opening a camera for calibration and managing its
-//! sensor temperature (`picam_em_calibration.h`, PICam manual chapter 8).
-//!
-//! Running the calibration itself, `PicamEMCalibration_Calibrate`, reports
-//! progress through a callback, so it waits for the callbacks chunk.
+//! EM gain calibration: opening a camera for calibration, managing its
+//! sensor temperature and running the calibration (`picam_em_calibration.h`,
+//! PICam manual chapter 8).
 
-use std::sync::Arc;
+use std::any::Any;
+use std::ffi::c_void;
+use std::panic::{self, AssertUnwindSafe};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use crate::camera::CameraId;
 use crate::constraint::RangeConstraint;
@@ -192,6 +193,81 @@ impl EmCalibration {
         picam_call!(sys::Picam_DestroyRangeConstraints(ptr))?;
         Ok(constraint)
     }
+
+    /// Calibrates the camera's EM gain, blocking until it finishes (PICam
+    /// manual 8.4.4.1). The sensor temperature must be locked first, see
+    /// [`EmCalibration::read_sensor_temperature_status`].
+    ///
+    /// `progress` is called with how much is done, as a percentage from 0 to
+    /// 100, and returning `false` cancels the calibration. The manual doesn't
+    /// say which thread PICam calls it on, so it must be `Send`. If it
+    /// panics, the calibration is cancelled, and the panic resumes here once
+    /// PICam returns.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::Error::OperationCanceled`] if `progress` returned
+    /// `false` (manual 8.4.4.1), or an error if PICam is unable to calibrate,
+    /// for example because the sensor temperature isn't locked.
+    pub fn calibrate<F: FnMut(f64) -> bool + Send>(&self, progress: F) -> Result<()> {
+        let state = Mutex::new(Progress {
+            callback: progress,
+            panic: None,
+        });
+        // `state` outlives the call, and picam hands it only to
+        // `calibration_progress::<F>`, during the call (manual 8.3.1.1)
+        let result = picam_call!(sys::PicamEMCalibration_Calibrate(
+            self.handle,
+            Some(calibration_progress::<F>),
+            (&raw const state).cast_mut().cast()
+        ));
+        let state = state.into_inner().unwrap_or_else(PoisonError::into_inner);
+        if let Some(payload) = state.panic {
+            panic::resume_unwind(payload);
+        }
+        result
+    }
+}
+
+/// What [`EmCalibration::calibrate`] hands its progress callback through
+/// PICam's user state, inside a mutex so the callback stays sound even if
+/// PICam called it from two threads at once, which the manual doesn't rule
+/// out.
+struct Progress<F> {
+    callback: F,
+    /// a panic from `callback`, resumed once PICam returns
+    panic: Option<Box<dyn Any + Send>>,
+}
+
+/// PICam's EM calibration progress callback (manual 8.3.1.1), which runs
+/// `calibrate`'s `progress` and returns whether to carry on.
+///
+/// # Safety
+///
+/// `user_state` must point to the `Mutex<Progress<F>>` that
+/// [`EmCalibration::calibrate`] passed to `PicamEMCalibration_Calibrate`,
+/// and the call must happen before that returns.
+unsafe extern "C" fn calibration_progress<F: FnMut(f64) -> bool + Send>(
+    _calibration: sys::PicamHandle,
+    progress: sys::piflt,
+    user_state: *mut c_void,
+) -> sys::pibln {
+    // SAFETY: the caller guarantees `user_state` is `calibrate`'s
+    // `Mutex<Progress<F>>`, still alive. Only shared references are made,
+    // and the mutex makes sharing it across threads sound, since `F: Send`
+    let state = unsafe { &*user_state.cast::<Mutex<Progress<F>>>() };
+    let mut state = state.lock().unwrap_or_else(PoisonError::into_inner);
+    // once the callback has panicked, it's never called again
+    if state.panic.is_some() {
+        return 0;
+    }
+    match panic::catch_unwind(AssertUnwindSafe(|| (state.callback)(progress))) {
+        Ok(carry_on) => sys::pibln::from(carry_on),
+        Err(payload) => {
+            state.panic = Some(payload);
+            0
+        }
+    }
 }
 
 impl Drop for EmCalibration {
@@ -246,4 +322,63 @@ pub struct EmCalibrationDate {
     pub month: i32,
     /// The day of the month, from 1 to 31.
     pub day: i32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Calls the progress trampoline as PICam would, with `state` as its user
+    /// state.
+    fn report<F: FnMut(f64) -> bool + Send>(
+        state: &Mutex<Progress<F>>,
+        percent: f64,
+    ) -> sys::pibln {
+        // SAFETY: `state` is a live `Mutex<Progress<F>>` for the whole call
+        unsafe {
+            calibration_progress::<F>(
+                std::ptr::null_mut(),
+                percent,
+                (&raw const *state).cast_mut().cast(),
+            )
+        }
+    }
+
+    #[test]
+    fn progress_callback_reports_and_cancels() {
+        let mut seen = Vec::new();
+        let state = Mutex::new(Progress {
+            callback: |percent| {
+                seen.push(percent);
+                percent < 50.0
+            },
+            panic: None,
+        });
+        assert_eq!(report(&state, 10.0), 1);
+        assert_eq!(report(&state, 60.0), 0);
+        drop(state);
+        assert_eq!(seen, vec![10.0, 60.0]);
+    }
+
+    #[test]
+    fn progress_callback_keeps_a_panic() {
+        let mut calls = 0;
+        let state = Mutex::new(Progress {
+            callback: |_| {
+                calls += 1;
+                panic!("boom")
+            },
+            panic: None,
+        });
+        assert_eq!(report(&state, 10.0), 0);
+        // never called again once it has panicked
+        assert_eq!(report(&state, 20.0), 0);
+        let payload = state
+            .into_inner()
+            .expect("the mutex shouldn't be poisoned")
+            .panic
+            .expect("the panic should be kept");
+        assert_eq!(payload.downcast_ref::<&str>(), Some(&"boom"));
+        assert_eq!(calls, 1);
+    }
 }
