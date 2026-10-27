@@ -24,10 +24,9 @@
 //! updates, by the device handle and parameter 0, but their sink is the
 //! streaming acquisition's own: it copies the readouts while the trampoline
 //! dispatches the update, and the trampoline then checks the overrun flag
-//! outside `SINKS` and dispatches that too. A status
-//! notification fires once: its trampoline takes the
-//! key's sinks as it sends, so a key with no sinks has nothing registered with
-//! PICam, whatever `REGISTRATIONS` still counts.
+//! outside `SINKS` and dispatches that too. A status notification fires once:
+//! its trampoline takes the key's sinks as it sends, so a key with no sinks
+//! has nothing registered with PICam, whatever `REGISTRATIONS` still counts.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -345,7 +344,6 @@ pub(crate) fn subscribe_acquisition_state<T: Send + 'static>(
     )
 }
 
-/// `subscribe`'s body, taking the raw parameter.
 /// Adds `sink` for `device`'s acquisition-updated callbacks, which have no
 /// parameter, so they're keyed by parameter 0. A streaming acquisition
 /// handles the events itself, rather than through a channel of copies.
@@ -374,6 +372,7 @@ pub(crate) fn is_acquisition_updated_registered(device: sys::PicamHandle) -> boo
     ))
 }
 
+/// `subscribe`'s body, taking the raw parameter.
 fn subscribe_raw<T: Send + 'static>(
     handle: sys::PicamHandle,
     parameter: sys::PicamParameter,

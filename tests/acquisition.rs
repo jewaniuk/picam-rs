@@ -795,7 +795,7 @@ fn acquisition_state_watches() {
 /// Checks that a stream brings every readout to another thread, then ends by
 /// itself, disconnecting the receiver.
 #[test]
-fn stream_brings_every_readout() {
+fn acquisition_stream_brings_every_readout() {
     // each test uses its own serial number so demo cameras never collide
     const SERIAL_NUMBER: &str = "ACQ0016";
 
@@ -945,6 +945,7 @@ fn leaked_stream_blocks_other_acquisitions() {
     let library = &test_library.library;
     let (id, mut camera) = open(library, SERIAL_NUMBER);
     configure(&camera, 3, 20.0);
+    let stride = readout_stride(&camera);
 
     let (stream, updates) = camera
         .start_acquisition_stream()
@@ -974,8 +975,34 @@ fn leaked_stream_blocks_other_acquisitions() {
         camera.acquire(1, Some(TIMEOUT)),
         Err(Error::AcquisitionUpdatedHandlerRegistered)
     ));
+    // the leaked callback could still read a buffer
+    assert!(matches!(
+        camera.set_acquisition_buffer(2 * stride),
+        Err(Error::AcquisitionUpdatedHandlerRegistered)
+    ));
 
-    // closing the camera unregisters the leaked callback
+    // closing the camera unregisters the leaked callback, so the same camera
+    // streams again once reopened
+    drop(camera);
+    let mut camera = Camera::open(&id, Arc::clone(library)).expect("demo camera should reopen");
+    configure(&camera, 2, 20.0);
+    let (stream, updates) = camera
+        .start_acquisition_stream()
+        .expect("the stream should start once the camera has closed");
+    let total: usize = updates
+        .iter()
+        .map(|update| {
+            update
+                .expect("every update should be a copy")
+                .readouts()
+                .len()
+        })
+        .sum();
+    assert_eq!(total, 2);
+    stream
+        .finish()
+        .expect("an ended stream should finish cleanly");
+
     drop(camera);
     id.disconnect_demo(library)
         .expect("demo camera should disconnect");
