@@ -58,10 +58,12 @@ The crate only runs on Windows, the only platform the lab uses. The SDK also shi
 | `acquisition` | `Camera::acquire`, `Camera::start_acquisition` and the `Acquisition` guard, the borrowed data views (`Readouts`, `Readout`, `Frame`, `RoiData`, `Pixels`), `AcquisitionErrors` | done |
 | `validation` | `ValidationResult`, `ValidationResults`, `DependentValidationResult`, `FailedDependentParameter`, and `Camera`'s validation methods | done |
 | `defect` | `PixelDefectMap`, `StarDefectMap` and their parts, and `Camera`'s defect map methods | done |
-| `watch` | `Watch` and the callback machinery: the registry, the trampolines, and the `watch_*` methods' halves | done |
-| advanced | the rest of `picam_advanced.h`: user state, acquisition buffers, the remaining callbacks and discovery | not started |
-| `accessory` | `Accessory`, `AccessoryId`, `AccessoryHandle`, `CalibrationPoint`: identifying, opening and querying accessories, the light source reference, and the parameter methods shared with `Camera` | done apart from discovery |
-| `em_calibration` | `EmCalibration`, `EmCalibrationHandle`, `EmCalibrationDate`: opening a camera for EM gain calibration and its sensor temperature | done apart from `Calibrate`, which needs a callback |
+| `watch` | `Watch` and the callback machinery: the registry, the trampolines (parameter, dependent constraint, status and discovery callbacks), and the `watch_*` methods' halves | done |
+| `discovery` | `DiscoveryAction`, `CameraDiscovery`, `AccessoryDiscovery`, and the discovery methods of `Camera` and `Accessory` | done |
+| `user_state` | PICam's user state as a `usize` tag, behind the `user_state` methods of `Camera`, `Accessory` and their handle views | done |
+| advanced | the rest of `picam_advanced.h`: user acquisition buffers and the acquisition callbacks | not started |
+| `accessory` | `Accessory`, `AccessoryId`, `AccessoryHandle`, `CalibrationPoint`: identifying, opening and querying accessories, the light source reference, and the parameter methods shared with `Camera` | done |
+| `em_calibration` | `EmCalibration`, `EmCalibrationHandle`, `EmCalibrationDate`: opening a camera for EM gain calibration, its sensor temperature, and `calibrate` | done |
 | special | `picam_special.h`: residual erasure, as `Camera` methods in `camera` | done |
 
 ### Single crate, private `sys` module (settled)
@@ -100,7 +102,7 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 
 ### Library lifecycle (settled)
 
-- `Library::new()` calls `Picam_InitializeLibrary`; `Drop` calls `Picam_UninitializeLibrary` and logs any failure, since `Drop` can't return one.
+- `Library::new()` calls `Picam_InitializeLibrary`; `Drop` calls `Picam_UninitializeLibrary` and logs any failure, since `Drop` can't return one. Just before, `Drop` clears the discovery watches, which belong to no camera (see [Callbacks](#callbacks-settled), decided with the maintainer on 2026-10-26).
 - Cameras hold an `Arc<Library>`, so many cameras share one library and the library outlives them all. This was chosen to fit the downstream server's design.
 - With SDK 5.15, connecting a 65th different demo camera (model and serial number pair) in one library session corrupts PICam's heap inside `Picam_ConnectDemoCamera` and kills the process, even if the others were disconnected. Reconnecting a pair already used doesn't count again, and a fresh library resets the count. This was found with demo cameras and reproduced with raw `sys` calls: a new model each time, or one model with a new serial number each time, crashes on the 65th connect, while repeating pairs never does. Safe code must not reach it, so `Library` records the pairs `CameraId::connect_demo` has connected (counting attempts, to be safe), and `connect_demo` returns `Error::TooManyDemoCameras` instead of making a 65th.
 - PICam needs an initialized library for every call except `Picam_GetVersion` and `Picam_IsLibraryInitialized` (manual 3.2). So every public function that calls PICam takes `library: &Library` (first, after any `self`), unless its receiver already holds one (`Camera`) or borrows one (`CameraHandle`). Constructors that keep the library (`Camera::open`, `Camera::open_first`) take an `Arc<Library>` instead. Calling PICam too early then fails to compile rather than returning `Error::LibraryNotInitialized`. A function that only needs the proof takes the argument and ignores it (`let _ = library;`). The two exceptions are the associated functions `Library::version()` and `Library::is_initialized()`, which take no `&Library`.
@@ -143,7 +145,7 @@ Designed with the maintainer on 2026-10-25, through the design discussion in `CL
 
 ### Callbacks (settled)
 
-Designed with the maintainer on 2026-10-26, through the design discussion in `CLAUDE.md`. The machinery lives in `src/watch.rs`, and every later callback chunk (dependent constraints, status notifications, discovery, `Calibrate`) reuses it. Acquisition callbacks go with user acquisition buffers, under the acquisition design.
+Designed with the maintainer on 2026-10-26, through the design discussion in `CLAUDE.md`. The machinery lives in `src/watch.rs`. Parameter, dependent constraint, status and discovery callbacks all go through it, and `Calibrate` passes its closure through PICam's user state instead. Acquisition callbacks go with user acquisition buffers, under the acquisition design.
 
 - **Delivery through channels:** each `watch_*` method returns a `Watch` guard and an unbounded `mpsc::Receiver` of typed values. PICam's callback, a crate trampoline, only copies the event and sends it, so no user code ever runs inside PICam: no re-entrancy, no panics across FFI, no blocking PICam's thread. The receiver is `Send` and can be read on any thread. Unbounded, so nothing is lost and sending never blocks; unread events only cost memory.
 - **Guard:** `Watch` doesn't borrow what it watches, so it can be kept during an acquisition, for example to follow the sensor temperature. It unregisters on drop. A camera or accessory clears every watch on its handles just before it closes (a camera both its model and its device handle): each callback is unregistered with PICam and each sink removed, so the receivers report the channel disconnected. A `Watch` dropped after that does nothing, so it never reaches PICam with a closed handle, or one a later camera has reused. Leaking one with `mem::forget` leaves nothing behind once its camera closes (decided with the maintainer on 2026-10-26, replacing a guard that borrowed the camera). It holds a raw handle, so it is neither `Send` nor `Sync`. `let (_, events) = ...` drops it at once, so the docs say to keep it as `_watch`.
@@ -151,6 +153,11 @@ Designed with the maintainer on 2026-10-26, through the design discussion in `CL
 - **Extrinsic watches** go on a device or accessory handle (manual 7.4.9.3), so `Camera` registers them on the device handle it keeps.
 - **Registry:** PICam passes callbacks no user pointer, so a global registry maps (handle, parameter, callback kind) to the watches' senders. One PICam registration is shared by every watch on a key, refcounted. Two locks keep it free of deadlocks: the registration lock is held across PICam's register and unregister calls and never taken by a callback, and the sink lock, the only one callbacks take, is never held across a PICam call.
 - **Trampolines** always report success to PICam, since the manual doesn't say what PICam does with an error, and copy any data behind a pointer before returning, since the manual doesn't say how long it stays valid. Each callback kind has its own trampoline, the extrinsic ones included, so a trampoline always knows which kind fired.
+- **Dependent constraint watches:** `watch_collection_constraint` and `watch_range_constraint` are shared methods, and `watch_rois_constraint`, `watch_pulse_constraint` and `watch_modulations_constraint` are camera-only, like their getters. PICam calls them inside the `set` that changes the constraint (manual 7.4.12.2). The manual calls the constraint passed an array but gives no count, and the header passes one, so one constraint is copied per callback. It equals the `Required` constraint read afterwards (seen with SDK 5.15).
+- **Status notifications:** `notify_when_status(parameter, value)` returns a `Watch` and a receiver of one `Result<()>`, then disconnects. It goes on the device or accessory handle, like extrinsic watches (manual 7.4.9.9). PICam calls it only once, so its trampoline takes the key's sinks as it sends. A key with no sinks then has nothing registered with PICam, whatever the count says: the next watch on it registers again, and `release` skips cancelling it.
+- **Discovery:** `Camera::watch_discovery`, `start_discovery`, `stop_discovery` and `is_discovering`, and the same on `Accessory`, take `&Library`. Discovery callbacks have no handle or parameter, so they're keyed by a null handle, and `Library`'s `Drop` clears them before uninitializing. Events carry `open_in_this_process` instead of the device handle PICam passes, since a handle view borrows the library and can't travel through a channel. Events only arrive while discovery runs (seen with SDK 5.15).
+- **User state:** PICam's per-camera `void*` is offered as a `usize` tag, `user_state` and `set_user_state` on `Camera` and `Accessory`, and `user_state` on their handle views. Neither the crate nor PICam dereferences it, and a camera's model and device share it (manual 7.4.7).
+- **`Calibrate`:** `EmCalibration::calibrate` takes a `FnMut(f64) -> bool + Send` closure. It is the one callback that runs user code inside PICam, since `Calibrate` is synchronous and takes a user pointer. The closure goes through that pointer inside a mutex, so it stays sound whichever thread PICam calls it on. A panic is caught, cancels the calibration, and resumes once `Calibrate` returns.
 
 ### Memory that PICam allocates (settled)
 
@@ -214,7 +221,7 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 
 ## Roadmap
 
-As of 2026-10-26: 164 / 199 functions wrapped.
+As of 2026-10-26: 189 / 199 functions wrapped.
 
 ### 1. Finish the `sys`-type refactor (done)
 
@@ -270,9 +277,9 @@ Callback registration (`Register*`/`Unregister*` pairs), parameter validation, c
 - [ ] user-supplied acquisition buffers, under the acquisition design discussion
 - callbacks, designed with the maintainer on 2026-10-26 (see [Callbacks](#callbacks-settled)):
   - [x] parameter value, extrinsic value, relevance and access watches, with the machinery
-  - [ ] dependent constraint watches and status notifications
-  - [ ] camera and accessory discovery
-  - [ ] user state (`Get/SetUserState`) and `Calibrate`'s progress callback
+  - [x] dependent constraint watches and status notifications
+  - [x] camera and accessory discovery
+  - [x] user state (`Get/SetUserState`) and `Calibrate`'s progress callback
   - acquisition callbacks go with user acquisition buffers, above
 
 ### 5. `picam_accessory.h` (18), `picam_em_calibration.h` (11), `picam_special.h` (2)
