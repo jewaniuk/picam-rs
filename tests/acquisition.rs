@@ -1,6 +1,7 @@
-//! Tests for acquiring data from demo cameras: `Camera::acquire` and
-//! `Camera::start_acquisition`, into PICam's memory or a buffer the camera
-//! keeps, and acquisition state watches.
+//! Tests for acquiring data from demo cameras: `Camera::acquire`,
+//! `Camera::start_acquisition` and `Camera::start_acquisition_stream`, into
+//! PICam's memory or a buffer the camera keeps, and acquisition state
+//! watches.
 //!
 //! Every test uses a PIXIS 100F demo camera: one 1340 × 100 region of 16-bit
 //! pixels, one frame per readout, a 100 ms exposure by default, and time
@@ -9,9 +10,9 @@
 mod common;
 
 use std::sync::Arc;
-use std::sync::mpsc::TryRecvError;
-use std::thread;
+use std::sync::mpsc::{self, TryRecvError};
 use std::time::Duration;
+use std::{mem, thread};
 
 use picam_rs::{
     Acquisition, AcquisitionErrors, AcquisitionState, Camera, CameraId, Error, Library, Model,
@@ -787,6 +788,229 @@ fn acquisition_state_watches() {
     drop(camera);
     assert_eq!(started.try_recv(), Err(TryRecvError::Disconnected));
     assert_eq!(ended.try_recv(), Err(TryRecvError::Disconnected));
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that a stream brings every readout to another thread, then ends by
+/// itself, disconnecting the receiver.
+#[test]
+fn acquisition_stream_brings_every_readout() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "ACQ0016";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, mut camera) = open(library, SERIAL_NUMBER);
+    configure(&camera, 5, 20.0);
+    let stride = readout_stride(&camera);
+
+    let (stream, updates) = camera
+        .start_acquisition_stream()
+        .expect("the stream should start");
+    // ends once the receiver disconnects, after the acquisition has ended
+    let worker = thread::spawn(move || updates.into_iter().collect::<Vec<_>>());
+    let updates = worker.join().expect("the worker shouldn't panic");
+    stream
+        .finish()
+        .expect("an ended stream should finish cleanly");
+
+    let mut total = 0;
+    for update in &updates {
+        let update = update.as_ref().expect("every update should be a copy");
+        for readout in update.readouts().iter() {
+            assert_eq!(readout.bytes().len(), stride);
+        }
+        total += update.readouts().len();
+    }
+    assert_eq!(total, 5);
+    let last = updates
+        .last()
+        .expect("there should be updates")
+        .as_ref()
+        .expect("the last update should say the acquisition ended");
+    assert!(!last.running());
+    assert!(last.readouts().is_empty());
+
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that a stream into a buffer runs until stopped from another
+/// thread than the one reading it, going round the buffer more than once.
+#[test]
+fn stream_runs_until_stopped_with_a_buffer() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "ACQ0017";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, mut camera) = open(library, SERIAL_NUMBER);
+    configure(&camera, 0, 10.0);
+    let stride = readout_stride(&camera);
+    camera
+        .set_acquisition_buffer(4 * stride)
+        .expect("the buffer should be set");
+
+    let (stream, updates) = camera
+        .start_acquisition_stream()
+        .expect("the stream should start");
+    let (enough_sender, enough) = mpsc::channel();
+    let worker = thread::spawn(move || {
+        let mut total = 0;
+        for update in updates {
+            let update = update.expect("every update should be a copy");
+            for readout in update.readouts().iter() {
+                assert_eq!(readout.bytes().len(), stride);
+            }
+            total += update.readouts().len();
+            // three times what the buffer holds, so it wrapped
+            if total >= 12 {
+                let _ = enough_sender.send(());
+            }
+        }
+        total
+    });
+    enough
+        .recv_timeout(3 * TIMEOUT)
+        .expect("12 readouts should arrive");
+    stream
+        .finish()
+        .expect("a stopped stream should finish cleanly");
+    let total = worker.join().expect("the worker shouldn't panic");
+    assert!(total >= 12, "only {total} readouts arrived");
+    assert_eq!(camera.has_acquisition_buffer_overrun(), Ok(false));
+
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that dropping a stream ends its acquisition, that updates already
+/// received are kept, and that the camera then acquires normally.
+#[test]
+fn dropping_a_stream_ends_it() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "ACQ0018";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, mut camera) = open(library, SERIAL_NUMBER);
+    configure(&camera, 0, 10.0);
+    let stride = readout_stride(&camera);
+    camera
+        .set_acquisition_buffer(4 * stride)
+        .expect("the buffer should be set");
+
+    let (stream, updates) = camera
+        .start_acquisition_stream()
+        .expect("the stream should start");
+    let first = updates
+        .recv_timeout(TIMEOUT)
+        .expect("a demo readout should arrive within the timeout")
+        .expect("the update should be a copy");
+    drop(stream);
+    // the rest drain, then the receiver disconnects
+    let rest: Vec<_> = updates.iter().collect();
+    assert!(
+        rest.last()
+            .is_some_and(|last| last.as_ref().is_ok_and(|last| !last.running())),
+        "the last update should say the acquisition ended"
+    );
+    // owned, so it outlives the stream
+    assert!(first.running());
+    assert_eq!(first.readouts().bytes().len(), stride);
+
+    let readouts = camera
+        .acquire(2, Some(TIMEOUT))
+        .expect("demo camera should acquire after a stream");
+    assert_eq!(readouts.len(), 2);
+    drop(readouts);
+
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that a stream leaked with `mem::forget` still ends by itself, and
+/// that its callback, still registered, blocks other acquisitions until the
+/// camera closes.
+#[test]
+fn leaked_stream_blocks_other_acquisitions() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "ACQ0019";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, mut camera) = open(library, SERIAL_NUMBER);
+    configure(&camera, 3, 20.0);
+    let stride = readout_stride(&camera);
+    camera
+        .set_acquisition_buffer(4 * stride)
+        .expect("the buffer should be set");
+
+    let (stream, updates) = camera
+        .start_acquisition_stream()
+        .expect("the stream should start");
+    mem::forget(stream);
+    let total: usize = updates
+        .iter()
+        .map(|update| {
+            update
+                .expect("every update should be a copy")
+                .readouts()
+                .len()
+        })
+        .sum();
+    assert_eq!(total, 3);
+
+    assert!(matches!(
+        camera.start_acquisition(),
+        Err(Error::AcquisitionUpdatedHandlerRegistered)
+    ));
+    assert!(matches!(
+        camera.start_acquisition_stream(),
+        Err(Error::AcquisitionUpdatedHandlerRegistered)
+    ));
+    // picam refuses this one itself (seen with sdk 5.15)
+    assert!(matches!(
+        camera.acquire(1, Some(TIMEOUT)),
+        Err(Error::AcquisitionUpdatedHandlerRegistered)
+    ));
+    // the leaked callback could still read the buffer
+    assert!(matches!(
+        camera.set_acquisition_buffer(2 * stride),
+        Err(Error::AcquisitionUpdatedHandlerRegistered)
+    ));
+    assert!(matches!(
+        camera.clear_acquisition_buffer(),
+        Err(Error::AcquisitionUpdatedHandlerRegistered)
+    ));
+
+    // closing the camera unregisters the leaked callback, so the same camera
+    // streams again once reopened
+    drop(camera);
+    let mut camera = Camera::open(&id, Arc::clone(library)).expect("demo camera should reopen");
+    configure(&camera, 2, 20.0);
+    let (stream, updates) = camera
+        .start_acquisition_stream()
+        .expect("the stream should start once the camera has closed");
+    let total: usize = updates
+        .iter()
+        .map(|update| {
+            update
+                .expect("every update should be a copy")
+                .readouts()
+                .len()
+        })
+        .sum();
+    assert_eq!(total, 2);
+    stream
+        .finish()
+        .expect("an ended stream should finish cleanly");
+
+    drop(camera);
     id.disconnect_demo(library)
         .expect("demo camera should disconnect");
 }

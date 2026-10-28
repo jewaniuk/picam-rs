@@ -1,6 +1,8 @@
 //! Watching parameters, statuses, discovery and acquisition states through
-//! PICam's callbacks (`picam_advanced.h` and `picam_accessory.h`, PICam
-//! manual 7.3, 7.4.1, 7.4.2, 7.4.8 to 7.4.12 and 7.4.16).
+//! PICam's callbacks, and the callback behind
+//! [`Camera::start_acquisition_stream`](crate::Camera::start_acquisition_stream)
+//! (`picam_advanced.h` and `picam_accessory.h`, PICam manual 7.3, 7.4.1,
+//! 7.4.2, 7.4.8 to 7.4.12, 7.4.15 and 7.4.16).
 //!
 //! PICam passes a callback only the handle, the parameter and the new value,
 //! never a pointer of the caller's. So there is one trampoline per kind of
@@ -18,10 +20,13 @@
 //! Discovery callbacks have no handle or parameter, so they're keyed by a null
 //! handle and parameter 0, and the library clears them before it
 //! uninitializes. Acquisition state callbacks have no parameter, so they're
-//! keyed by the device handle, parameter 0 and the state. A status
-//! notification fires once: its trampoline takes the
-//! key's sinks as it sends, so a key with no sinks has nothing registered with
-//! PICam, whatever `REGISTRATIONS` still counts.
+//! keyed by the device handle, parameter 0 and the state. So are acquisition
+//! updates, by the device handle and parameter 0, but their sink is the
+//! streaming acquisition's own: it copies the readouts while the trampoline
+//! dispatches the update, and the trampoline then checks the overrun flag
+//! outside `SINKS` and dispatches that too. A status notification fires once:
+//! its trampoline takes the key's sinks as it sends, so a key with no sinks
+//! has nothing registered with PICam, whatever `REGISTRATIONS` still counts.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -30,7 +35,9 @@ use std::sync::mpsc::{self, Receiver};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use crate::accessory::AccessoryId;
-use crate::acquisition::{AcquisitionState, AcquisitionStateErrors, AcquisitionStateUpdate};
+use crate::acquisition::{
+    AcquisitionState, AcquisitionStateErrors, AcquisitionStateUpdate, has_overrun,
+};
 use crate::camera::CameraId;
 use crate::constraint::{
     CollectionConstraint, ModulationsConstraint, PulseConstraint, RangeConstraint, RoisConstraint,
@@ -65,9 +72,12 @@ pub(crate) enum Kind {
     AccessoryDiscovery,
     /// the acquisition state it watches for
     AcquisitionState(i32),
+    AcquisitionUpdated,
 }
 
-/// A copy of what one callback reported, made before the callback returns.
+/// A copy of what one callback reported, made before the callback returns,
+/// except an acquisition update, which points at data valid only while it's
+/// dispatched.
 pub(crate) enum Event {
     Integer(i32),
     LargeInteger(i64),
@@ -86,6 +96,15 @@ pub(crate) enum Event {
     CameraDiscovery(CameraDiscovery),
     AccessoryDiscovery(AccessoryDiscovery),
     AcquisitionState(AcquisitionStateUpdate),
+    /// What an acquisition-updated callback passed. `available` points at
+    /// data valid only while this event is dispatched, inside the callback
+    AcquisitionUpdated {
+        available: Option<sys::PicamAvailableData>,
+        status: sys::PicamAcquisitionStatus,
+    },
+    /// Whether the camera's buffer had overrun once the sinks copied the
+    /// last acquisition update
+    AcquisitionChecked(Result<bool>),
 }
 
 /// Sends one watch's events down its channel, as its value type.
@@ -154,7 +173,8 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 /// the library, which clears it before it uninitializes. An acquisition state
 /// watch
 /// ([`Camera::watch_acquisition_state`](crate::Camera::watch_acquisition_state))
-/// is on the camera's device, and ends when the camera closes.
+/// is on the camera's device, and ends when the camera closes. An
+/// [`AcquisitionStream`](crate::AcquisitionStream) keeps one for its callback.
 pub struct Watch {
     key: Key,
     id: u64,
@@ -324,6 +344,34 @@ pub(crate) fn subscribe_acquisition_state<T: Send + 'static>(
     )
 }
 
+/// Adds `sink` for `device`'s acquisition-updated callbacks, which have no
+/// parameter, so they're keyed by parameter 0. A streaming acquisition
+/// handles the events itself, rather than through a channel of copies.
+///
+/// # Errors
+///
+/// Returns an error if PICam is unable to register the callback.
+pub(crate) fn subscribe_acquisition_updated(
+    device: sys::PicamHandle,
+    sink: impl Fn(&Event) + Send + 'static,
+) -> Result<Watch> {
+    Watch::new(
+        device,
+        sys::PicamParameter(0),
+        Kind::AcquisitionUpdated,
+        Box::new(sink),
+    )
+}
+
+/// Reports whether `device` has an acquisition-updated callback registered.
+pub(crate) fn is_acquisition_updated_registered(device: sys::PicamHandle) -> bool {
+    lock(&REGISTRATIONS).contains_key(&Key::new(
+        device,
+        sys::PicamParameter(0),
+        Kind::AcquisitionUpdated,
+    ))
+}
+
 /// `subscribe`'s body, taking the raw parameter.
 fn subscribe_raw<T: Send + 'static>(
     handle: sys::PicamHandle,
@@ -405,6 +453,12 @@ macro_rules! callbacks {
                         Some(acquisition_state_updated)
                     )
                 ),
+                Kind::AcquisitionUpdated => picam_call!(
+                    sys::PicamAdvanced_RegisterForAcquisitionUpdated(
+                        handle,
+                        Some(acquisition_updated)
+                    )
+                ),
             }
         }
 
@@ -432,6 +486,12 @@ macro_rules! callbacks {
                         handle,
                         sys::PicamAcquisitionState(state),
                         Some(acquisition_state_updated)
+                    )
+                ),
+                Kind::AcquisitionUpdated => picam_call!(
+                    sys::PicamAdvanced_UnregisterForAcquisitionUpdated(
+                        handle,
+                        Some(acquisition_updated)
                     )
                 ),
             }
@@ -942,6 +1002,46 @@ unsafe extern "C" fn acquisition_state_updated(
         Kind::AcquisitionState(current.0),
         &Event::AcquisitionState(update),
     )
+}
+
+/// PICam's acquisition-updated callback (manual 7.3.7.1).
+///
+/// # Safety
+///
+/// `available` must be null or point to a valid `PicamAvailableData`, whose
+/// readouts stay valid for the duration of the call, and `status` must be
+/// null or point to a valid `PicamAcquisitionStatus`.
+unsafe extern "C" fn acquisition_updated(
+    device: sys::PicamHandle,
+    available: *const sys::PicamAvailableData,
+    status: *const sys::PicamAcquisitionStatus,
+) -> sys::PicamError {
+    if status.is_null() {
+        tracing::warn!("PICam sent an acquisition update with no status");
+        return sys::PicamError::PicamError_None;
+    }
+    // SAFETY: just checked `status` is non-null, and the caller guarantees it
+    // points to a valid `PicamAcquisitionStatus` for this call
+    let status = unsafe { *status };
+    // SAFETY: the caller guarantees `available` is null or valid for this call
+    let available = unsafe { available.as_ref() }.copied();
+    let parameter = sys::PicamParameter(0);
+    let kind = Kind::AcquisitionUpdated;
+    dispatch(
+        device,
+        parameter,
+        kind,
+        &Event::AcquisitionUpdated { available, status },
+    );
+    if available.is_some() {
+        // the sinks have copied the readouts. one picam wrote over midway
+        // shows in the overrun flag, read here since the sink lock is never
+        // held across a picam call. picam answers it inside its callback
+        // (seen with sdk 5.15)
+        let overran = has_overrun(device);
+        dispatch(device, parameter, kind, &Event::AcquisitionChecked(overran));
+    }
+    sys::PicamError::PicamError_None
 }
 
 #[cfg(test)]
