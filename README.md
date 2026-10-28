@@ -45,3 +45,8 @@ library for interfacing with teledyne princeton instruments cameras, written in 
 - [ ] PICam called the acquisition-updated callback once per readout on a demo camera, never batching, even when the callback was slow, need to check on hardware, though the crate handles several readouts per update either way
 - [ ] the acquisition-updated trampoline reads the overrun flag inside PICam's callback, which worked on a demo camera, need to check on hardware, including while the callback is being unregistered after a stream gave up ending its acquisition
 - [ ] a stream copies data in PICam's own memory with an ordinary copy, assuming PICam isn't writing to it during the callback, seen on a demo camera only (the data stayed unchanged until the next acquisition), need to check on hardware with a long, fast acquisition
+- [ ] frame metadata time stamps counted from the acquisition's start at 10 MHz on demo cameras, need to check on hardware where the camera stamps them, and which resolutions it offers
+- [ ] frame numbers counted frames, not readouts, from 1 in each acquisition on demo cameras, need to check on hardware
+- [ ] every demo model allows only 64-bit metadata values, need to check on hardware whether any camera offers other bit depths, which the crate decodes as sign-extended integers of up to 64 bits and floats of 32 or 64 bits
+- [ ] gate tracking added no metadata on a PI-MAX4 demo camera with repetitive gating or with modulation on, where PICam says it isn't relevant, even when turned on, need to check on a PI-MAX
+- [ ] gate and modulation tracking were in the units of `Pulse` and `Modulation` on demo cameras, and the output signal frequency read 0 with sequential modulation phases, need to check on a PI-MAX
