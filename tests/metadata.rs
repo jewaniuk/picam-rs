@@ -215,7 +215,8 @@ fn copies_carry_metadata() {
     stream.finish().expect("the stream should end cleanly");
     assert_eq!(numbers, [1, 2, 3]);
 
-    // room for 4 readouts, run until stopped
+    // room for 8 readouts, so a slow test thread doesn't overrun it, run
+    // until stopped
     let stride = usize::try_from(
         camera
             .get(params::READOUT_STRIDE)
@@ -223,7 +224,7 @@ fn copies_carry_metadata() {
     )
     .expect("readout stride should be positive");
     camera
-        .set_acquisition_buffer(4 * stride)
+        .set_acquisition_buffer(8 * stride)
         .expect("the buffer should be set");
     camera
         .set(params::READOUT_COUNT, 0)

@@ -2319,8 +2319,8 @@ mod tests {
         assert_eq!(layout.len, 11);
 
         let mut bytes = Vec::new();
-        // -5 in 12 bits, its top 4 bits clear
-        bytes.extend_from_slice(&0x0ffb_u16.to_le_bytes());
+        // -5 in 12 bits, with the 4 bits above them set, which are dropped
+        bytes.extend_from_slice(&0xfffb_u16.to_le_bytes());
         // past `i32`, but positive in 33 bits
         bytes.extend_from_slice(&((1_u64 << 31) | 9).to_le_bytes()[..5]);
         bytes.extend_from_slice(&2.5_f32.to_le_bytes());
@@ -2343,9 +2343,13 @@ mod tests {
                 time_stamps: Some((TimeStamps::from_bits_retain(unknown), 64, 1)),
                 ..Default::default()
             },
-            // no ticks per second
+            // no ticks per second, or fewer
             MetadataSettings {
                 time_stamps: Some((TimeStamps::EXPOSURE_STARTED, 64, 0)),
+                ..Default::default()
+            },
+            MetadataSettings {
+                time_stamps: Some((TimeStamps::EXPOSURE_STARTED, 64, -1)),
                 ..Default::default()
             },
             // integers of 0 and 65 bits
