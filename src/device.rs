@@ -22,6 +22,12 @@ macro_rules! impl_parameter_methods {
                 "   `parameter` can be set online (seen with SDK 5.15)\n",
                 " - otherwise an error if PICam is unable to set it",
             ),
+            failed: concat!(
+                " A failed commit commits nothing: the values pending on the camera's model\n",
+                " don't reach the hardware, and [`Self::are_parameters_committed`] stays false\n",
+                " (seen with SDK 5.15), though manual 5.4.6.2 can be read as saying the valid\n",
+                " ones are applied.",
+            ),
             commit: concat!(
                 " Returns [`crate::Error::AcquisitionInProgress`] during an acquisition (seen\n",
                 " with SDK 5.15), or an error if PICam is unable to attempt the commit at all.",
@@ -38,6 +44,7 @@ macro_rules! impl_parameter_methods {
             @impl $ty,
             $noun,
             set_tail: " - otherwise an error if PICam is unable to set it",
+            failed: "",
             commit: " Returns an error if PICam is unable to attempt the commit at all.",
             restore: " Returns an error if PICam is unable to do this."
         );
@@ -46,6 +53,7 @@ macro_rules! impl_parameter_methods {
         @impl $ty:ty,
         $noun:literal,
         set_tail: $set_tail:expr,
+        failed: $failed:expr,
         commit: $commit:expr,
         restore: $restore:expr
     ) => {
@@ -419,11 +427,10 @@ macro_rules! impl_parameter_methods {
                 /// it's set.
                 ///
                 /// Returns the parameters that failed to commit, if any. An empty
-                /// `Vec` means every pending change was accepted. PICam reports a
-                /// failure with [`Error::InvalidParameterValues`], which this returns
-                /// as the list instead, and then commits none of the changes: the
-                /// hardware keeps its values and [`Self::are_parameters_committed`]
-                /// stays false (seen with SDK 5.15).
+                /// `Vec` means every pending change was accepted. When PICam reports a
+                /// failure with [`crate::Error::InvalidParameterValues`] along with the
+                /// list, this returns the list instead.
+                #[doc = $failed]
                 ///
                 /// # Errors
                 ///

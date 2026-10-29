@@ -365,7 +365,11 @@ pub(crate) use picam_call;
 ///
 /// # Safety
 /// `$ptr` must be the output pointer the call was given, initialized to null,
-/// and `$destroy` the `Picam_Destroy*` function that frees it.
+/// and `$destroy` the `Picam_Destroy*` function that frees it. A non-null
+/// pointer on an error is taken to be an allocation `$destroy` accepts, as it
+/// was for the two calls above (seen with SDK 5.15), since the manual doesn't
+/// cover it. Once this returns an error, the caller must not use or free
+/// `$ptr` again, so return the error with `?` straight away.
 macro_rules! free_on_error {
     ($result:expr, $ptr:expr, $destroy:path) => {{
         let result: $crate::error::Result<()> = $result;
