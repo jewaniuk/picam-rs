@@ -319,11 +319,12 @@ macro_rules! impl_parameter_methods {
                     Ok(committed != 0)
                 }
 
-                /// Commits the values set with [`Self::set`] on the camera's model to
-                /// the hardware, validating them against PICam's constraints (PICam
-                /// manual 5.4.6.2). On a camera device, `set` has already reached the
-                /// hardware, and this commits any values still pending on the camera's
-                /// model; an accessory applies each value as it's set.
+                /// Commits the values set with [`Camera::set`](crate::Camera::set) on
+                /// the camera's model to the hardware, validating them against PICam's
+                /// constraints (PICam manual 5.4.6.2). On a camera device, `set` has
+                /// already reached the hardware, and this commits any values still
+                /// pending on the camera's model; an accessory applies each value as
+                /// it's set.
                 ///
                 /// Returns the parameters that failed to commit, if any. An empty
                 /// `Vec` means every pending change was accepted.

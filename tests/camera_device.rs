@@ -234,6 +234,7 @@ fn device_commits_the_models_values() {
         .set(params::EXPOSURE_TIME, pending)
         .expect("exposure time should be set");
     assert_eq!(device.are_parameters_committed(), Ok(false));
+    assert_eq!(camera.are_parameters_committed(), Ok(false));
     assert_eq!(device.get(params::EXPOSURE_TIME), Ok(committed));
 
     // committing through the device commits the model's pending value

@@ -258,9 +258,9 @@ impl<T> Hash for TypedParameter<T> {
 
 /// The crate-private halves of the value traits, which seal them.
 ///
-/// The public traits ([`PicamValue`], [`ReadablePicamValue`] and
-/// [`OnlineSettablePicamValue`]) have no methods of their own, they only
-/// require the supertraits here. Users can't name these supertraits, so they
+/// The public traits ([`PicamValue`], [`ReadablePicamValue`],
+/// [`OnlineSettablePicamValue`] and [`WaitablePicamValue`]) have no methods of
+/// their own, they only require the supertraits here. Users can't name these supertraits, so they
 /// can't implement the public traits for their own types:
 ///
 /// ```compile_fail

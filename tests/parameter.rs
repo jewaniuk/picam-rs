@@ -345,6 +345,7 @@ fn status_values_through_camera() {
         .status_parameter_purview_untyped(Parameter::SensorTemperatureStatus)
         .expect("the purview codes should be listed");
     assert_eq!(purview.len(), codes.len());
+    assert!(codes.contains(&locked));
     assert!(purview.contains(&SensorTemperatureStatus::Locked));
     assert!(purview.contains(&SensorTemperatureStatus::Unlocked));
 

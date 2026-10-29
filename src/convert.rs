@@ -208,6 +208,7 @@ mod tests {
     #[test]
     fn durations_from_milliseconds() {
         assert_eq!(duration_from_ms(-1), None);
+        assert_eq!(duration_from_ms(i32::MIN), None);
         assert_eq!(duration_from_ms(0), Some(Duration::ZERO));
         assert_eq!(duration_from_ms(1500), Some(Duration::from_millis(1500)));
     }
