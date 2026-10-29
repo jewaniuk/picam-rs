@@ -328,4 +328,4 @@ These largely mirror patterns already in `camera.rs`.
 
 ## Open questions
 
-None at the moment.
+- **`commit_parameters` on an error:** on the NIRVANA LN 640 demo, committing non-destructive readout returned `Err(InvalidParameterValues)` rather than `Ok` with the failed parameters (seen with SDK 5.15). `commit_parameters` returns through `?` before it frees PICam's failed-parameter array, so if PICam allocates that array while also returning an error, it leaks and the failed list is lost. Whether PICam does is unchecked. A candidate for a small follow-up that checks it on a demo camera, frees the array on both paths, and names the error.

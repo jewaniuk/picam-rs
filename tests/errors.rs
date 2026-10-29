@@ -763,8 +763,8 @@ fn acquisition_errors() {
         .expect("exposure time should be set");
     assert_eq!(camera.commit_parameters(), Ok(vec![]));
 
-    // `acquire`, with a count that isn't positive, or more than picam's own
-    // memory holds without a buffer
+    // `acquire`, with a count that isn't positive, or past the range manual
+    // 6.4.1 gives
     let invalid_count = Some(Error::InvalidReadoutCount);
     assert_eq!(camera.acquire(0, wait).err(), invalid_count);
     assert_eq!(camera.acquire(-1, wait).err(), invalid_count);
@@ -793,7 +793,30 @@ fn acquisition_errors() {
         Err(Error::InsufficientMemory)
     );
 
-    // `Acquisition::wait`, once the acquisition has ended
+    // `start_acquisition_stream`, running until stopped without a buffer, and
+    // both starts with a buffer of one readout, where two are needed
+    camera
+        .set(params::READOUT_COUNT, 0)
+        .expect("readout count should be set");
+    assert_eq!(camera.commit_parameters(), Ok(vec![]));
+    let invalid_buffer = Some(Error::InvalidAcquisitionBuffer);
+    assert_eq!(camera.start_acquisition_stream().err(), invalid_buffer);
+    let stride = usize::try_from(
+        camera
+            .get(params::READOUT_STRIDE)
+            .expect("readout stride should be read"),
+    )
+    .expect("readout stride should be positive");
+    camera
+        .set_acquisition_buffer(stride)
+        .expect("a buffer of one readout should be set");
+    assert_eq!(camera.start_acquisition().err(), invalid_buffer);
+    assert_eq!(camera.start_acquisition_stream().err(), invalid_buffer);
+    camera
+        .clear_acquisition_buffer()
+        .expect("the buffer should be cleared");
+
+    // `Acquisition::wait`, after an update said the acquisition has ended
     camera
         .set(params::READOUT_COUNT, 1)
         .expect("readout count should be set");
