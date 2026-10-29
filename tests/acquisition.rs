@@ -299,9 +299,9 @@ fn metadata_follows_the_pixels() {
     let readout = readouts.get(0).expect("one readout should arrive");
     let frame = readout.frame(0).expect("the readout should hold a frame");
     assert!(
-        frame.metadata().is_empty(),
+        frame.metadata_bytes().is_empty(),
         "nothing is tracked, so there should be no metadata, got {} bytes",
-        frame.metadata().len()
+        frame.metadata_bytes().len()
     );
     drop(readouts);
 
@@ -331,7 +331,7 @@ fn metadata_follows_the_pixels() {
     let readout = readouts.get(0).expect("one readout should arrive");
     let frame = readout.frame(0).expect("the readout should hold a frame");
     // two time stamps, each (bit depth + 7) / 8 bytes (manual 6.1)
-    assert_eq!(frame.metadata().len(), 2 * bit_depth.div_ceil(8));
+    assert_eq!(frame.metadata_bytes().len(), 2 * bit_depth.div_ceil(8));
 
     drop(readouts);
     drop(camera);

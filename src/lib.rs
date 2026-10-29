@@ -48,8 +48,8 @@ mod watch;
 pub use accessory::{Accessory, AccessoryHandle, AccessoryId, CalibrationPoint};
 pub use acquisition::{
     Acquisition, AcquisitionErrors, AcquisitionState, AcquisitionStateErrors,
-    AcquisitionStateUpdate, AcquisitionStream, Frame, Pixels, Readout, Readouts, RoiData,
-    StreamedUpdate, Update,
+    AcquisitionStateUpdate, AcquisitionStream, Frame, Metadata, Pixels, Readout, Readouts, RoiData,
+    StreamedUpdate, TimeStamp, Update,
 };
 pub use camera::{Camera, CameraHandle, CameraId, HandleType};
 pub use camera_device::CameraDevice;

@@ -18,9 +18,9 @@ use windows_sys::Win32::System::Memory::{
 
 use crate::camera::Camera;
 use crate::convert::define_picam_enum;
-use crate::enums::PixelFormat;
+use crate::enums::{GateTracking, ModulationTracking, PixelFormat, TimeStamps};
 use crate::error::{Error, Result, picam_call};
-use crate::parameter::{Roi, params};
+use crate::parameter::{Parameter, Roi, params};
 use crate::sys;
 use crate::watch::{self, Event, Watch};
 
@@ -264,8 +264,9 @@ impl Camera {
     ///   [`AcquisitionErrors::DATA_LOST`] if PICam wrote over the camera's
     ///   buffer while it was copied
     /// - [`crate::Error::InconsistentDataLayout`] if the camera's layout
-    ///   parameters don't fit together, or the data doesn't lie inside the
-    ///   camera's buffer
+    ///   parameters don't fit together, its metadata settings can't be
+    ///   decoded or don't fit between a frame's pixels and the next frame, or
+    ///   the data doesn't lie inside the camera's buffer
     /// - [`crate::Error::InvalidAcquisitionBuffer`] if the camera's buffer
     ///   can't hold `readout_count` readouts (seen with SDK 5.15)
     /// - otherwise an error if PICam is unable to acquire
@@ -324,7 +325,8 @@ impl Camera {
     /// - [`crate::Error::ParametersNotCommitted`] if parameters have changed
     ///   since the last commit
     /// - [`crate::Error::InconsistentDataLayout`] if the camera's layout
-    ///   parameters don't fit together
+    ///   parameters don't fit together, or its metadata settings can't be
+    ///   decoded or don't fit between a frame's pixels and the next frame
     /// - [`crate::Error::InvalidAcquisitionBuffer`] if the readout count needs
     ///   a buffer and the camera has none, or the camera's buffer is too
     ///   small (seen with SDK 5.15)
@@ -397,7 +399,8 @@ impl Camera {
     /// - [`crate::Error::ParametersNotCommitted`] if parameters have changed
     ///   since the last commit
     /// - [`crate::Error::InconsistentDataLayout`] if the camera's layout
-    ///   parameters don't fit together
+    ///   parameters don't fit together, or its metadata settings can't be
+    ///   decoded or don't fit between a frame's pixels and the next frame
     /// - [`crate::Error::InvalidAcquisitionBuffer`] if the readout count
     ///   needs a buffer and the camera has none, or the camera's buffer is
     ///   too small (seen with SDK 5.15)
@@ -1388,11 +1391,35 @@ impl<'a> Frame<'a> {
         frame.layout.rois.iter().map(move |roi| frame.roi_data(roi))
     }
 
-    /// The frame's metadata, the bytes after its pixels (`FrameSize`) up to
-    /// the next frame (`FrameStride`), not decoded. It holds whichever of
-    /// time stamps, frame tracking, gate tracking and modulation tracking
-    /// are turned on (manual 6.1).
-    pub fn metadata(&self) -> &'a [u8] {
+    /// The frame's metadata, decoded (manual 6.1).
+    ///
+    /// ```no_run
+    /// # fn f(camera: &mut picam_rs::Camera) -> picam_rs::Result<()> {
+    /// use std::time::Duration;
+    ///
+    /// let readouts = camera.acquire(3, Some(Duration::from_secs(5)))?;
+    /// for readout in readouts.iter() {
+    ///     for frame in readout.frames() {
+    ///         let metadata = frame.metadata();
+    ///         if let (Some(started), Some(ended)) =
+    ///             (metadata.exposure_started, metadata.exposure_ended)
+    ///         {
+    ///             let seconds = ended.as_secs_f64() - started.as_secs_f64();
+    ///             println!("exposed for {seconds} s");
+    ///         }
+    ///         println!("frame {:?}", metadata.frame_number);
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn metadata(&self) -> Metadata {
+        self.layout.metadata.decode(self.metadata_bytes())
+    }
+
+    /// The frame's metadata as bytes: everything after its pixels
+    /// (`FrameSize`) up to the next frame (`FrameStride`), not decoded.
+    pub fn metadata_bytes(&self) -> &'a [u8] {
         &self.bytes[self.layout.frame_size..]
     }
 
@@ -1491,6 +1518,75 @@ macro_rules! pixels_from_bytes {
 pixels_from_bytes!(as_u16s, u16);
 pixels_from_bytes!(as_u32s, u32);
 
+/// A frame's metadata, decoded: whichever values were turned on when the
+/// acquisition started (PICam manual 6.1).
+///
+/// A value is `None` when it isn't in the metadata. Turning one on isn't
+/// always enough: gate tracking only applies to sequential gating without
+/// modulation, and modulation tracking only with modulation on. Otherwise
+/// PICam says they aren't relevant and adds nothing for them (seen with
+/// SDK 5.15).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Metadata {
+    /// When the frame's exposure started, with
+    /// [`TimeStamps::EXPOSURE_STARTED`] in [`params::TIME_STAMPS`].
+    pub exposure_started: Option<TimeStamp>,
+    /// When the frame's exposure ended, with [`TimeStamps::EXPOSURE_ENDED`]
+    /// in [`params::TIME_STAMPS`].
+    pub exposure_ended: Option<TimeStamp>,
+    /// The frame's number, with [`params::TRACK_FRAMES`] on. It counts
+    /// frames, not readouts, from 1 at the start of each acquisition (seen
+    /// with SDK 5.15).
+    pub frame_number: Option<i64>,
+    /// The gate's delay in ns, as in [`Pulse::delay`](crate::Pulse::delay),
+    /// with [`GateTracking::DELAY`] in [`params::GATE_TRACKING`].
+    pub gate_delay: Option<f64>,
+    /// The gate's width in ns, as in [`Pulse::width`](crate::Pulse::width),
+    /// with [`GateTracking::WIDTH`] in [`params::GATE_TRACKING`].
+    pub gate_width: Option<f64>,
+    /// How long the intensifier modulated, in ms, as in
+    /// [`Modulation::duration`](crate::Modulation::duration), with
+    /// [`ModulationTracking::DURATION`] in [`params::MODULATION_TRACKING`].
+    pub modulation_duration: Option<f64>,
+    /// The intensifier modulation frequency, in MHz, with
+    /// [`ModulationTracking::FREQUENCY`].
+    pub modulation_frequency: Option<f64>,
+    /// The intensifier's phase relative to the output signal, in degrees,
+    /// with [`ModulationTracking::PHASE`].
+    pub modulation_phase: Option<f64>,
+    /// The RF output signal's frequency, in MHz, with
+    /// [`ModulationTracking::OUTPUT_SIGNAL_FREQUENCY`].
+    pub modulation_output_signal_frequency: Option<f64>,
+}
+
+/// A time stamp from a frame's metadata: a signed count of ticks, at
+/// [`params::TIME_STAMP_RESOLUTION`] ticks per second (manual 5.1.1.34). It
+/// counts from when the acquisition started (seen with SDK 5.15).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TimeStamp {
+    ticks: i64,
+    resolution: i64,
+}
+
+impl TimeStamp {
+    /// The time stamp in ticks. It can be negative, since PICam keeps a bit
+    /// for the sign (manual Table 5-23).
+    pub fn ticks(&self) -> i64 {
+        self.ticks
+    }
+
+    /// How many ticks make a second, always positive.
+    pub fn resolution(&self) -> i64 {
+        self.resolution
+    }
+
+    /// The time stamp in seconds, rounded beyond 2^53 ticks, where
+    /// [`ticks`](Self::ticks) stays exact.
+    pub fn as_secs_f64(&self) -> f64 {
+        self.ticks as f64 / self.resolution as f64
+    }
+}
+
 /// Where acquired data sits in PICam's buffer (manual 6.1), from the
 /// camera's committed parameters.
 #[derive(Debug)]
@@ -1508,6 +1604,8 @@ struct Layout {
     // bytes per pixel
     pixel_size: usize,
     rois: Vec<RoiLayout>,
+    // where each metadata value sits after the pixels
+    metadata: MetadataLayout,
 }
 
 /// Where one region of interest's pixels sit in a frame.
@@ -1536,7 +1634,8 @@ impl Layout {
             camera.get(params::PIXEL_FORMAT)?,
             camera.get(params::PIXEL_BIT_DEPTH)?,
             camera.get(params::ROIS)?,
-        )
+        )?
+        .with_metadata(&MetadataSettings::read(camera)?)
     }
 
     /// Checks the parts fit together, so the views never slice out of
@@ -1604,7 +1703,235 @@ impl Layout {
             pixel_format,
             pixel_size,
             rois: roi_layouts,
+            metadata: MetadataLayout::default(),
         })
+    }
+
+    /// Adds where the metadata `settings` turn on sits, checking it fits
+    /// between a frame's pixels and the next frame. `new` checked the frame
+    /// size is within the stride.
+    fn with_metadata(mut self, settings: &MetadataSettings) -> Result<Self> {
+        let metadata = MetadataLayout::new(settings)?;
+        // the demo cameras filled the room exactly (seen with sdk 5.15), and
+        // padding after the values is allowed
+        if metadata.len > self.frame_stride - self.frame_size {
+            return Err(Error::InconsistentDataLayout);
+        }
+        self.metadata = metadata;
+        Ok(self)
+    }
+}
+
+/// The committed parameters that turn metadata on (manual 6.1), each `None`
+/// when it's off.
+#[derive(Debug, Default, Clone, Copy)]
+struct MetadataSettings {
+    // the time stamps turned on, their bit depth and their resolution
+    time_stamps: Option<(TimeStamps, i32, i64)>,
+    // the frame tracking bit depth
+    frame_tracking: Option<i32>,
+    gate_tracking: Option<(GateTracking, i32)>,
+    modulation_tracking: Option<(ModulationTracking, i32)>,
+}
+
+impl MetadataSettings {
+    /// Reads the settings from `camera`'s parameters, which `Layout::read`
+    /// checked are committed.
+    fn read(camera: &Camera) -> Result<Self> {
+        // a parameter adds no metadata when the camera doesn't have it, or
+        // picam says it isn't relevant, such as gate tracking without
+        // sequential gating, even when it's turned on (seen with sdk 5.15)
+        let applies = |parameter: Parameter| -> Result<bool> {
+            Ok(camera.does_parameter_exist(parameter)? && camera.is_relevant(parameter)?)
+        };
+        let mut settings = Self::default();
+        if applies(Parameter::TimeStamps)? {
+            let time_stamps = camera.get(params::TIME_STAMPS)?;
+            if !time_stamps.is_empty() {
+                settings.time_stamps = Some((
+                    time_stamps,
+                    camera.get(params::TIME_STAMP_BIT_DEPTH)?,
+                    camera.get(params::TIME_STAMP_RESOLUTION)?,
+                ));
+            }
+        }
+        if applies(Parameter::TrackFrames)? && camera.get(params::TRACK_FRAMES)? {
+            settings.frame_tracking = Some(camera.get(params::FRAME_TRACKING_BIT_DEPTH)?);
+        }
+        if applies(Parameter::GateTracking)? {
+            let gate_tracking = camera.get(params::GATE_TRACKING)?;
+            if !gate_tracking.is_empty() {
+                settings.gate_tracking =
+                    Some((gate_tracking, camera.get(params::GATE_TRACKING_BIT_DEPTH)?));
+            }
+        }
+        if applies(Parameter::ModulationTracking)? {
+            let modulation_tracking = camera.get(params::MODULATION_TRACKING)?;
+            if !modulation_tracking.is_empty() {
+                settings.modulation_tracking = Some((
+                    modulation_tracking,
+                    camera.get(params::MODULATION_TRACKING_BIT_DEPTH)?,
+                ));
+            }
+        }
+        Ok(settings)
+    }
+}
+
+/// Where each metadata value sits after a frame's pixels, in the order PICam
+/// writes them (manual 6.1 and figure 6-1).
+#[derive(Debug, Default)]
+struct MetadataLayout {
+    // ticks per second, for the time stamps
+    resolution: i64,
+    exposure_started: Option<Field>,
+    exposure_ended: Option<Field>,
+    frame_number: Option<Field>,
+    gate_delay: Option<Field>,
+    gate_width: Option<Field>,
+    modulation_duration: Option<Field>,
+    modulation_frequency: Option<Field>,
+    modulation_phase: Option<Field>,
+    modulation_output_signal_frequency: Option<Field>,
+    // every value's bytes together
+    len: usize,
+}
+
+/// Where one metadata value sits in a frame's metadata.
+#[derive(Debug, Clone, Copy)]
+struct Field {
+    offset: usize,
+    // (bit depth + 7) / 8 bytes (manual figure 6-1)
+    len: usize,
+    bit_depth: u32,
+}
+
+impl MetadataLayout {
+    /// Places the values `settings` turn on one after another, refusing
+    /// any it can't decode.
+    fn new(settings: &MetadataSettings) -> Result<Self> {
+        let mut layout = Self::default();
+        if let Some((time_stamps, bit_depth, resolution)) = settings.time_stamps {
+            // a flag this crate doesn't know would hold a value it can't place
+            if !TimeStamps::all().contains(time_stamps) || resolution <= 0 {
+                return Err(Error::InconsistentDataLayout);
+            }
+            let bit_depth = integer_bit_depth(bit_depth)?;
+            layout.resolution = resolution;
+            layout.exposure_started = layout.place(
+                time_stamps.contains(TimeStamps::EXPOSURE_STARTED),
+                bit_depth,
+            );
+            layout.exposure_ended =
+                layout.place(time_stamps.contains(TimeStamps::EXPOSURE_ENDED), bit_depth);
+        }
+        if let Some(bit_depth) = settings.frame_tracking {
+            layout.frame_number = layout.place(true, integer_bit_depth(bit_depth)?);
+        }
+        if let Some((gate_tracking, bit_depth)) = settings.gate_tracking {
+            if !GateTracking::all().contains(gate_tracking) {
+                return Err(Error::InconsistentDataLayout);
+            }
+            let bit_depth = float_bit_depth(bit_depth)?;
+            layout.gate_delay =
+                layout.place(gate_tracking.contains(GateTracking::DELAY), bit_depth);
+            layout.gate_width =
+                layout.place(gate_tracking.contains(GateTracking::WIDTH), bit_depth);
+        }
+        if let Some((modulation_tracking, bit_depth)) = settings.modulation_tracking {
+            if !ModulationTracking::all().contains(modulation_tracking) {
+                return Err(Error::InconsistentDataLayout);
+            }
+            let bit_depth = float_bit_depth(bit_depth)?;
+            let tracks = |flag| modulation_tracking.contains(flag);
+            layout.modulation_duration =
+                layout.place(tracks(ModulationTracking::DURATION), bit_depth);
+            layout.modulation_frequency =
+                layout.place(tracks(ModulationTracking::FREQUENCY), bit_depth);
+            layout.modulation_phase = layout.place(tracks(ModulationTracking::PHASE), bit_depth);
+            layout.modulation_output_signal_frequency = layout.place(
+                tracks(ModulationTracking::OUTPUT_SIGNAL_FREQUENCY),
+                bit_depth,
+            );
+        }
+        Ok(layout)
+    }
+
+    /// Places a value after the ones placed so far, if it's turned on.
+    fn place(&mut self, on: bool, bit_depth: u32) -> Option<Field> {
+        on.then(|| {
+            let len = bit_depth.div_ceil(8) as usize;
+            let field = Field {
+                offset: self.len,
+                len,
+                bit_depth,
+            };
+            self.len += len;
+            field
+        })
+    }
+
+    /// Decodes a frame's metadata bytes, which `Layout::with_metadata`
+    /// checked hold every value.
+    fn decode(&self, bytes: &[u8]) -> Metadata {
+        let time_stamp = |field: Option<Field>| {
+            field.map(|field| TimeStamp {
+                ticks: field.integer(bytes),
+                resolution: self.resolution,
+            })
+        };
+        let float = |field: Option<Field>| field.map(|field| field.float(bytes));
+        Metadata {
+            exposure_started: time_stamp(self.exposure_started),
+            exposure_ended: time_stamp(self.exposure_ended),
+            frame_number: self.frame_number.map(|field| field.integer(bytes)),
+            gate_delay: float(self.gate_delay),
+            gate_width: float(self.gate_width),
+            modulation_duration: float(self.modulation_duration),
+            modulation_frequency: float(self.modulation_frequency),
+            modulation_phase: float(self.modulation_phase),
+            modulation_output_signal_frequency: float(self.modulation_output_signal_frequency),
+        }
+    }
+}
+
+impl Field {
+    /// Reads the value as a little-endian signed integer, extending its top
+    /// bit, the sign (manual Table 5-23).
+    fn integer(self, bytes: &[u8]) -> i64 {
+        let mut raw = [0; 8];
+        raw[..self.len].copy_from_slice(&bytes[self.offset..self.offset + self.len]);
+        let unused = 64 - self.bit_depth;
+        (i64::from_le_bytes(raw) << unused) >> unused
+    }
+
+    /// Reads the value as a little-endian float of 32 or 64 bits.
+    fn float(self, bytes: &[u8]) -> f64 {
+        let bytes = &bytes[self.offset..self.offset + self.len];
+        match self.len {
+            4 => f32::from_le_bytes(bytes.try_into().expect("a 32-bit field is 4 bytes")).into(),
+            _ => f64::from_le_bytes(bytes.try_into().expect("a 64-bit field is 8 bytes")),
+        }
+    }
+}
+
+/// Checks the bit depth of time stamps or frame numbers, which are signed
+/// integers (manual Table 5-23, and the SDK's metadata sample for frame
+/// numbers), of up to 64 bits.
+fn integer_bit_depth(bit_depth: i32) -> Result<u32> {
+    u32::try_from(bit_depth)
+        .ok()
+        .filter(|bits| (1..=64).contains(bits))
+        .ok_or(Error::InconsistentDataLayout)
+}
+
+/// Checks the bit depth of gate or modulation tracking, which are floating
+/// point (manual Table 5-23), so 32 or 64 bits.
+fn float_bit_depth(bit_depth: i32) -> Result<u32> {
+    match bit_depth {
+        32 => Ok(32),
+        64 => Ok(64),
+        _ => Err(Error::InconsistentDataLayout),
     }
 }
 
@@ -1754,6 +2081,19 @@ mod tests {
         (r * 1000 + f * 100 + k * 10 + p) as u16
     }
 
+    /// Metadata with nothing turned on.
+    const NO_METADATA: Metadata = Metadata {
+        exposure_started: None,
+        exposure_ended: None,
+        frame_number: None,
+        gate_delay: None,
+        gate_width: None,
+        modulation_duration: None,
+        modulation_frequency: None,
+        modulation_phase: None,
+        modulation_output_signal_frequency: None,
+    };
+
     /// Fills `bytes` with two readouts in `test_layout`'s shape: the test
     /// pixels, metadata `[r, f, 0xaa, 0xbb]` and padding `0xee`.
     fn fill(bytes: &mut [u8]) {
@@ -1809,7 +2149,9 @@ mod tests {
             assert!(readout.frame(2).is_none());
             for (f, frame) in readout.frames().enumerate() {
                 assert_eq!(frame.bytes().len(), 16);
-                assert_eq!(frame.metadata(), &[r as u8, f as u8, 0xaa, 0xbb]);
+                assert_eq!(frame.metadata_bytes(), &[r as u8, f as u8, 0xaa, 0xbb]);
+                // nothing is turned on, so the bytes hold no values
+                assert_eq!(frame.metadata(), NO_METADATA);
                 assert_eq!(frame.roi_count(), 2);
                 assert!(frame.roi(2).is_none());
                 let sizes: Vec<(usize, usize)> = frame
@@ -1945,6 +2287,139 @@ mod tests {
             );
         }
         assert!(Layout::new(40, 2, 20, 16, mono16, 16, vec![roi(2, 1, 1, 1)]).is_ok());
+    }
+
+    #[test]
+    fn metadata_decodes_every_value() {
+        let settings = MetadataSettings {
+            time_stamps: Some((TimeStamps::all(), 64, 1_000)),
+            frame_tracking: Some(64),
+            gate_tracking: Some((GateTracking::all(), 64)),
+            modulation_tracking: Some((ModulationTracking::all(), 64)),
+        };
+        let layout = MetadataLayout::new(&settings).expect("64-bit values should be placed");
+        assert_eq!(layout.len, 9 * 8);
+
+        // the values in the order picam writes them (manual 6.1)
+        let mut bytes = Vec::new();
+        for value in [-250_i64, 1_500, 7] {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+        for value in [100.0_f64, 50.0, 1.0, 100.0, 25.0, 90.0] {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+        let metadata = layout.decode(&bytes);
+
+        let started = metadata
+            .exposure_started
+            .expect("exposure start is tracked");
+        assert_eq!((started.ticks(), started.resolution()), (-250, 1_000));
+        assert_eq!(started.as_secs_f64(), -0.25);
+        let ended = metadata.exposure_ended.expect("exposure end is tracked");
+        assert_eq!((ended.ticks(), ended.resolution()), (1_500, 1_000));
+        assert_eq!(ended.as_secs_f64(), 1.5);
+        assert_eq!(metadata.frame_number, Some(7));
+        assert_eq!(metadata.gate_delay, Some(100.0));
+        assert_eq!(metadata.gate_width, Some(50.0));
+        assert_eq!(metadata.modulation_duration, Some(1.0));
+        assert_eq!(metadata.modulation_frequency, Some(100.0));
+        assert_eq!(metadata.modulation_phase, Some(25.0));
+        assert_eq!(metadata.modulation_output_signal_frequency, Some(90.0));
+    }
+
+    #[test]
+    fn metadata_reads_narrow_values() {
+        let settings = MetadataSettings {
+            time_stamps: Some((TimeStamps::EXPOSURE_ENDED, 12, 10)),
+            frame_tracking: Some(33),
+            gate_tracking: Some((GateTracking::WIDTH, 32)),
+            modulation_tracking: None,
+        };
+        let layout = MetadataLayout::new(&settings).expect("narrow values should be placed");
+        // 2, 5 and 4 bytes
+        assert_eq!(layout.len, 11);
+
+        let mut bytes = Vec::new();
+        // -5 in 12 bits, with the 4 bits above them set, which are dropped
+        bytes.extend_from_slice(&0xfffb_u16.to_le_bytes());
+        // past `i32`, but positive in 33 bits
+        bytes.extend_from_slice(&((1_u64 << 31) | 9).to_le_bytes()[..5]);
+        bytes.extend_from_slice(&2.5_f32.to_le_bytes());
+        let metadata = layout.decode(&bytes);
+
+        assert_eq!(metadata.exposure_started, None);
+        assert_eq!(metadata.exposure_ended.map(|stamp| stamp.ticks()), Some(-5));
+        assert_eq!(metadata.frame_number, Some((1 << 31) | 9));
+        assert_eq!(metadata.gate_delay, None);
+        assert_eq!(metadata.gate_width, Some(2.5));
+        assert_eq!(metadata.modulation_phase, None);
+    }
+
+    #[test]
+    fn metadata_layout_refuses_what_it_cannot_place() {
+        let unknown = 1 << 20;
+        let cases = [
+            // a time stamp flag this crate doesn't know
+            MetadataSettings {
+                time_stamps: Some((TimeStamps::from_bits_retain(unknown), 64, 1)),
+                ..Default::default()
+            },
+            // no ticks per second, or fewer
+            MetadataSettings {
+                time_stamps: Some((TimeStamps::EXPOSURE_STARTED, 64, 0)),
+                ..Default::default()
+            },
+            MetadataSettings {
+                time_stamps: Some((TimeStamps::EXPOSURE_STARTED, 64, -1)),
+                ..Default::default()
+            },
+            // integers of 0 and 65 bits
+            MetadataSettings {
+                frame_tracking: Some(0),
+                ..Default::default()
+            },
+            MetadataSettings {
+                frame_tracking: Some(65),
+                ..Default::default()
+            },
+            // a 16-bit float
+            MetadataSettings {
+                gate_tracking: Some((GateTracking::DELAY, 16)),
+                ..Default::default()
+            },
+            // gate and modulation flags this crate doesn't know
+            MetadataSettings {
+                gate_tracking: Some((GateTracking::from_bits_retain(unknown), 64)),
+                ..Default::default()
+            },
+            MetadataSettings {
+                modulation_tracking: Some((ModulationTracking::from_bits_retain(unknown), 64)),
+                ..Default::default()
+            },
+        ];
+        for (index, case) in cases.iter().enumerate() {
+            assert!(
+                matches!(
+                    MetadataLayout::new(case),
+                    Err(Error::InconsistentDataLayout)
+                ),
+                "case {index} should be refused"
+            );
+        }
+
+        // the test layout leaves 4 bytes after the pixels
+        let frame_number = |bit_depth| MetadataSettings {
+            frame_tracking: Some(bit_depth),
+            ..Default::default()
+        };
+        assert!(matches!(
+            test_layout().with_metadata(&frame_number(64)),
+            Err(Error::InconsistentDataLayout)
+        ));
+        let layout = test_layout()
+            .with_metadata(&frame_number(32))
+            .expect("a 32-bit frame number fits exactly");
+        assert_eq!(layout.metadata.len, 4);
     }
 
     #[test]
