@@ -10,8 +10,8 @@ use std::time::Duration;
 
 use picam_rs::{
     AdcQuality, Camera, CameraId, ConstraintCategory, ConstraintScope, ConstraintSeverity,
-    ConstraintType, Error, Library, Model, Parameter, Roi, SensorTemperatureStatus,
-    ShutterTimingMode, ValueAccess, ValueType, params,
+    ConstraintType, Error, Library, Model, Parameter, ReadoutControlMode, Roi,
+    SensorTemperatureStatus, ShutterTimingMode, ValueAccess, ValueType, params,
 };
 
 /// Connects a demo camera of the first model PICam offers.
@@ -404,6 +404,65 @@ fn status_values_through_camera() {
         Err(Error::ParameterHasInvalidValueType)
     );
 
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that a commit failing validation lists the parameters that failed
+/// rather than returning PICam's `InvalidParameterValues`, and commits none
+/// of the changes (seen with SDK 5.15).
+#[test]
+fn failed_commits_list_their_parameters() {
+    // each test uses its own serial numbers so demo cameras never collide
+    const SERIAL_NUMBER: &str = "PARAM0007";
+    const NDR_SERIAL_NUMBER: &str = "PARAM0008";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+
+    // kinetics with the default full-sensor region
+    let id = CameraId::connect_demo(library, Model::PIXIS_100F, SERIAL_NUMBER)
+        .expect("demo camera should connect");
+    let camera = Camera::open(&id, Arc::clone(library)).expect("demo camera should open");
+    let exposure = camera
+        .device()
+        .get(params::EXPOSURE_TIME)
+        .expect("the device's exposure time should be read");
+    camera
+        .set(params::EXPOSURE_TIME, exposure + 23.0)
+        .expect("the exposure time should be set");
+    camera
+        .set(params::READOUT_CONTROL_MODE, ReadoutControlMode::Kinetics)
+        .expect("kinetics should be set");
+    assert_eq!(camera.commit_parameters(), Ok(vec![Parameter::Rois]));
+    assert_eq!(camera.are_parameters_committed(), Ok(false));
+    assert_eq!(camera.device().get(params::EXPOSURE_TIME), Ok(exposure));
+    assert_eq!(
+        camera.device().get(params::READOUT_CONTROL_MODE),
+        Ok(ReadoutControlMode::FullFrame)
+    );
+    assert_eq!(
+        camera.device().commit_parameters(),
+        Ok(vec![Parameter::Rois])
+    );
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+
+    // non-destructive readout, on the one demo model that has it
+    let id = CameraId::connect_demo(library, Model::NIRVANA_LN_640, NDR_SERIAL_NUMBER)
+        .expect("demo camera should connect");
+    let camera = Camera::open(&id, Arc::clone(library)).expect("demo camera should open");
+    camera
+        .set(params::ENABLE_NONDESTRUCTIVE_READOUT, true)
+        .expect("non-destructive readout should be set");
+    assert_eq!(camera.commit_parameters(), Ok(vec![Parameter::TrackFrames]));
+    assert_eq!(camera.are_parameters_committed(), Ok(false));
+    assert_eq!(
+        camera.device().get(params::ENABLE_NONDESTRUCTIVE_READOUT),
+        Ok(false)
+    );
     drop(camera);
     id.disconnect_demo(library)
         .expect("demo camera should disconnect");

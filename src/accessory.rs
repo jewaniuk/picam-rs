@@ -7,7 +7,7 @@ use crate::convert::{
     FirmwareDetail, c_char_array_to_string, collect_raw_array, string_to_c_char_array,
 };
 use crate::device::impl_parameter_methods;
-use crate::error::{Error, Result, picam_call};
+use crate::error::{Error, Result, free_on_error, picam_call};
 use crate::library::Library;
 use crate::model::Model;
 use crate::parameter::ComputerInterface;
@@ -102,9 +102,10 @@ impl Accessory {
         let _ = library; // ties the returned lifetime to `library`, see `AccessoryHandle`
         let mut array: *const sys::PicamHandle = std::ptr::null();
         let mut count: sys::piint = 0;
-        picam_call!(sys::PicamAccessory_GetOpenAccessories(
+        let result = picam_call!(sys::PicamAccessory_GetOpenAccessories(
             &mut array, &mut count
-        ))?;
+        ));
+        free_on_error!(result, array, sys::Picam_DestroyHandles)?;
 
         // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
         let handles = unsafe {
@@ -131,9 +132,10 @@ impl Accessory {
         let _ = library; // only taken to prove picam is initialized
         let mut array: *const sys::PicamAccessoryID = std::ptr::null();
         let mut count: sys::piint = 0;
-        picam_call!(sys::PicamAccessory_GetAvailableAccessoryIDs(
+        let result = picam_call!(sys::PicamAccessory_GetAvailableAccessoryIDs(
             &mut array, &mut count
-        ))?;
+        ));
+        free_on_error!(result, array, sys::PicamAccessory_DestroyAccessoryIDs)?;
         collect_and_destroy_ids(array, count)
     }
 
@@ -148,9 +150,10 @@ impl Accessory {
         let _ = library; // only taken to prove picam is initialized
         let mut array: *const sys::PicamAccessoryID = std::ptr::null();
         let mut count: sys::piint = 0;
-        picam_call!(sys::PicamAccessory_GetUnavailableAccessoryIDs(
+        let result = picam_call!(sys::PicamAccessory_GetUnavailableAccessoryIDs(
             &mut array, &mut count
-        ))?;
+        ));
+        free_on_error!(result, array, sys::PicamAccessory_DestroyAccessoryIDs)?;
         collect_and_destroy_ids(array, count)
     }
 
@@ -205,10 +208,11 @@ impl Accessory {
     /// get it.
     pub fn light_source_reference(&self) -> Result<Vec<CalibrationPoint>> {
         let mut ptr: *const sys::PicamCalibration = std::ptr::null();
-        picam_call!(sys::PicamAccessory_GetLightSourceReference(
+        let result = picam_call!(sys::PicamAccessory_GetLightSourceReference(
             self.handle,
             &mut ptr
-        ))?;
+        ));
+        free_on_error!(result, ptr, sys::Picam_DestroyCalibrations)?;
 
         if ptr.is_null() {
             return Err(Error::UnexpectedNullPointer);
@@ -393,9 +397,10 @@ impl AccessoryId {
         let raw_id = self.to_raw()?;
         let mut array: *const sys::PicamFirmwareDetail = std::ptr::null();
         let mut count: sys::piint = 0;
-        picam_call!(sys::PicamAccessory_GetFirmwareDetails(
+        let result = picam_call!(sys::PicamAccessory_GetFirmwareDetails(
             &raw_id, &mut array, &mut count
-        ))?;
+        ));
+        free_on_error!(result, array, sys::Picam_DestroyFirmwareDetails)?;
 
         // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
         let details = unsafe { collect_raw_array(array, count, FirmwareDetail::from_raw) };

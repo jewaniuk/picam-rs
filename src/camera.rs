@@ -12,7 +12,7 @@ use crate::convert::{
     string_to_c_char_array,
 };
 use crate::device::impl_parameter_methods;
-use crate::error::{Result, picam_call};
+use crate::error::{Result, free_on_error, picam_call};
 use crate::library::Library;
 use crate::model::Model;
 use crate::parameter::sealed::RawHandle;
@@ -137,7 +137,8 @@ impl Camera {
         let _ = library; // ties the returned lifetime to `library`, see `CameraHandle`
         let mut array: *const sys::PicamHandle = std::ptr::null();
         let mut count: sys::piint = 0;
-        picam_call!(sys::Picam_GetOpenCameras(&mut array, &mut count))?;
+        let result = picam_call!(sys::Picam_GetOpenCameras(&mut array, &mut count));
+        free_on_error!(result, array, sys::Picam_DestroyHandles)?;
 
         // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
         let handles = unsafe {
@@ -165,9 +166,10 @@ impl Camera {
         let _ = library; // ties the returned lifetime to `library`, see `CameraHandle`
         let mut array: *const sys::PicamHandle = std::ptr::null();
         let mut count: sys::piint = 0;
-        picam_call!(sys::PicamAdvanced_GetOpenCameraDevices(
+        let result = picam_call!(sys::PicamAdvanced_GetOpenCameraDevices(
             &mut array, &mut count
-        ))?;
+        ));
+        free_on_error!(result, array, sys::Picam_DestroyHandles)?;
 
         // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
         let handles = unsafe {
@@ -193,7 +195,8 @@ impl Camera {
         let _ = library; // only taken to prove picam is initialized
         let mut array: *const sys::PicamCameraID = std::ptr::null();
         let mut count: sys::piint = 0;
-        picam_call!(sys::Picam_GetAvailableCameraIDs(&mut array, &mut count))?;
+        let result = picam_call!(sys::Picam_GetAvailableCameraIDs(&mut array, &mut count));
+        free_on_error!(result, array, sys::Picam_DestroyCameraIDs)?;
         collect_and_destroy_ids(array, count)
     }
 
@@ -208,7 +211,8 @@ impl Camera {
         let _ = library; // only taken to prove picam is initialized
         let mut array: *const sys::PicamCameraID = std::ptr::null();
         let mut count: sys::piint = 0;
-        picam_call!(sys::Picam_GetUnavailableCameraIDs(&mut array, &mut count))?;
+        let result = picam_call!(sys::Picam_GetUnavailableCameraIDs(&mut array, &mut count));
+        free_on_error!(result, array, sys::Picam_DestroyCameraIDs)?;
         collect_and_destroy_ids(array, count)
     }
 
@@ -319,9 +323,10 @@ impl Camera {
         let _ = library; // only taken to prove picam is initialized
         let mut array: *const sys::PicamModel = std::ptr::null();
         let mut count: sys::piint = 0;
-        picam_call!(sys::Picam_GetAvailableDemoCameraModels(
+        let result = picam_call!(sys::Picam_GetAvailableDemoCameraModels(
             &mut array, &mut count
-        ))?;
+        ));
+        free_on_error!(result, array, sys::Picam_DestroyModels)?;
 
         // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
         let models = unsafe { collect_raw_array(array, count, |&m| Model::from_raw(m)) };
@@ -419,12 +424,13 @@ impl Camera {
         category: ConstraintCategory,
     ) -> Result<RoisConstraint> {
         let mut ptr: *const sys::PicamRoisConstraint = std::ptr::null();
-        picam_call!(sys::Picam_GetParameterRoisConstraint(
+        let result = picam_call!(sys::Picam_GetParameterRoisConstraint(
             self.handle,
             parameter.into().to_raw(),
             category.to_raw(),
             &mut ptr
-        ))?;
+        ));
+        free_on_error!(result, ptr, sys::Picam_DestroyRoisConstraints)?;
 
         if ptr.is_null() {
             return Err(crate::error::Error::UnexpectedNullPointer);
@@ -458,12 +464,13 @@ impl Camera {
         category: ConstraintCategory,
     ) -> Result<PulseConstraint> {
         let mut ptr: *const sys::PicamPulseConstraint = std::ptr::null();
-        picam_call!(sys::Picam_GetParameterPulseConstraint(
+        let result = picam_call!(sys::Picam_GetParameterPulseConstraint(
             self.handle,
             parameter.into().to_raw(),
             category.to_raw(),
             &mut ptr
-        ))?;
+        ));
+        free_on_error!(result, ptr, sys::Picam_DestroyPulseConstraints)?;
 
         if ptr.is_null() {
             return Err(crate::error::Error::UnexpectedNullPointer);
@@ -497,12 +504,13 @@ impl Camera {
         category: ConstraintCategory,
     ) -> Result<ModulationsConstraint> {
         let mut ptr: *const sys::PicamModulationsConstraint = std::ptr::null();
-        picam_call!(sys::Picam_GetParameterModulationsConstraint(
+        let result = picam_call!(sys::Picam_GetParameterModulationsConstraint(
             self.handle,
             parameter.into().to_raw(),
             category.to_raw(),
             &mut ptr
-        ))?;
+        ));
+        free_on_error!(result, ptr, sys::Picam_DestroyModulationsConstraints)?;
 
         if ptr.is_null() {
             return Err(crate::error::Error::UnexpectedNullPointer);
@@ -526,12 +534,13 @@ impl Camera {
     pub fn rois_constraints(&self, parameter: impl Into<Parameter>) -> Result<Vec<RoisConstraint>> {
         let mut array: *const sys::PicamRoisConstraint = std::ptr::null();
         let mut count: sys::piint = 0;
-        picam_call!(sys::PicamAdvanced_GetParameterRoisConstraints(
+        let result = picam_call!(sys::PicamAdvanced_GetParameterRoisConstraints(
             self.handle,
             parameter.into().to_raw(),
             &mut array,
             &mut count
-        ))?;
+        ));
+        free_on_error!(result, array, sys::Picam_DestroyRoisConstraints)?;
 
         // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
         let constraints = unsafe { collect_raw_array(array, count, RoisConstraint::from_raw) };
@@ -558,12 +567,13 @@ impl Camera {
     ) -> Result<Vec<PulseConstraint>> {
         let mut array: *const sys::PicamPulseConstraint = std::ptr::null();
         let mut count: sys::piint = 0;
-        picam_call!(sys::PicamAdvanced_GetParameterPulseConstraints(
+        let result = picam_call!(sys::PicamAdvanced_GetParameterPulseConstraints(
             self.handle,
             parameter.into().to_raw(),
             &mut array,
             &mut count
-        ))?;
+        ));
+        free_on_error!(result, array, sys::Picam_DestroyPulseConstraints)?;
 
         // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
         let constraints = unsafe { collect_raw_array(array, count, PulseConstraint::from_raw) };
@@ -590,12 +600,13 @@ impl Camera {
     ) -> Result<Vec<ModulationsConstraint>> {
         let mut array: *const sys::PicamModulationsConstraint = std::ptr::null();
         let mut count: sys::piint = 0;
-        picam_call!(sys::PicamAdvanced_GetParameterModulationsConstraints(
+        let result = picam_call!(sys::PicamAdvanced_GetParameterModulationsConstraints(
             self.handle,
             parameter.into().to_raw(),
             &mut array,
             &mut count
-        ))?;
+        ));
+        free_on_error!(result, array, sys::Picam_DestroyModulationsConstraints)?;
 
         // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
         let constraints =
@@ -1036,9 +1047,10 @@ impl CameraId {
         let raw_id = self.to_raw()?;
         let mut array: *const sys::PicamFirmwareDetail = std::ptr::null();
         let mut count: sys::piint = 0;
-        picam_call!(sys::Picam_GetFirmwareDetails(
+        let result = picam_call!(sys::Picam_GetFirmwareDetails(
             &raw_id, &mut array, &mut count
-        ))?;
+        ));
+        free_on_error!(result, array, sys::Picam_DestroyFirmwareDetails)?;
 
         // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
         let details = unsafe { collect_raw_array(array, count, FirmwareDetail::from_raw) };

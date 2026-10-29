@@ -11,7 +11,7 @@ use crate::camera::CameraId;
 use crate::constraint::RangeConstraint;
 use crate::convert::collect_raw_array;
 use crate::enums::SensorTemperatureStatus;
-use crate::error::{Error, Result, picam_call};
+use crate::error::{Error, Result, free_on_error, picam_call};
 use crate::library::Library;
 use crate::sys;
 
@@ -63,9 +63,10 @@ impl EmCalibration {
         let _ = library; // ties the returned lifetime to `library`, see `EmCalibrationHandle`
         let mut array: *const sys::PicamHandle = std::ptr::null();
         let mut count: sys::piint = 0;
-        picam_call!(sys::PicamEMCalibration_GetOpenCalibrations(
+        let result = picam_call!(sys::PicamEMCalibration_GetOpenCalibrations(
             &mut array, &mut count
-        ))?;
+        ));
+        free_on_error!(result, array, sys::Picam_DestroyHandles)?;
 
         // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
         let handles = unsafe {
@@ -179,9 +180,10 @@ impl EmCalibration {
     /// get it.
     pub fn sensor_temperature_set_point_constraint(&self) -> Result<RangeConstraint> {
         let mut ptr: *const sys::PicamRangeConstraint = std::ptr::null();
-        picam_call!(
+        let result = picam_call!(
             sys::PicamEMCalibration_GetSensorTemperatureSetPointConstraint(self.handle, &mut ptr)
-        )?;
+        );
+        free_on_error!(result, ptr, sys::Picam_DestroyRangeConstraints)?;
 
         if ptr.is_null() {
             return Err(Error::UnexpectedNullPointer);

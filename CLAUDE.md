@@ -93,7 +93,7 @@ Any `Send`/`Sync` question that acquisition or callbacks raise, such as stopping
 `DESIGN.md` is the full standard. The points most often missed:
 
 - every raw call goes through `picam_call!`
-- PICam-allocated memory: copy into owned types, then call the matching `Picam_Destroy*`, and only on a non-null pointer
+- PICam-allocated memory: copy into owned types, then call the matching `Picam_Destroy*`, and only on a non-null pointer, and free it on errors too (`free_on_error!`)
 - enums whose values come from C: a `newtype_enum` line in `build.rs` plus a `define_picam_enum!` wrapper, never a raw Rust enum
 - public types are re-exported from `lib.rs`; modules stay private, except the generated `params` module
 - every public item and field has a `///` doc, every fallible public function has `# Errors`, every `unsafe fn` has `# Safety`, and every `unsafe` block has a `// SAFETY:` comment

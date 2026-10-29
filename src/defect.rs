@@ -4,7 +4,7 @@
 
 use crate::camera::Camera;
 use crate::convert::collect_raw_array;
-use crate::error::{Error, Result, picam_call};
+use crate::error::{Error, Result, free_on_error, picam_call};
 use crate::sys;
 
 /// A pixel's location on the sensor, counting columns (`x`) and rows (`y`)
@@ -110,10 +110,11 @@ impl Camera {
     /// success but returns no map, or an error if PICam is unable to get it.
     pub fn pixel_defect_map(&self) -> Result<PixelDefectMap> {
         let mut ptr: *const sys::PicamPixelDefectMap = std::ptr::null();
-        picam_call!(sys::PicamAdvanced_GetPixelDefectMap(
+        let result = picam_call!(sys::PicamAdvanced_GetPixelDefectMap(
             self.raw_handle(),
             &mut ptr
-        ))?;
+        ));
+        free_on_error!(result, ptr, sys::PicamAdvanced_DestroyPixelDefectMaps)?;
 
         if ptr.is_null() {
             return Err(Error::UnexpectedNullPointer);
@@ -161,10 +162,11 @@ impl Camera {
     /// success but returns no map, or an error if PICam is unable to get it.
     pub fn star_defect_map(&self) -> Result<StarDefectMap> {
         let mut ptr: *const sys::PicamStarDefectMap = std::ptr::null();
-        picam_call!(sys::PicamAdvanced_GetStarDefectMap(
+        let result = picam_call!(sys::PicamAdvanced_GetStarDefectMap(
             self.raw_handle(),
             &mut ptr
-        ))?;
+        ));
+        free_on_error!(result, ptr, sys::PicamAdvanced_DestroyStarDefectMaps)?;
 
         if ptr.is_null() {
             return Err(Error::UnexpectedNullPointer);
@@ -186,11 +188,12 @@ impl Camera {
     pub fn star_defect_maps(&self) -> Result<Vec<StarDefectMap>> {
         let mut array: *const sys::PicamStarDefectMap = std::ptr::null();
         let mut count: sys::piint = 0;
-        picam_call!(sys::PicamAdvanced_GetStarDefectMaps(
+        let result = picam_call!(sys::PicamAdvanced_GetStarDefectMaps(
             self.raw_handle(),
             &mut array,
             &mut count
-        ))?;
+        ));
+        free_on_error!(result, array, sys::PicamAdvanced_DestroyStarDefectMaps)?;
 
         // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
         let maps = unsafe { collect_raw_array(array, count, StarDefectMap::from_raw) };

@@ -353,3 +353,32 @@ macro_rules! picam_call {
     }};
 }
 pub(crate) use picam_call;
+
+/// Frees memory PICam allocated for a call that failed, then gives back the
+/// call's result.
+///
+/// PICam can fail a call and still allocate its output:
+/// `Picam_CommitParameters` lists the parameters that failed validation, and
+/// `Picam_GetEnumerationString` names a value it doesn't know (seen with SDK
+/// 5.15). So every allocating call passes its result through this before
+/// `?`. A failure to free is logged, and the call's own error is returned.
+///
+/// # Safety
+/// `$ptr` must be the output pointer the call was given, initialized to null,
+/// and `$destroy` the `Picam_Destroy*` function that frees it. A non-null
+/// pointer on an error is taken to be an allocation `$destroy` accepts, as it
+/// was for the two calls above (seen with SDK 5.15), since the manual doesn't
+/// cover it. Once this returns an error, the caller must not use or free
+/// `$ptr` again, so return the error with `?` straight away.
+macro_rules! free_on_error {
+    ($result:expr, $ptr:expr, $destroy:path) => {{
+        let result: $crate::error::Result<()> = $result;
+        if result.is_err() && !$ptr.is_null() {
+            if let Err(e) = $crate::error::picam_call!($destroy($ptr)) {
+                tracing::error!("failed to free memory PICam allocated for a failed call: {e}");
+            }
+        }
+        result
+    }};
+}
+pub(crate) use free_on_error;

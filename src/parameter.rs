@@ -6,7 +6,7 @@ use std::marker::PhantomData;
 use std::sync::mpsc::Receiver;
 
 use crate::convert::{collect_raw_array, define_picam_enum, enumeration_string};
-use crate::error::{Result, picam_call};
+use crate::error::{Result, free_on_error, picam_call};
 use crate::library::Library;
 use crate::sys;
 use crate::watch::{self, Event, Kind, Watch};
@@ -738,11 +738,12 @@ impl Roi {
 impl sealed::RawPicamValue for Vec<Roi> {
     fn get(handle: RawHandle, parameter: Parameter) -> Result<Self> {
         let mut ptr: *const sys::PicamRois = std::ptr::null();
-        picam_call!(sys::Picam_GetParameterRoisValue(
+        let result = picam_call!(sys::Picam_GetParameterRoisValue(
             handle.0,
             parameter.to_raw(),
             &mut ptr
-        ))?;
+        ));
+        free_on_error!(result, ptr, sys::Picam_DestroyRois)?;
 
         let rois = if ptr.is_null() {
             Vec::new()
@@ -781,11 +782,12 @@ impl sealed::RawPicamValue for Vec<Roi> {
 
     fn default_value(handle: RawHandle, parameter: Parameter) -> Result<Self> {
         let mut ptr: *const sys::PicamRois = std::ptr::null();
-        picam_call!(sys::Picam_GetParameterRoisDefaultValue(
+        let result = picam_call!(sys::Picam_GetParameterRoisDefaultValue(
             handle.0,
             parameter.to_raw(),
             &mut ptr
-        ))?;
+        ));
+        free_on_error!(result, ptr, sys::Picam_DestroyRois)?;
 
         let rois = if ptr.is_null() {
             Vec::new()
@@ -868,11 +870,12 @@ impl Modulation {
 impl sealed::RawPicamValue for Vec<Modulation> {
     fn get(handle: RawHandle, parameter: Parameter) -> Result<Self> {
         let mut ptr: *const sys::PicamModulations = std::ptr::null();
-        picam_call!(sys::Picam_GetParameterModulationsValue(
+        let result = picam_call!(sys::Picam_GetParameterModulationsValue(
             handle.0,
             parameter.to_raw(),
             &mut ptr
-        ))?;
+        ));
+        free_on_error!(result, ptr, sys::Picam_DestroyModulations)?;
 
         let modulations = if ptr.is_null() {
             Vec::new()
@@ -916,11 +919,12 @@ impl sealed::RawPicamValue for Vec<Modulation> {
 
     fn default_value(handle: RawHandle, parameter: Parameter) -> Result<Self> {
         let mut ptr: *const sys::PicamModulations = std::ptr::null();
-        picam_call!(sys::Picam_GetParameterModulationsDefaultValue(
+        let result = picam_call!(sys::Picam_GetParameterModulationsDefaultValue(
             handle.0,
             parameter.to_raw(),
             &mut ptr
-        ))?;
+        ));
+        free_on_error!(result, ptr, sys::Picam_DestroyModulations)?;
 
         let modulations = if ptr.is_null() {
             Vec::new()
@@ -1005,11 +1009,12 @@ impl Pulse {
 impl sealed::RawPicamValue for Pulse {
     fn get(handle: RawHandle, parameter: Parameter) -> Result<Self> {
         let mut ptr: *const sys::PicamPulse = std::ptr::null();
-        picam_call!(sys::Picam_GetParameterPulseValue(
+        let result = picam_call!(sys::Picam_GetParameterPulseValue(
             handle.0,
             parameter.to_raw(),
             &mut ptr
-        ))?;
+        ));
+        free_on_error!(result, ptr, sys::Picam_DestroyPulses)?;
 
         if ptr.is_null() {
             return Err(crate::error::Error::UnexpectedNullPointer);
@@ -1034,11 +1039,12 @@ impl sealed::RawPicamValue for Pulse {
 
     fn default_value(handle: RawHandle, parameter: Parameter) -> Result<Self> {
         let mut ptr: *const sys::PicamPulse = std::ptr::null();
-        picam_call!(sys::Picam_GetParameterPulseDefaultValue(
+        let result = picam_call!(sys::Picam_GetParameterPulseDefaultValue(
             handle.0,
             parameter.to_raw(),
             &mut ptr
-        ))?;
+        ));
+        free_on_error!(result, ptr, sys::Picam_DestroyPulses)?;
 
         if ptr.is_null() {
             return Err(crate::error::Error::UnexpectedNullPointer);
