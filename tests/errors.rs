@@ -1,9 +1,12 @@
-//! Tests for the errors the parameter methods' `# Errors` sections name,
-//! triggered on PICam's demo cameras: parameters a camera doesn't have,
-//! read-only and out-of-range values, value and constraint types, reading
-//! from hardware, waitable statuses, setting values online, and changes
-//! during an acquisition. The comments name the methods whose docs each
-//! group of assertions backs, typed and `_untyped` alike.
+//! Tests for the errors the `# Errors` sections name, triggered on PICam's
+//! demo cameras. For the parameter methods: parameters a camera doesn't
+//! have, read-only and out-of-range values, value and constraint types,
+//! reading from hardware, waitable statuses, setting values online, and
+//! changes during an acquisition. For identifying cameras: no camera
+//! connected, IDs that match none, demo cameras, handles whose camera has
+//! closed, and names of values PICam doesn't know. The comments name the
+//! methods whose docs each group of assertions backs, typed and `_untyped`
+//! alike.
 
 mod common;
 
@@ -11,8 +14,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use picam_rs::{
-    AdcQuality, Camera, CameraId, ConstraintCategory, Error, GatingMode, Library, Model, Parameter,
-    Pulse, SensorTemperatureStatus, params,
+    AdcQuality, Camera, CameraId, ComputerInterface, ConstraintCategory, EmCalibration, Error,
+    GatingMode, Library, Model, Parameter, Pulse, SensorTemperatureStatus, params,
 };
 
 /// A category this crate doesn't know, which `ConstraintCategory` keeps.
@@ -590,4 +593,138 @@ fn a_pulse_out_of_range() {
     drop(camera);
     id.disconnect_demo(library)
         .expect("demo camera should disconnect");
+}
+
+/// Checks `Camera::open_first` with no camera connected (seen with SDK 5.15).
+#[test]
+fn no_camera_connected() {
+    let test_library = common::library();
+    let library = &test_library.library;
+    let available = Camera::available_ids(library).expect("available cameras should be listed");
+    assert!(available.is_empty(), "no camera should be connected");
+    assert_eq!(
+        Camera::open_first(Arc::clone(library)).err(),
+        Some(Error::NoCamerasAvailable)
+    );
+}
+
+/// Checks the errors for a camera ID that matches no camera PICam knows of
+/// (seen with SDK 5.15).
+#[test]
+fn an_unknown_camera_id() {
+    // each test uses its own serial number so demo cameras never collide,
+    // and this one is never connected
+    const SERIAL_NUMBER: &str = "ERR0009";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let id = CameraId {
+        model: Model::PIXIS_100F,
+        computer_interface: ComputerInterface::Usb2,
+        sensor_name: "none".to_string(),
+        serial_number: SERIAL_NUMBER.to_string(),
+    };
+
+    // `Camera::open` and `open_device`, `EmCalibration::open`, and the
+    // `CameraId` methods
+    let unknown = Some(Error::InvalidCameraId);
+    assert_eq!(Camera::open(&id, Arc::clone(library)).err(), unknown);
+    assert_eq!(Camera::open_device(&id, Arc::clone(library)).err(), unknown);
+    assert_eq!(EmCalibration::open(&id, Arc::clone(library)).err(), unknown);
+    assert_eq!(id.is_connected(library).err(), unknown);
+    assert_eq!(id.is_open_elsewhere(library).err(), unknown);
+    assert_eq!(id.is_demo(library).err(), unknown);
+    assert_eq!(id.firmware_details(library).err(), unknown);
+    assert_eq!(id.disconnect_demo(library).err(), unknown);
+}
+
+/// Checks the errors for connecting, opening and disconnecting demo cameras
+/// (seen with SDK 5.15).
+#[test]
+fn demo_cameras() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "ERR0010";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, camera) = open(library, Model::PIXIS_100F, SERIAL_NUMBER);
+
+    // `connect_demo`: the same pair again, models that aren't demo cameras,
+    // and a serial number too long for picam
+    assert_eq!(
+        CameraId::connect_demo(library, Model::PIXIS_100F, SERIAL_NUMBER).err(),
+        Some(Error::DemoAlreadyConnected)
+    );
+    let invalid_model = Some(Error::InvalidDemoModel);
+    assert_eq!(
+        CameraId::connect_demo(library, Model::PI_MTE_SERIES, "ERR0010S").err(),
+        invalid_model
+    );
+    assert_eq!(
+        CameraId::connect_demo(library, Model::FERGIE_QTH, "ERR0010A").err(),
+        invalid_model
+    );
+    assert_eq!(
+        CameraId::connect_demo(library, Model::PIXIS_100F, &"X".repeat(200)).err(),
+        Some(Error::InvalidDemoSerialNumber)
+    );
+
+    // `Camera::open` and `open_device`, on a camera open already
+    let opened = Some(Error::CameraAlreadyOpened);
+    assert_eq!(Camera::open(&id, Arc::clone(library)).err(), opened);
+    assert_eq!(Camera::open_device(&id, Arc::clone(library)).err(), opened);
+
+    // `erase_residual`, which no demo camera does
+    assert_eq!(camera.can_erase_residual(), Ok(false));
+    assert_eq!(camera.erase_residual().err(), Some(Error::DemoNotSupported));
+
+    // `disconnect_demo` and `Camera::open`, once it's disconnected
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+    let disconnected = Some(Error::DeviceDisconnected);
+    assert_eq!(id.disconnect_demo(library).err(), disconnected);
+    assert_eq!(Camera::open(&id, Arc::clone(library)).err(), disconnected);
+}
+
+/// Checks that every `CameraHandle` method refuses a handle whose camera has
+/// closed, model and device alike (seen with SDK 5.15).
+#[test]
+fn a_closed_handle() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "ERR0011";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, camera) = open(library, Model::PIXIS_100F, SERIAL_NUMBER);
+    let model = Camera::list_open_cameras(library).expect("open cameras should be listed")[0];
+    let device =
+        Camera::list_open_camera_devices(library).expect("open camera devices should be listed")[0];
+    drop(camera);
+
+    let closed = Some(Error::InvalidHandle);
+    for handle in [model, device] {
+        assert_eq!(handle.handle_type().err(), closed);
+        assert_eq!(handle.model().err(), closed);
+        assert_eq!(handle.device().err(), closed);
+        assert_eq!(handle.is_connected().err(), closed);
+        assert_eq!(handle.is_faulted().err(), closed);
+        assert_eq!(handle.id().err(), closed);
+        assert_eq!(handle.user_state().err(), closed);
+    }
+
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks the `name()` methods for values PICam doesn't know (seen with SDK
+/// 5.15).
+#[test]
+fn names_of_unknown_values() {
+    let test_library = common::library();
+    let library = &test_library.library;
+
+    let undefined = Some(Error::EnumerationValueNotDefined);
+    assert_eq!(Parameter::Unknown(9999).name(library).err(), undefined);
+    assert_eq!(AdcQuality::Unknown(99).name(library).err(), undefined);
 }
