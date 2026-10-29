@@ -31,10 +31,13 @@ impl EmCalibration {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::DemoNotSupported`] for a demo camera (seen with
-    /// SDK 5.15), [`crate::Error::ValueTooLong`] if `id`'s fields don't fit in
-    /// PICam's fixed-size buffers, or an error if PICam is unable to open it,
-    /// for example because the camera is already open.
+    /// - [`crate::Error::DemoNotSupported`] for a demo camera (seen with SDK
+    ///   5.15)
+    /// - [`crate::Error::InvalidCameraId`] if `id` matches no camera PICam
+    ///   knows of (seen with SDK 5.15)
+    /// - [`crate::Error::ValueTooLong`] if `id`'s fields don't fit in PICam's
+    ///   fixed-size buffers
+    /// - otherwise an error if PICam is unable to open it
     pub fn open(id: &CameraId, library: Arc<Library>) -> Result<Self> {
         tracing::debug!("opening camera for em calibration: {}", id.serial_number);
         let raw_id = id.to_raw()?;

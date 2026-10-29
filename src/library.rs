@@ -44,7 +44,8 @@ impl Library {
     /// # Errors
     ///
     /// Returns [`crate::Error::LibraryAlreadyInitialized`] if a `Library` is
-    /// already active elsewhere in the process.
+    /// already active elsewhere in the process (seen with SDK 5.15), or an
+    /// error if PICam is unable to initialize.
     pub fn new() -> Result<Self> {
         tracing::debug!("initializing PICam library");
         picam_call!(sys::Picam_InitializeLibrary())?;

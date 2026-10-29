@@ -41,8 +41,8 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::NoCamerasAvailable`] if no camera is connected,
-    /// or an error if PICam is unable to find its device.
+    /// Returns [`crate::Error::NoCamerasAvailable`] if no camera is connected
+    /// (seen with SDK 5.15), or an error if PICam is unable to find its device.
     pub fn open_first(library: Arc<Library>) -> Result<Self> {
         tracing::debug!("opening first available camera");
         let mut handle: sys::PicamHandle = std::ptr::null_mut();
@@ -54,11 +54,16 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::InvalidCameraId`] if `id` doesn't
-    /// match a currently available camera, or
-    /// [`crate::Error::CameraAlreadyOpened`] if it's already open
-    /// elsewhere in this process, or an error if PICam is unable to find its
-    /// device.
+    /// - [`crate::Error::InvalidCameraId`] if `id` matches no camera PICam
+    ///   knows of (seen with SDK 5.15)
+    /// - [`crate::Error::DeviceDisconnected`] if `id`'s camera has been
+    ///   disconnected, such as a demo camera after
+    ///   [`CameraId::disconnect_demo`] (seen with SDK 5.15)
+    /// - [`crate::Error::CameraAlreadyOpened`] if it's already open in this
+    ///   process (seen with SDK 5.15)
+    /// - [`crate::Error::ValueTooLong`] if `id`'s fields don't fit in PICam's
+    ///   fixed-size buffers
+    /// - otherwise an error if PICam is unable to open it
     pub fn open(id: &CameraId, library: Arc<Library>) -> Result<Self> {
         tracing::debug!("opening camera: {}", id.serial_number);
         let raw_id = id.to_raw()?;
@@ -92,10 +97,13 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::InvalidCameraId`] if `id` doesn't match a
-    /// currently available camera, [`crate::Error::CameraAlreadyOpened`] if
-    /// it's already open elsewhere in this process, or an error if PICam is
-    /// unable to open it.
+    /// - [`crate::Error::InvalidCameraId`] if `id` matches no camera PICam
+    ///   knows of (seen with SDK 5.15)
+    /// - [`crate::Error::CameraAlreadyOpened`] if it's already open in this
+    ///   process (seen with SDK 5.15)
+    /// - [`crate::Error::ValueTooLong`] if `id`'s fields don't fit in PICam's
+    ///   fixed-size buffers
+    /// - otherwise an error if PICam is unable to open it
     pub fn open_device(id: &CameraId, library: Arc<Library>) -> Result<Self> {
         tracing::debug!("opening camera device: {}", id.serial_number);
         let raw_id = id.to_raw()?;
@@ -209,7 +217,7 @@ impl Camera {
     /// # Errors
     ///
     /// Returns an error if PICam is unable to query the camera's connection
-    /// status (for example, if the handle is no longer valid).
+    /// status.
     pub fn is_connected(&self) -> Result<bool> {
         handle_is_connected(self.handle)
     }
@@ -273,7 +281,9 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to erase it.
+    /// Returns [`crate::Error::DemoNotSupported`] on a demo camera, which can't
+    /// erase residual charge (seen with SDK 5.15), or an error if PICam is
+    /// unable to erase it.
     pub fn erase_residual(&self) -> Result<()> {
         let device = self.device_handle();
         picam_call!(sys::PicamSpecial_EraseResidual(device))
@@ -718,7 +728,9 @@ impl<'a> CameraHandle<'a> {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to check this.
+    /// Returns [`crate::Error::InvalidHandle`] if the handle's camera has since
+    /// closed (seen with SDK 5.15), or an error if PICam is unable to check
+    /// this.
     pub fn handle_type(&self) -> Result<HandleType> {
         let mut raw = sys::PicamHandleType(0);
         picam_call!(sys::PicamAdvanced_GetHandleType(self.handle, &mut raw))?;
@@ -730,7 +742,9 @@ impl<'a> CameraHandle<'a> {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to look it up.
+    /// Returns [`crate::Error::InvalidHandle`] if the handle's camera has since
+    /// closed (seen with SDK 5.15), or an error if PICam is unable to look it
+    /// up.
     pub fn model(&self) -> Result<CameraHandle<'a>> {
         let mut model: sys::PicamHandle = std::ptr::null_mut();
         picam_call!(sys::PicamAdvanced_GetCameraModel(self.handle, &mut model))?;
@@ -745,7 +759,9 @@ impl<'a> CameraHandle<'a> {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to look it up.
+    /// Returns [`crate::Error::InvalidHandle`] if the handle's camera has since
+    /// closed (seen with SDK 5.15), or an error if PICam is unable to look it
+    /// up.
     pub fn device(&self) -> Result<CameraHandle<'a>> {
         let mut device: sys::PicamHandle = std::ptr::null_mut();
         picam_call!(sys::PicamAdvanced_GetCameraDevice(self.handle, &mut device))?;
@@ -759,8 +775,9 @@ impl<'a> CameraHandle<'a> {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to query the camera's connection
-    /// status.
+    /// Returns [`crate::Error::InvalidHandle`] if the handle's camera has since
+    /// closed (seen with SDK 5.15), or an error if PICam is unable to query the
+    /// camera's connection status.
     pub fn is_connected(&self) -> Result<bool> {
         handle_is_connected(self.handle)
     }
@@ -769,7 +786,9 @@ impl<'a> CameraHandle<'a> {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to query the camera's fault status.
+    /// Returns [`crate::Error::InvalidHandle`] if the handle's camera has since
+    /// closed (seen with SDK 5.15), or an error if PICam is unable to query the
+    /// camera's fault status.
     pub fn is_faulted(&self) -> Result<bool> {
         handle_is_faulted(self.handle)
     }
@@ -778,7 +797,9 @@ impl<'a> CameraHandle<'a> {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to query the camera's identity.
+    /// Returns [`crate::Error::InvalidHandle`] if the handle's camera has since
+    /// closed (seen with SDK 5.15), or an error if PICam is unable to query the
+    /// camera's identity.
     pub fn id(&self) -> Result<CameraId> {
         handle_id(self.handle)
     }
@@ -789,8 +810,8 @@ impl<'a> CameraHandle<'a> {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to read it, for example if the
-    /// handle has since been closed.
+    /// Returns [`crate::Error::InvalidHandle`] if the handle's camera has since
+    /// closed (seen with SDK 5.15), or an error if PICam is unable to read it.
     pub fn user_state(&self) -> Result<usize> {
         user_state::get(self.handle)
     }
@@ -884,9 +905,10 @@ impl CameraId {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::ValueTooLong`] if this ID's fields
-    /// don't fit in PICam's fixed-size buffers, or an error if PICam is unable
-    /// to query connection status.
+    /// Returns [`crate::Error::ValueTooLong`] if this ID's fields don't fit in
+    /// PICam's fixed-size buffers, [`crate::Error::InvalidCameraId`] if this ID
+    /// matches no camera PICam knows of (seen with SDK 5.15), or an error if
+    /// PICam is unable to query connection status.
     pub fn is_connected(&self, library: &Library) -> Result<bool> {
         let _ = library; // only taken to prove picam is initialized
         let raw = self.to_raw()?;
@@ -900,9 +922,10 @@ impl CameraId {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::ValueTooLong`] if this ID's fields
-    /// don't fit in PICam's fixed-size buffers, or an error if PICam is
-    /// unable to query this.
+    /// Returns [`crate::Error::ValueTooLong`] if this ID's fields don't fit in
+    /// PICam's fixed-size buffers, [`crate::Error::InvalidCameraId`] if this ID
+    /// matches no camera PICam knows of (seen with SDK 5.15), or an error if
+    /// PICam is unable to query this.
     pub fn is_open_elsewhere(&self, library: &Library) -> Result<bool> {
         let _ = library; // only taken to prove picam is initialized
         let raw = self.to_raw()?;
@@ -931,12 +954,17 @@ impl CameraId {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::InvalidString`] if `serial_number`
-    /// contains an embedded null byte, [`crate::Error::TooManyDemoCameras`]
-    /// if this would be the 65th different demo camera for `library`,
-    /// [`crate::Error::InvalidDemoModel`] if `model` isn't a valid demo
-    /// model, or [`crate::Error::DemoAlreadyConnected`] if a demo camera with
-    /// this serial number is already connected.
+    /// - [`crate::Error::InvalidString`] if `serial_number` contains an
+    ///   embedded null byte
+    /// - [`crate::Error::TooManyDemoCameras`] if this would be the 65th
+    ///   different demo camera for `library`
+    /// - [`crate::Error::InvalidDemoModel`] if `model` isn't a demo model, such
+    ///   as a series or an accessory (seen with SDK 5.15)
+    /// - [`crate::Error::InvalidDemoSerialNumber`] if `serial_number` is too
+    ///   long for PICam (seen with SDK 5.15)
+    /// - [`crate::Error::DemoAlreadyConnected`] if this model and serial number
+    ///   are already connected (seen with SDK 5.15)
+    /// - otherwise an error if PICam is unable to connect it
     pub fn connect_demo(library: &Library, model: Model, serial_number: &str) -> Result<CameraId> {
         tracing::debug!("connecting demo camera: {serial_number}");
         let c_serial_number = std::ffi::CString::new(serial_number)
@@ -965,9 +993,13 @@ impl CameraId {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::ValueTooLong`] if this ID's fields
-    /// don't fit in PICam's fixed-size buffers, or an error if this isn't
-    /// a currently connected demo camera.
+    /// - [`crate::Error::ValueTooLong`] if this ID's fields don't fit in
+    ///   PICam's fixed-size buffers
+    /// - [`crate::Error::InvalidCameraId`] if this ID matches no camera PICam
+    ///   knows of (seen with SDK 5.15)
+    /// - [`crate::Error::DeviceDisconnected`] if it's already been disconnected
+    ///   (seen with SDK 5.15)
+    /// - otherwise an error if PICam is unable to disconnect it
     pub fn disconnect_demo(&self, library: &Library) -> Result<()> {
         let _ = library; // only taken to prove picam is initialized
         let raw = self.to_raw()?;
@@ -979,9 +1011,10 @@ impl CameraId {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::ValueTooLong`] if this ID's fields
-    /// don't fit in PICam's fixed-size buffers, or an error if PICam is
-    /// unable to query this.
+    /// Returns [`crate::Error::ValueTooLong`] if this ID's fields don't fit in
+    /// PICam's fixed-size buffers, [`crate::Error::InvalidCameraId`] if this ID
+    /// matches no camera PICam knows of (seen with SDK 5.15), or an error if
+    /// PICam is unable to query this.
     pub fn is_demo(&self, library: &Library) -> Result<bool> {
         let _ = library; // only taken to prove picam is initialized
         let raw = self.to_raw()?;
@@ -994,9 +1027,10 @@ impl CameraId {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::ValueTooLong`] if this ID's fields
-    /// don't fit in PICam's fixed-size buffers, or an error if PICam is
-    /// unable to query firmware details.
+    /// Returns [`crate::Error::ValueTooLong`] if this ID's fields don't fit in
+    /// PICam's fixed-size buffers, [`crate::Error::InvalidCameraId`] if this ID
+    /// matches no camera PICam knows of (seen with SDK 5.15), or an error if
+    /// PICam is unable to query firmware details.
     pub fn firmware_details(&self, library: &Library) -> Result<Vec<FirmwareDetail>> {
         let _ = library; // only taken to prove picam is initialized
         let raw_id = self.to_raw()?;

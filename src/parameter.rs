@@ -105,7 +105,10 @@ macro_rules! define_parameters {
             ///
             /// # Errors
             ///
-            /// Returns an error if PICam is unable to name this parameter.
+            /// Returns [`crate::Error::EnumerationValueNotDefined`] for a
+            /// parameter PICam doesn't know, such as a [`Parameter::Unknown`]
+            /// one (seen with SDK 5.15), or an error if PICam is unable to name
+            /// this parameter.
             pub fn name(self, library: &Library) -> Result<String> {
                 enumeration_string(
                     library,
