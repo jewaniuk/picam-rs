@@ -256,9 +256,12 @@ impl Camera {
     /// # Errors
     ///
     /// - [`crate::Error::ParametersNotCommitted`] if parameters have changed
-    ///   since the last commit
+    ///   since the last commit (PICam manual 6.4.1, seen with SDK 5.15)
     /// - [`crate::Error::TimeOutOccurred`] if a readout took longer than
-    ///   `readout_timeout`, which halts the acquisition
+    ///   `readout_timeout`, which halts the acquisition (PICam manual 6.4.1,
+    ///   seen with SDK 5.15)
+    /// - [`crate::Error::InvalidReadoutCount`] if `readout_count` isn't
+    ///   positive (seen with SDK 5.15)
     /// - [`crate::Error::AcquisitionFailed`] if PICam reported errors, in
     ///   which case any data is dropped, or with
     ///   [`AcquisitionErrors::DATA_LOST`] if PICam wrote over the camera's
@@ -268,7 +271,10 @@ impl Camera {
     ///   decoded or don't fit between a frame's pixels and the next frame, or
     ///   the data doesn't lie inside the camera's buffer
     /// - [`crate::Error::InvalidAcquisitionBuffer`] if the camera's buffer
-    ///   can't hold `readout_count` readouts (seen with SDK 5.15)
+    ///   can't hold `readout_count` readouts, or it has none and
+    ///   `readout_count` is more than
+    ///   [`EXACT_READOUT_COUNT_MAXIMUM`](crate::params::EXACT_READOUT_COUNT_MAXIMUM)
+    ///   (seen with SDK 5.15)
     /// - otherwise an error if PICam is unable to acquire
     pub fn acquire(
         &mut self,
@@ -323,7 +329,7 @@ impl Camera {
     /// # Errors
     ///
     /// - [`crate::Error::ParametersNotCommitted`] if parameters have changed
-    ///   since the last commit
+    ///   since the last commit (PICam manual 6.4.2, seen with SDK 5.15)
     /// - [`crate::Error::InconsistentDataLayout`] if the camera's layout
     ///   parameters don't fit together, or its metadata settings can't be
     ///   decoded or don't fit between a frame's pixels and the next frame
@@ -397,7 +403,7 @@ impl Camera {
     /// # Errors
     ///
     /// - [`crate::Error::ParametersNotCommitted`] if parameters have changed
-    ///   since the last commit
+    ///   since the last commit (PICam manual 6.4.2, seen with SDK 5.15)
     /// - [`crate::Error::InconsistentDataLayout`] if the camera's layout
     ///   parameters don't fit together, or its metadata settings can't be
     ///   decoded or don't fit between a frame's pixels and the next frame
@@ -726,8 +732,11 @@ impl Acquisition<'_> {
     ///
     /// - [`crate::Error::AcquisitionFailed`] if PICam reported errors, which
     ///   halt the acquisition, or with [`AcquisitionErrors::DATA_LOST`] if
-    ///   PICam wrote over the camera's buffer before it was read. Keep
-    ///   waiting, or call [`finish`](Self::finish), until it has ended.
+    ///   PICam wrote over the camera's buffer before it was read (seen with
+    ///   SDK 5.15). Keep waiting, or call [`finish`](Self::finish), until it
+    ///   has ended.
+    /// - [`crate::Error::AcquisitionNotInProgress`] once the acquisition has
+    ///   ended (seen with SDK 5.15)
     /// - [`crate::Error::InconsistentDataLayout`] if the data doesn't fit the
     ///   layout read when the acquisition started, or doesn't lie inside the
     ///   camera's buffer

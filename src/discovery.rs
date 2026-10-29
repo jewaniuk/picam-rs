@@ -74,9 +74,9 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to start, for example
-    /// [`crate::Error::AlreadyDiscoveringCameras`] if discovery is running
-    /// (seen with SDK 5.15).
+    /// Returns [`crate::Error::AlreadyDiscoveringCameras`] if discovery is
+    /// already running (seen with SDK 5.15), or an error if PICam is unable
+    /// to start.
     pub fn start_discovery(library: &Library) -> Result<()> {
         let _ = library; // only taken to prove picam is initialized
         picam_call!(sys::PicamAdvanced_DiscoverCameras())
@@ -86,9 +86,9 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to stop, for example
-    /// [`crate::Error::NotDiscoveringCameras`] if discovery isn't running
-    /// (seen with SDK 5.15).
+    /// Returns [`crate::Error::NotDiscoveringCameras`] if discovery isn't
+    /// running (seen with SDK 5.15), or an error if PICam is unable to
+    /// stop.
     pub fn stop_discovery(library: &Library) -> Result<()> {
         let _ = library; // only taken to prove picam is initialized
         picam_call!(sys::PicamAdvanced_StopDiscoveringCameras())
@@ -131,9 +131,9 @@ impl Accessory {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to start, for example
-    /// [`crate::Error::AlreadyDiscoveringAccessories`] if discovery is
-    /// running (seen with SDK 5.15).
+    /// Returns [`crate::Error::AlreadyDiscoveringAccessories`] if discovery
+    /// is already running (seen with SDK 5.15), or an error if PICam is
+    /// unable to start.
     pub fn start_discovery(library: &Library) -> Result<()> {
         let _ = library; // only taken to prove picam is initialized
         picam_call!(sys::PicamAccessory_DiscoverAccessories())
@@ -143,9 +143,9 @@ impl Accessory {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to stop, for example
-    /// [`crate::Error::NotDiscoveringAccessories`] if discovery isn't
-    /// running (seen with SDK 5.15).
+    /// Returns [`crate::Error::NotDiscoveringAccessories`] if discovery
+    /// isn't running (seen with SDK 5.15), or an error if PICam is unable to
+    /// stop.
     pub fn stop_discovery(library: &Library) -> Result<()> {
         let _ = library; // only taken to prove picam is initialized
         picam_call!(sys::PicamAccessory_StopDiscoveringAccessories())
