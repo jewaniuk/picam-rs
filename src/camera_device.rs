@@ -54,9 +54,9 @@ impl Camera {
     /// # Errors
     ///
     /// Returns [`crate::Error::InvalidParameterValue`] if a value fails
-    /// validation (seen on a demo camera with SDK 5.15),
-    /// [`crate::Error::AcquisitionInProgress`] during an acquisition (seen with
-    /// SDK 5.15), or an error if PICam is unable to configure the device.
+    /// validation (seen with SDK 5.15), [`crate::Error::AcquisitionInProgress`]
+    /// during an acquisition (seen with SDK 5.15), or an error if PICam is
+    /// unable to configure the device.
     pub fn commit_parameters_to_device(&self) -> Result<()> {
         picam_call!(sys::PicamAdvanced_CommitParametersToCameraDevice(
             self.raw_handle()

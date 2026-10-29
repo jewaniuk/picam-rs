@@ -126,9 +126,8 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
                 #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15),")]
-                /// [`crate::Error::ParameterValueIsReadOnly`] if `parameter` is read-only,
-                /// which has no default (seen with SDK 5.15), or an error if PICam is unable to
-                /// read the default value.
+                /// [`crate::Error::ParameterValueIsReadOnly`] if `parameter` is read-only (seen
+                /// with SDK 5.15), or an error if PICam is unable to read the default value.
                 pub fn default_value<T: PicamValue>(
                     &self,
                     parameter: TypedParameter<T>,
@@ -153,8 +152,8 @@ macro_rules! impl_parameter_methods {
                 ///   one `parameter`'s values belong to
                 /// - [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply to
                 #[doc = concat!("   this ", $noun, " (seen with SDK 5.15)")]
-                /// - [`crate::Error::ParameterValueIsReadOnly`] if `parameter` is read-only,
-                ///   which has no default (seen with SDK 5.15)
+                /// - [`crate::Error::ParameterValueIsReadOnly`] if `parameter` is read-only
+                ///   (seen with SDK 5.15)
                 /// - otherwise an error if PICam is unable to read the default value
                 pub fn default_value_untyped<T: PicamValue>(
                     &self,
@@ -420,7 +419,8 @@ macro_rules! impl_parameter_methods {
                 /// # Errors
                 ///
                 /// Returns [`crate::Error::ParameterIsNotWaitableStatus`] if `parameter` isn't
-                /// a waitable status, as [`Self::can_wait_for_status`] says (seen with SDK
+                /// a waitable status, including a
+                #[doc = concat!(" parameter that doesn't apply to this ", $noun, " (seen with SDK")]
                 /// 5.15), or an error if PICam is unable to list them.
                 pub fn status_parameter_purview<T: WaitablePicamValue>(
                     &self,
@@ -440,7 +440,8 @@ macro_rules! impl_parameter_methods {
                 /// # Errors
                 ///
                 /// Returns [`crate::Error::ParameterIsNotWaitableStatus`] if `parameter` isn't
-                /// a waitable status, as [`Self::can_wait_for_status`] says (seen with SDK
+                /// a waitable status, including a
+                #[doc = concat!(" parameter that doesn't apply to this ", $noun, " (seen with SDK")]
                 /// 5.15), or an error if PICam is unable to list them.
                 pub fn status_parameter_purview_untyped(
                     &self,
@@ -476,7 +477,8 @@ macro_rules! impl_parameter_methods {
                 /// # Errors
                 ///
                 /// Returns [`crate::Error::ParameterIsNotWaitableStatus`] if `parameter` isn't
-                /// a waitable status, as [`Self::can_wait_for_status`] says (seen with SDK
+                /// a waitable status, including a
+                #[doc = concat!(" parameter that doesn't apply to this ", $noun, " (seen with SDK")]
                 /// 5.15), [`crate::Error::InvalidParameterValue`] if `value` isn't in the
                 /// status's purview (seen with SDK 5.15), or an error if PICam is unable to
                 /// estimate this.
@@ -500,8 +502,8 @@ macro_rules! impl_parameter_methods {
                 /// - [`crate::Error::ParameterHasInvalidValueType`] if `parameter`'s values
                 ///   aren't integers (seen with SDK 5.15)
                 /// - [`crate::Error::ParameterIsNotWaitableStatus`] if `parameter` isn't a
-                ///   waitable status, as [`Self::can_wait_for_status`] says (seen with SDK
-                ///   5.15)
+                ///   waitable status, including a parameter
+                #[doc = concat!("   that doesn't apply to this ", $noun, " (seen with SDK 5.15)")]
                 /// - [`crate::Error::InvalidParameterValue`] if `value` isn't in the status's
                 ///   purview (seen with SDK 5.15)
                 /// - otherwise an error if PICam is unable to estimate this
@@ -530,8 +532,8 @@ macro_rules! impl_parameter_methods {
                 /// - [`crate::Error::TimeOutOccurred`] if `timeout` elapses first (PICam manual
                 ///   5.4.2.18)
                 /// - [`crate::Error::ParameterIsNotWaitableStatus`] if `parameter` isn't a
-                ///   waitable status, as [`Self::can_wait_for_status`] says (seen with SDK
-                ///   5.15)
+                ///   waitable status, including a parameter
+                #[doc = concat!("   that doesn't apply to this ", $noun, " (seen with SDK 5.15)")]
                 /// - [`crate::Error::InvalidParameterValue`] if `value` isn't in the status's
                 ///   purview (seen with SDK 5.15)
                 /// - otherwise an error if PICam is unable to wait for this
@@ -559,8 +561,8 @@ macro_rules! impl_parameter_methods {
                 /// - [`crate::Error::ParameterHasInvalidValueType`] if `parameter`'s values
                 ///   aren't integers (seen with SDK 5.15)
                 /// - [`crate::Error::ParameterIsNotWaitableStatus`] if `parameter` isn't a
-                ///   waitable status, as [`Self::can_wait_for_status`] says (seen with SDK
-                ///   5.15)
+                ///   waitable status, including a parameter
+                #[doc = concat!("   that doesn't apply to this ", $noun, " (seen with SDK 5.15)")]
                 /// - [`crate::Error::InvalidParameterValue`] if `value` isn't in the status's
                 ///   purview (seen with SDK 5.15)
                 /// - otherwise an error if PICam is unable to wait for this
@@ -585,9 +587,9 @@ macro_rules! impl_parameter_methods {
                 /// # Errors
                 ///
                 /// Returns [`crate::Error::ParameterIsNotReadable`] if `parameter` can't be
-                /// read from hardware, as [`Self::can_read`] says, which includes a parameter
-                #[doc = concat!(" that doesn't apply to this ", $noun, " (seen with SDK 5.15), or")]
-                /// an error if PICam is unable to read it.
+                /// read from hardware, including a
+                #[doc = concat!(" parameter that doesn't apply to this ", $noun, " (seen with SDK")]
+                /// 5.15), or an error if PICam is unable to read it.
                 pub fn read<T: ReadablePicamValue>(
                     &self,
                     parameter: TypedParameter<T>,
@@ -611,8 +613,8 @@ macro_rules! impl_parameter_methods {
                 /// - [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum other than the
                 ///   one `parameter`'s values belong to
                 /// - [`crate::Error::ParameterIsNotReadable`] if `parameter` can't be read from
-                ///   hardware, as [`Self::can_read`] says, which includes a parameter that
-                #[doc = concat!("   doesn't apply to this ", $noun, " (seen with SDK 5.15)")]
+                ///   hardware, including a parameter
+                #[doc = concat!("   that doesn't apply to this ", $noun, " (seen with SDK 5.15)")]
                 /// - otherwise an error if PICam is unable to read it
                 pub fn read_untyped<T: ReadablePicamValue>(
                     &self,
@@ -989,7 +991,8 @@ macro_rules! impl_parameter_methods {
                 /// # Errors
                 ///
                 /// Returns [`crate::Error::ParameterIsNotWaitableStatus`] if `parameter` isn't
-                /// a waitable status, as [`Self::can_wait_for_status`] says (seen with SDK
+                /// a waitable status, including a
+                #[doc = concat!(" parameter that doesn't apply to this ", $noun, " (seen with SDK")]
                 /// 5.15), or an error if PICam is unable to set the notification.
                 pub fn notify_when_status<T: WaitablePicamValue>(
                     &self,
@@ -1007,8 +1010,9 @@ macro_rules! impl_parameter_methods {
                 /// Returns [`crate::Error::ParameterHasInvalidValueType`] if `parameter`'s
                 /// values aren't integers (seen with SDK 5.15),
                 /// [`crate::Error::ParameterIsNotWaitableStatus`] if `parameter` isn't a
-                /// waitable status, as [`Self::can_wait_for_status`] says (seen with SDK 5.15),
-                /// or an error if PICam is unable to set the notification.
+                /// waitable status, including a parameter
+                #[doc = concat!(" that doesn't apply to this ", $noun, " (seen with SDK 5.15), or")]
+                /// an error if PICam is unable to set the notification.
                 pub fn notify_when_status_untyped(
                     &self,
                     parameter: Parameter,

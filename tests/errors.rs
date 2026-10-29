@@ -2,8 +2,8 @@
 //! triggered on PICam's demo cameras: parameters a camera doesn't have,
 //! read-only and out-of-range values, value and constraint types, reading
 //! from hardware, waitable statuses, setting values online, and changes
-//! during an acquisition. Each assertion's comment names the methods whose
-//! docs it backs.
+//! during an acquisition. The comments name the methods whose docs each
+//! group of assertions backs, typed and `_untyped` alike.
 
 mod common;
 
@@ -28,7 +28,7 @@ fn open(library: &Arc<Library>, model: Model, serial_number: &str) -> (CameraId,
 
 /// Checks the errors for parameters a PIXIS 100F doesn't have: an intensifier
 /// camera's gating mode, intensifier gain, repetitive gate and custom
-/// modulation sequence (seen with sdk 5.15).
+/// modulation sequence (seen with SDK 5.15).
 #[test]
 fn a_missing_parameter() {
     // each test uses its own serial number so demo cameras never collide
@@ -50,6 +50,12 @@ fn a_missing_parameter() {
         missing
     );
     assert_eq!(camera.device().get(gating).err(), missing);
+    // and the `_untyped` twins, with a type that passes the crate's own check
+    let code = Parameter::GatingMode;
+    assert_eq!(camera.get_untyped::<i32>(code).err(), missing);
+    assert_eq!(camera.set_untyped::<i32>(code, 0).err(), missing);
+    assert_eq!(camera.default_value_untyped::<i32>(code).err(), missing);
+    assert_eq!(camera.can_set_untyped::<i32>(code, 0).err(), missing);
 
     // the information methods
     assert_eq!(camera.can_set_online(gating).err(), missing);
@@ -83,6 +89,11 @@ fn a_missing_parameter() {
     // the watches
     assert_eq!(camera.watch_value(gating).err(), missing);
     assert_eq!(camera.watch_extrinsic_value(gating).err(), missing);
+    assert_eq!(camera.watch_value_untyped::<i32>(code).err(), missing);
+    assert_eq!(
+        camera.watch_extrinsic_value_untyped::<i32>(code).err(),
+        missing
+    );
     assert_eq!(camera.watch_relevance(gating).err(), missing);
     assert_eq!(camera.watch_value_access(gating).err(), missing);
     assert_eq!(camera.watch_collection_constraint(gating).err(), missing);
@@ -96,10 +107,9 @@ fn a_missing_parameter() {
     assert_eq!(camera.refresh_parameter_from_device(gating).err(), missing);
 
     // reading from hardware is refused before picam looks for the parameter
-    assert_eq!(
-        camera.read(gating).err(),
-        Some(Error::ParameterIsNotReadable)
-    );
+    let not_readable = Some(Error::ParameterIsNotReadable);
+    assert_eq!(camera.read(gating).err(), not_readable);
+    assert_eq!(camera.read_untyped::<i32>(code).err(), not_readable);
 
     // and so are the status methods, since it isn't a waitable status
     let not_waitable = Some(Error::ParameterIsNotWaitableStatus);
@@ -133,7 +143,7 @@ fn a_missing_parameter() {
 }
 
 /// Checks the errors for a read-only parameter and for values out of range
-/// (seen with sdk 5.15).
+/// (seen with SDK 5.15).
 #[test]
 fn read_only_and_out_of_range_values() {
     // each test uses its own serial number so demo cameras never collide
@@ -143,19 +153,29 @@ fn read_only_and_out_of_range_values() {
     let library = &test_library.library;
     let (id, camera) = open(library, Model::PIXIS_100F, SERIAL_NUMBER);
 
-    // `set`, `can_set` and `default_value`: picam refuses even asking for a
-    // read-only parameter's default
+    // `set`, `can_set` and `default_value` and their `_untyped` twins: picam
+    // refuses even asking for a read-only parameter's default
     let read_only = Some(Error::ParameterValueIsReadOnly);
+    let stride = Parameter::ReadoutStride;
     assert_eq!(camera.set(params::READOUT_STRIDE, 4).err(), read_only);
     assert_eq!(camera.can_set(params::READOUT_STRIDE, 4).err(), read_only);
     assert_eq!(
         camera.default_value(params::READOUT_STRIDE).err(),
         read_only
     );
+    assert_eq!(camera.set_untyped::<i32>(stride, 4).err(), read_only);
+    assert_eq!(camera.can_set_untyped::<i32>(stride, 4).err(), read_only);
+    assert_eq!(camera.default_value_untyped::<i32>(stride).err(), read_only);
 
     // `set`, outside a range or a collection, while `can_set` only says no
     let invalid = Some(Error::InvalidParameterValue);
     assert_eq!(camera.set(params::EXPOSURE_TIME, -5.0).err(), invalid);
+    assert_eq!(
+        camera
+            .set_untyped::<f64>(Parameter::ExposureTime, -5.0)
+            .err(),
+        invalid
+    );
     assert_eq!(camera.can_set(params::EXPOSURE_TIME, -5.0), Ok(false));
     let unknown_quality = AdcQuality::Unknown(99);
     assert_eq!(
@@ -173,7 +193,7 @@ fn read_only_and_out_of_range_values() {
 }
 
 /// Checks the errors for a value or constraint of the wrong type, and an
-/// unknown constraint category (seen with sdk 5.15).
+/// unknown constraint category (seen with SDK 5.15).
 #[test]
 fn value_and_constraint_types() {
     // each test uses its own serial number so demo cameras never collide
@@ -286,7 +306,7 @@ fn value_and_constraint_types() {
 }
 
 /// Checks the pulse and modulation constraints' errors for an unknown
-/// category, on an intensifier camera that has both (seen with sdk 5.15).
+/// category, on an intensifier camera that has both (seen with SDK 5.15).
 #[test]
 fn pulse_and_modulation_categories() {
     // each test uses its own serial number so demo cameras never collide
@@ -317,7 +337,7 @@ fn pulse_and_modulation_categories() {
 
 /// Checks the errors for reading a parameter the hardware can't report, and
 /// for statuses that can't be waited on or values outside a status's purview
-/// (seen with sdk 5.15).
+/// (seen with SDK 5.15).
 #[test]
 fn reading_and_waiting() {
     // each test uses its own serial number so demo cameras never collide
@@ -394,14 +414,21 @@ fn reading_and_waiting() {
             .err(),
         invalid
     );
-    // the typed status values are all in the purview
+    // and through the typed methods, with a value the enum keeps but the
+    // purview doesn't have
+    let temperature = params::SENSOR_TEMPERATURE_STATUS;
+    let unknown_status = SensorTemperatureStatus::Unknown(outside);
     assert_eq!(
-        camera.wait_for_status_parameter_value(
-            params::SENSOR_TEMPERATURE_STATUS,
-            SensorTemperatureStatus::Locked,
-            wait
-        ),
-        Ok(())
+        camera
+            .estimate_time_to_status_parameter_value(temperature, unknown_status)
+            .err(),
+        invalid
+    );
+    assert_eq!(
+        camera
+            .wait_for_status_parameter_value(temperature, unknown_status, wait)
+            .err(),
+        invalid
     );
 
     drop(camera);
@@ -411,7 +438,7 @@ fn reading_and_waiting() {
 
 /// Checks the errors for setting values online, outside and during an
 /// acquisition, and for changes during an acquisition that picam can't make
-/// online (seen with sdk 5.15).
+/// online (seen with SDK 5.15).
 #[test]
 fn setting_online_and_while_acquiring() {
     // each test uses its own serial number so demo cameras never collide
@@ -421,11 +448,19 @@ fn setting_online_and_while_acquiring() {
     let library = &test_library.library;
     let (id, mut camera) = open(library, Model::PIXIS_100F, SERIAL_NUMBER);
 
-    // `set_online`, outside an acquisition (manual 5.4.1.20)
+    // `set_online` and its `_untyped` twin, outside an acquisition (manual
+    // 5.4.1.20 to 5.4.1.22)
+    let not_acquiring = Some(Error::AcquisitionNotInProgress);
     assert_eq!(camera.can_set_online(params::EXPOSURE_TIME), Ok(true));
     assert_eq!(
         camera.set_online(params::EXPOSURE_TIME, 60.0).err(),
-        Some(Error::AcquisitionNotInProgress)
+        not_acquiring
+    );
+    assert_eq!(
+        camera
+            .set_online_untyped::<f64>(Parameter::ExposureTime, 60.0)
+            .err(),
+        not_acquiring
     );
 
     // long enough that the acquisition runs throughout
@@ -463,12 +498,36 @@ fn setting_online_and_while_acquiring() {
         during.set_online(params::ACTIVE_WIDTH, width).err(),
         Some(Error::ParameterIsNotOnlineable)
     );
-    // `set_online_untyped`, with a float for an integer
+    // `set_online_untyped`, with a float for an integer, and its other errors
     assert_eq!(
         during
             .set_online_untyped::<f64>(Parameter::ActiveWidth, 1.0)
             .err(),
         Some(Error::ParameterHasInvalidValueType)
+    );
+    assert_eq!(
+        during
+            .set_online_untyped::<f64>(Parameter::ExposureTime, -5.0)
+            .err(),
+        Some(Error::InvalidParameterValue)
+    );
+    assert_eq!(
+        during
+            .set_online_untyped::<i32>(Parameter::ReadoutStride, 4)
+            .err(),
+        Some(Error::ParameterValueIsReadOnly)
+    );
+    assert_eq!(
+        during
+            .set_online_untyped::<i32>(Parameter::IntensifierGain, 1)
+            .err(),
+        Some(Error::ParameterDoesNotExist)
+    );
+    assert_eq!(
+        during
+            .set_online_untyped::<i32>(Parameter::ActiveWidth, width)
+            .err(),
+        Some(Error::ParameterIsNotOnlineable)
     );
 
     // `set` and `set_untyped`, for a parameter that can't be set online, while
@@ -505,7 +564,7 @@ fn setting_online_and_while_acquiring() {
 }
 
 /// Checks that a pulse value out of range is refused on an intensifier
-/// camera, as other values are (seen with sdk 5.15).
+/// camera, as other values are (seen with SDK 5.15).
 #[test]
 fn a_pulse_out_of_range() {
     // each test uses its own serial number so demo cameras never collide

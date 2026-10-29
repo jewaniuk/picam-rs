@@ -340,8 +340,8 @@ impl Camera {
     /// # Errors
     ///
     /// - [`crate::Error::AcquisitionNotInProgress`] outside an acquisition,
-    ///   since values are only set online during one (PICam manual 5.4.1.20,
-    ///   seen with SDK 5.15)
+    ///   since values are only set online during one (PICam manual 5.4.1.20 to
+    ///   5.4.1.22, seen with SDK 5.15)
     /// - [`crate::Error::ParameterIsNotOnlineable`] if `parameter` can't be set
     ///   online, as [`Self::can_set_online`] says (seen with SDK 5.15)
     /// - [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
@@ -370,8 +370,8 @@ impl Camera {
     /// - [`crate::Error::ParameterHasInvalidValueType`] if PICam's online call
     ///   for `T` doesn't accept `parameter`'s value type (seen with SDK 5.15)
     /// - [`crate::Error::AcquisitionNotInProgress`] outside an acquisition,
-    ///   since values are only set online during one (PICam manual 5.4.1.20,
-    ///   seen with SDK 5.15)
+    ///   since values are only set online during one (PICam manual 5.4.1.20 to
+    ///   5.4.1.22, seen with SDK 5.15)
     /// - [`crate::Error::ParameterIsNotOnlineable`] if `parameter` can't be set
     ///   online, as [`Self::can_set_online`] says (seen with SDK 5.15)
     /// - [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply

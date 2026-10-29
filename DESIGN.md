@@ -215,7 +215,7 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
   - Name an error with an intra-doc link when the manual says so, the crate itself returns it, or a demo-camera test sees it (decided with the maintainer on 2026-10-29). The manual names very few, and doesn't describe the error codes, so most come from demo cameras.
   - Mark an error only a demo camera shows "(seen with SDK 5.15)", and assert it in a committed test, mostly in `tests/errors.rs`. Cite the manual section for one the manual gives, and mark nothing for one the crate returns itself.
   - Name only errors a user can reach without unsafe code, not ones only a closed or invalid handle could cause.
-  - End with "or an error if PICam is unable to …" for everything else, since hardware can fail in ways a demo camera can't show. A function with no error a demo camera can trigger keeps only that sentence.
+  - End with "or an error if PICam is unable to …" for everything else, since hardware can fail in ways a demo camera can't show. A function with no error to name keeps only that sentence.
   - Use a sentence for one or two errors, and a bullet list for three or more.
 - Intra-doc links use public paths, the crate-root re-exports (`crate::Error::X`, `crate::Camera::open`), never paths through a private module (`crate::error::Error::X`).
 - Every `unsafe fn` has a `# Safety` section saying what the caller must guarantee.
