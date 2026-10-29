@@ -20,7 +20,7 @@ macro_rules! impl_parameter_methods {
             };
             use $crate::convert::{collect_raw_array, duration_from_ms, timeout_ms};
             use $crate::error::{Error, Result, picam_call};
-            use $crate::parameter::sealed::{RawHandle, RawWaitablePicamValue};
+            use $crate::parameter::sealed::RawHandle;
             use $crate::parameter::{
                 Dynamics, EnumeratedType, Parameter, PicamValue, ReadablePicamValue, TypedParameter,
                 ValueAccess, ValueType, WaitablePicamValue, can_read, can_set_online,
