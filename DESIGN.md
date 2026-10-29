@@ -321,7 +321,7 @@ These largely mirror patterns already in `camera.rs`.
 ### 6. Finishing
 
 - [x] the API review: `Camera::device` returns the `CameraDevice` without a `Result`, and the status methods are typed, with `Duration` timeouts (decided with the maintainer on 2026-10-29)
-- [ ] a pass through the manual to fill in `# Errors` sections (parts 1 and 2a of 3 done: the parameter methods, and identification and lifecycle)
+- [x] a pass through the manual to fill in `# Errors` sections (parts 1, 2a and 2b: the parameter methods, identification and lifecycle, and acquisition and discovery)
 - [ ] a crate-level README with an experimental notice
 - [x] revisit the shared `commit_parameters` and `are_parameters_committed` docs, which read oddly on a `CameraDevice`, where `set` isn't pending (left until then, decided with the maintainer on 2026-10-26)
 - [ ] hardware testing from the README's "to test" list, then publishing
