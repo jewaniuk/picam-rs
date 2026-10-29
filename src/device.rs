@@ -18,20 +18,16 @@ macro_rules! impl_parameter_methods {
             @impl $ty,
             $noun,
             set_tail: concat!(
-                " - [`crate::Error::AcquisitionInProgress`] during an acquisition, unless
-",
-                "   `parameter` can be set online (seen with SDK 5.15)
-",
+                " - [`crate::Error::AcquisitionInProgress`] during an acquisition, unless\n",
+                "   `parameter` can be set online (seen with SDK 5.15)\n",
                 " - otherwise an error if PICam is unable to set it",
             ),
             commit: concat!(
-                " Returns [`crate::Error::AcquisitionInProgress`] during an acquisition (seen
-",
+                " Returns [`crate::Error::AcquisitionInProgress`] during an acquisition (seen\n",
                 " with SDK 5.15), or an error if PICam is unable to attempt the commit at all.",
             ),
             restore: concat!(
-                " Returns [`crate::Error::AcquisitionInProgress`] during an acquisition (seen
-",
+                " Returns [`crate::Error::AcquisitionInProgress`] during an acquisition (seen\n",
                 " with SDK 5.15), or an error if PICam is unable to do this.",
             )
         );
