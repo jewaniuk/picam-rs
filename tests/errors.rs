@@ -177,6 +177,10 @@ fn read_only_and_out_of_range_values() {
         invalid
     );
     assert_eq!(camera.can_set(params::EXPOSURE_TIME, -5.0), Ok(false));
+    assert_eq!(
+        camera.can_set_untyped::<f64>(Parameter::ExposureTime, -5.0),
+        Ok(false)
+    );
     let unknown_quality = AdcQuality::Unknown(99);
     assert_eq!(
         camera.set(params::ADC_QUALITY, unknown_quality).err(),

@@ -36,7 +36,7 @@ impl CameraDevice<'_> {
     }
 }
 
-impl_parameter_methods!(CameraDevice<'_>, "camera device");
+impl_parameter_methods!(CameraDevice<'_>, "camera device", acquires);
 
 impl Camera {
     /// The camera's device handle, for parameter calls on the physical

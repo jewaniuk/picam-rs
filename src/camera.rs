@@ -674,7 +674,7 @@ impl Camera {
     }
 }
 
-impl_parameter_methods!(Camera, "camera");
+impl_parameter_methods!(Camera, "camera", acquires);
 
 impl Drop for Camera {
     fn drop(&mut self) {
