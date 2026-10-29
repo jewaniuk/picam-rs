@@ -339,7 +339,18 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to set it.
+    /// - [`crate::Error::AcquisitionNotInProgress`] outside an acquisition,
+    ///   since values are only set online during one (PICam manual 5.4.1.20,
+    ///   seen with SDK 5.15)
+    /// - [`crate::Error::ParameterIsNotOnlineable`] if `parameter` can't be set
+    ///   online, as [`Self::can_set_online`] says (seen with SDK 5.15)
+    /// - [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+    ///   to this camera (seen with SDK 5.15)
+    /// - [`crate::Error::ParameterValueIsReadOnly`] if `parameter` is read-only
+    ///   (seen with SDK 5.15)
+    /// - [`crate::Error::InvalidParameterValue`] if `value` is out of range or
+    ///   not one of the values allowed (seen with SDK 5.15)
+    /// - otherwise an error if PICam is unable to set it
     pub fn set_online<T: OnlineSettablePicamValue>(
         &self,
         parameter: TypedParameter<T>,
@@ -356,9 +367,20 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's online
-    /// call for `T` doesn't accept `parameter`'s value type, or an error if
-    /// PICam is unable to set it.
+    /// - [`crate::Error::ParameterHasInvalidValueType`] if PICam's online call
+    ///   for `T` doesn't accept `parameter`'s value type (seen with SDK 5.15)
+    /// - [`crate::Error::AcquisitionNotInProgress`] outside an acquisition,
+    ///   since values are only set online during one (PICam manual 5.4.1.20,
+    ///   seen with SDK 5.15)
+    /// - [`crate::Error::ParameterIsNotOnlineable`] if `parameter` can't be set
+    ///   online, as [`Self::can_set_online`] says (seen with SDK 5.15)
+    /// - [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+    ///   to this camera (seen with SDK 5.15)
+    /// - [`crate::Error::ParameterValueIsReadOnly`] if `parameter` is read-only
+    ///   (seen with SDK 5.15)
+    /// - [`crate::Error::InvalidParameterValue`] if `value` is out of range or
+    ///   not one of the values allowed (seen with SDK 5.15)
+    /// - otherwise an error if PICam is unable to set it
     pub fn set_online_untyped<T: OnlineSettablePicamValue>(
         &self,
         parameter: Parameter,
@@ -376,9 +398,11 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
-    /// if `parameter` isn't ROI-constrained, or an error if PICam is
-    /// unable to query this.
+    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`] if
+    /// `parameter` isn't ROI-constrained (seen with SDK 5.15),
+    /// [`crate::Error::InvalidConstraintCategory`] if `category` is one PICam
+    /// doesn't know (seen with SDK 5.15), or an error if PICam is unable to
+    /// query this.
     pub fn rois_constraint(
         &self,
         parameter: impl Into<Parameter>,
@@ -411,9 +435,13 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
-    /// if `parameter` isn't pulse-constrained, or an error if PICam is
-    /// unable to query this.
+    /// - [`crate::Error::ParameterHasInvalidConstraintType`] if `parameter`
+    ///   isn't pulse-constrained (seen with SDK 5.15)
+    /// - [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+    ///   to this camera (seen with SDK 5.15)
+    /// - [`crate::Error::InvalidConstraintCategory`] if `category` is one PICam
+    ///   doesn't know (seen with SDK 5.15)
+    /// - otherwise an error if PICam is unable to query this
     pub fn pulse_constraint(
         &self,
         parameter: impl Into<Parameter>,
@@ -446,9 +474,13 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
-    /// if `parameter` isn't modulations-constrained, or an error if PICam is
-    /// unable to query this.
+    /// - [`crate::Error::ParameterHasInvalidConstraintType`] if `parameter`
+    ///   isn't modulations-constrained (seen with SDK 5.15)
+    /// - [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+    ///   to this camera (seen with SDK 5.15)
+    /// - [`crate::Error::InvalidConstraintCategory`] if `category` is one PICam
+    ///   doesn't know (seen with SDK 5.15)
+    /// - otherwise an error if PICam is unable to query this
     pub fn modulations_constraint(
         &self,
         parameter: impl Into<Parameter>,
@@ -478,9 +510,9 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
-    /// if `parameter` isn't rois-constrained, or an error if PICam is
-    /// unable to query this.
+    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`] if
+    /// `parameter` isn't ROI-constrained (seen with SDK 5.15), or an error if
+    /// PICam is unable to query this.
     pub fn rois_constraints(&self, parameter: impl Into<Parameter>) -> Result<Vec<RoisConstraint>> {
         let mut array: *const sys::PicamRoisConstraint = std::ptr::null();
         let mut count: sys::piint = 0;
@@ -505,9 +537,11 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
-    /// if `parameter` isn't pulse-constrained, or an error if PICam is
-    /// unable to query this.
+    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`] if
+    /// `parameter` isn't pulse-constrained (seen with SDK 5.15),
+    /// [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply to
+    /// this camera (seen with SDK 5.15), or an error if PICam is unable to
+    /// query this.
     pub fn pulse_constraints(
         &self,
         parameter: impl Into<Parameter>,
@@ -535,9 +569,11 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
-    /// if `parameter` isn't modulations-constrained, or an error if PICam is
-    /// unable to query this.
+    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`] if
+    /// `parameter` isn't modulations-constrained (seen with SDK 5.15),
+    /// [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply to
+    /// this camera (seen with SDK 5.15), or an error if PICam is unable to
+    /// query this.
     pub fn modulations_constraints(
         &self,
         parameter: impl Into<Parameter>,
@@ -567,7 +603,9 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to register its callback.
+    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`] if
+    /// `parameter` isn't ROI-constrained (seen with SDK 5.15), or an error if
+    /// PICam is unable to register its callback.
     pub fn watch_rois_constraint(
         &self,
         parameter: impl Into<Parameter>,
@@ -589,7 +627,11 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to register its callback.
+    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`] if
+    /// `parameter` isn't pulse-constrained (seen with SDK 5.15),
+    /// [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply to
+    /// this camera (seen with SDK 5.15), or an error if PICam is unable to
+    /// register its callback.
     pub fn watch_pulse_constraint(
         &self,
         parameter: impl Into<Parameter>,
@@ -611,7 +653,11 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to register its callback.
+    /// Returns [`crate::Error::ParameterHasInvalidConstraintType`] if
+    /// `parameter` isn't modulations-constrained (seen with SDK 5.15),
+    /// [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply to
+    /// this camera (seen with SDK 5.15), or an error if PICam is unable to
+    /// register its callback.
     pub fn watch_modulations_constraint(
         &self,
         parameter: impl Into<Parameter>,
