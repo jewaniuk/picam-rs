@@ -1392,6 +1392,27 @@ impl<'a> Frame<'a> {
     }
 
     /// The frame's metadata, decoded (manual 6.1).
+    ///
+    /// ```no_run
+    /// # fn f(camera: &mut picam_rs::Camera) -> picam_rs::Result<()> {
+    /// use std::time::Duration;
+    ///
+    /// let readouts = camera.acquire(3, Some(Duration::from_secs(5)))?;
+    /// for readout in readouts.iter() {
+    ///     for frame in readout.frames() {
+    ///         let metadata = frame.metadata();
+    ///         if let (Some(started), Some(ended)) =
+    ///             (metadata.exposure_started, metadata.exposure_ended)
+    ///         {
+    ///             let seconds = ended.as_secs_f64() - started.as_secs_f64();
+    ///             println!("exposed for {seconds} s");
+    ///         }
+    ///         println!("frame {:?}", metadata.frame_number);
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn metadata(&self) -> Metadata {
         self.layout.metadata.decode(self.metadata_bytes())
     }
