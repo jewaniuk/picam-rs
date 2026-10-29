@@ -13,17 +13,19 @@ macro_rules! impl_parameter_methods {
         // rather than at each invocation
         const _: () = {
             use std::sync::mpsc::Receiver;
+            use std::time::Duration;
 
             use $crate::constraint::{
                 CollectionConstraint, ConstraintCategory, ConstraintType, RangeConstraint,
             };
-            use $crate::convert::collect_raw_array;
+            use $crate::convert::{collect_raw_array, duration_from_ms, timeout_ms};
             use $crate::error::{Error, Result, picam_call};
-            use $crate::parameter::sealed::RawHandle;
+            use $crate::parameter::sealed::{RawHandle, RawWaitablePicamValue};
             use $crate::parameter::{
                 Dynamics, EnumeratedType, Parameter, PicamValue, ReadablePicamValue, TypedParameter,
-                ValueAccess, ValueType, can_read, can_set_online, can_wait_for_status,
-                constraint_type, enumerated_type, is_relevant, value_access, value_type,
+                ValueAccess, ValueType, WaitablePicamValue, can_read, can_set_online,
+                can_wait_for_status, constraint_type, enumerated_type, is_relevant, value_access,
+                value_type,
             };
             use $crate::sys;
             use $crate::watch::{self, Event, Kind, Watch};
@@ -352,19 +354,42 @@ macro_rules! impl_parameter_methods {
                     picam_call!(sys::Picam_RestoreParametersToDefaultValues(self.handle))
                 }
 
-                /// Lists the discrete values `parameter` (a "status parameter") can take.
+                /// Lists the values status `parameter` can take, a handle from
+                /// [`params`](crate::params) whose value enum fixes their type
+                /// (PICam manual 5.4.2.15). [`Self::can_wait_for_status`] says which
+                /// parameters are waitable statuses.
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to query this.
-                pub fn status_parameter_purview(
+                /// Returns an error if PICam is unable to list them, for example
+                /// because `parameter` isn't a waitable status.
+                pub fn status_parameter_purview<T: WaitablePicamValue>(
                     &self,
-                    parameter: impl Into<Parameter>,
+                    parameter: TypedParameter<T>,
+                ) -> Result<Vec<T>> {
+                    let values = self.status_parameter_purview_untyped(parameter.parameter())?;
+                    Ok(values.into_iter().map(T::from_status).collect())
+                }
+
+                /// Lists the values status `parameter` can take as PICam's integer
+                /// codes.
+                ///
+                /// Prefer [`Self::status_parameter_purview`], which takes the type from
+                /// the parameter. This is for parameters with no handle in
+                /// [`params`](crate::params).
+                ///
+                /// # Errors
+                ///
+                /// Returns an error if PICam is unable to list them, for example
+                /// because `parameter` isn't a waitable status.
+                pub fn status_parameter_purview_untyped(
+                    &self,
+                    parameter: Parameter,
                 ) -> Result<Vec<i32>> {
                     let mut ptr: *const sys::PicamStatusPurview = std::ptr::null();
                     picam_call!(sys::Picam_GetStatusParameterPurview(
                         self.handle,
-                        parameter.into().to_raw(),
+                        parameter.to_raw(),
                         &mut ptr
                     ))?;
 
@@ -385,45 +410,90 @@ macro_rules! impl_parameter_methods {
                     Ok(values)
                 }
 
-                /// Estimates how long (in milliseconds) it would take for `parameter`
-                /// to reach `value`.
+                /// Estimates how long status `parameter` will take to reach `value`
+                /// (PICam manual 5.4.2.17), or `None` if PICam can't estimate it.
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to estimate this.
-                pub fn estimate_time_to_status_parameter_value(
+                /// Returns an error if PICam is unable to estimate this, for example
+                /// because `parameter` isn't a waitable status.
+                pub fn estimate_time_to_status_parameter_value<T: WaitablePicamValue>(
                     &self,
-                    parameter: impl Into<Parameter>,
+                    parameter: TypedParameter<T>,
+                    value: T,
+                ) -> Result<Option<Duration>> {
+                    self.estimate_time_to_status_parameter_value_untyped(
+                        parameter.parameter(),
+                        value.to_status(),
+                    )
+                }
+
+                /// [`Self::estimate_time_to_status_parameter_value`] with the value as
+                /// PICam's integer code, for parameters with no handle in
+                /// [`params`](crate::params).
+                ///
+                /// # Errors
+                ///
+                /// Returns an error if PICam is unable to estimate this, for example
+                /// because `parameter` isn't a waitable status.
+                pub fn estimate_time_to_status_parameter_value_untyped(
+                    &self,
+                    parameter: Parameter,
                     value: i32,
-                ) -> Result<i32> {
+                ) -> Result<Option<Duration>> {
                     let mut estimated_time: sys::piint = 0;
                     picam_call!(sys::Picam_EstimateTimeToStatusParameterValue(
                         self.handle,
-                        parameter.into().to_raw(),
+                        parameter.to_raw(),
                         value,
                         &mut estimated_time
                     ))?;
-                    Ok(estimated_time)
+                    // -1 when picam can't estimate it (manual 5.4.2.17)
+                    Ok(duration_from_ms(estimated_time))
                 }
 
-                /// Blocks until `parameter` reaches `value`, or `timeout` milliseconds
-                /// have elapsed.
+                /// Blocks until status `parameter` reaches `value`, or `timeout` has
+                /// elapsed, rounded up to milliseconds. `None` waits forever (PICam
+                /// manual 5.4.2.18).
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::TimeOutOccurred`] if `timeout`
-                /// elapses first, or an error if PICam is unable to wait for this.
-                pub fn wait_for_status_parameter_value(
+                /// Returns [`crate::Error::TimeOutOccurred`] if `timeout` elapses
+                /// first, or an error if PICam is unable to wait for this, for example
+                /// because `parameter` isn't a waitable status.
+                pub fn wait_for_status_parameter_value<T: WaitablePicamValue>(
                     &self,
-                    parameter: impl Into<Parameter>,
+                    parameter: TypedParameter<T>,
+                    value: T,
+                    timeout: Option<Duration>,
+                ) -> Result<()> {
+                    self.wait_for_status_parameter_value_untyped(
+                        parameter.parameter(),
+                        value.to_status(),
+                        timeout,
+                    )
+                }
+
+                /// [`Self::wait_for_status_parameter_value`] with the value as PICam's
+                /// integer code, for parameters with no handle in
+                /// [`params`](crate::params).
+                ///
+                /// # Errors
+                ///
+                /// Returns [`crate::Error::TimeOutOccurred`] if `timeout` elapses
+                /// first, or an error if PICam is unable to wait for this, for example
+                /// because `parameter` isn't a waitable status.
+                pub fn wait_for_status_parameter_value_untyped(
+                    &self,
+                    parameter: Parameter,
                     value: i32,
-                    timeout: i32,
+                    timeout: Option<Duration>,
                 ) -> Result<()> {
                     picam_call!(sys::Picam_WaitForStatusParameterValue(
                         self.handle,
-                        parameter.into().to_raw(),
+                        parameter.to_raw(),
                         value,
-                        timeout
+                        timeout_ms(timeout)
                     ))
                 }
 
@@ -796,14 +866,29 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// Returns an error if PICam is unable to set the notification, for example
                 /// because `parameter` isn't a status that can be waited on.
-                pub fn notify_when_status(
+                pub fn notify_when_status<T: WaitablePicamValue>(
                     &self,
-                    parameter: impl Into<Parameter>,
+                    parameter: TypedParameter<T>,
+                    value: T,
+                ) -> Result<(Watch, Receiver<Result<()>>)> {
+                    self.notify_when_status_untyped(parameter.parameter(), value.to_status())
+                }
+
+                /// [`Self::notify_when_status`] with the value as PICam's integer
+                /// code, for parameters with no handle in [`params`](crate::params).
+                ///
+                /// # Errors
+                ///
+                /// Returns an error if PICam is unable to set the notification, for
+                /// example because `parameter` isn't a status that can be waited on.
+                pub fn notify_when_status_untyped(
+                    &self,
+                    parameter: Parameter,
                     value: i32,
                 ) -> Result<(Watch, Receiver<Result<()>>)> {
                     watch::subscribe(
                         self.extrinsic_handle()?,
-                        parameter.into(),
+                        parameter,
                         Kind::Status(value),
                         |event| match event {
                             Event::Status(result) => Some(*result),

@@ -15,7 +15,7 @@ use crate::convert::define_picam_enum;
 use crate::error::{Error, Result};
 use crate::parameter::sealed::{self, RawHandle};
 use crate::parameter::{
-    EnumeratedType, Parameter, PicamValue, ReadablePicamValue, enumerated_type,
+    EnumeratedType, Parameter, PicamValue, ReadablePicamValue, WaitablePicamValue, enumerated_type,
 };
 use crate::sys;
 use crate::watch::{self, Event, Kind, Watch};
@@ -100,6 +100,18 @@ macro_rules! impl_value_via_i32 {
         }
 
         impl ReadablePicamValue for $ty {}
+
+        impl sealed::RawWaitablePicamValue for $ty {
+            fn to_status(self) -> i32 {
+                $to(self)
+            }
+
+            fn from_status(code: i32) -> Self {
+                ($from)(code)
+            }
+        }
+
+        impl WaitablePicamValue for $ty {}
     };
 }
 

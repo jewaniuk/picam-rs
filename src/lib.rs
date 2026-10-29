@@ -69,7 +69,8 @@ pub use library::{Library, Version};
 pub use model::Model;
 pub use parameter::{
     ComputerInterface, Dynamics, EnumeratedType, Modulation, OnlineSettablePicamValue, Parameter,
-    PicamValue, Pulse, ReadablePicamValue, Roi, TypedParameter, ValueAccess, ValueType, params,
+    PicamValue, Pulse, ReadablePicamValue, Roi, TypedParameter, ValueAccess, ValueType,
+    WaitablePicamValue, params,
 };
 pub use validation::{
     DependentValidationResult, FailedDependentParameter, ValidationResult, ValidationResults,

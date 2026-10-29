@@ -375,6 +375,16 @@ pub(crate) mod sealed {
         /// Returns an error if PICam is unable to set the value online.
         fn set_online(handle: RawHandle, parameter: Parameter, value: Self) -> Result<()>;
     }
+
+    /// The status half of [`super::WaitablePicamValue`]: converting to and
+    /// from the `i32` PICam's status calls use.
+    pub trait RawWaitablePicamValue: RawPicamValue {
+        /// The value as PICam's status calls take it.
+        fn to_status(self) -> i32;
+
+        /// A value from PICam's status calls.
+        fn from_status(code: i32) -> Self;
+    }
 }
 
 use sealed::RawHandle;
@@ -630,6 +640,54 @@ macro_rules! impl_online_settable_scalar {
 
 impl_online_settable_scalar!(i32, Picam_SetParameterIntegerValueOnline);
 impl_online_settable_scalar!(f64, Picam_SetParameterFloatingPointValueOnline);
+
+/// A value type a waitable status parameter can have, so the value waited
+/// for is checked against the parameter at compile time.
+///
+/// This trait is sealed: it is implemented for the value enums of PICam's
+/// enum parameters, and can't be implemented outside this crate. The manual
+/// doesn't list which parameters are waitable statuses, so every value enum
+/// implements it, and
+/// [`Camera::can_wait_for_status`](crate::Camera::can_wait_for_status) says
+/// which parameters are. PICam refuses the rest.
+///
+/// ```no_run
+/// use std::time::Duration;
+/// use picam_rs::{Camera, Result, SensorTemperatureStatus, params};
+///
+/// fn wait_until_cold(camera: &Camera) -> Result<()> {
+///     camera.wait_for_status_parameter_value(
+///         params::SENSOR_TEMPERATURE_STATUS,
+///         SensorTemperatureStatus::Locked,
+///         Some(Duration::from_secs(600)),
+///     )
+/// }
+/// ```
+///
+/// A value of another enum doesn't compile:
+///
+/// ```compile_fail,E0308
+/// use picam_rs::{Camera, CoolingFanStatus, Result, params};
+///
+/// fn wait(camera: &Camera) -> Result<()> {
+///     camera.wait_for_status_parameter_value(
+///         params::SENSOR_TEMPERATURE_STATUS,
+///         CoolingFanStatus::On,
+///         None,
+///     )
+/// }
+/// ```
+///
+/// Neither does a parameter whose values aren't an enum:
+///
+/// ```compile_fail,E0277
+/// use picam_rs::{Camera, Result, params};
+///
+/// fn wait(camera: &Camera) -> Result<()> {
+///     camera.wait_for_status_parameter_value(params::EXPOSURE_TIME, 5.0, None)
+/// }
+/// ```
+pub trait WaitablePicamValue: PicamValue + sealed::RawWaitablePicamValue {}
 
 /// A single region of interest.
 ///

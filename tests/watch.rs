@@ -607,12 +607,16 @@ fn status_notification() {
 
     let wait = Duration::from_secs(2);
     let (first_watch, first) = camera
-        .notify_when_status(status, locked)
+        .notify_when_status(
+            params::SENSOR_TEMPERATURE_STATUS,
+            SensorTemperatureStatus::Locked,
+        )
         .expect("the notification should be set");
     assert_eq!(first.recv_timeout(wait), Ok(Ok(())));
     assert_eq!(first.try_recv(), Err(TryRecvError::Disconnected));
+    // the untyped twin, with picam's code for the same value
     let (second_watch, second) = camera
-        .notify_when_status(status, locked)
+        .notify_when_status_untyped(status, locked)
         .expect("the notification should be set again");
     assert_eq!(second.recv_timeout(wait), Ok(Ok(())));
     assert_eq!(second.try_recv(), Err(TryRecvError::Disconnected));
@@ -634,18 +638,16 @@ fn status_notification_cancels_on_drop() {
     let test_library = common::library();
     let library = &test_library.library;
     let (id, camera) = open(library, Model::PIXIS_100F, SERIAL_NUMBER);
-    let status = Parameter::SensorTemperatureStatus;
     assert_eq!(
         camera.get(params::SENSOR_TEMPERATURE_STATUS),
         Ok(SensorTemperatureStatus::Locked)
     );
-    let locked: i32 = camera
-        .get_untyped(status)
-        .expect("the temperature status should be read");
 
-    // unlocked is one below locked (picam.h)
     let (unlocked_watch, unlocked) = camera
-        .notify_when_status(status, locked - 1)
+        .notify_when_status(
+            params::SENSOR_TEMPERATURE_STATUS,
+            SensorTemperatureStatus::Unlocked,
+        )
         .expect("the notification should be set");
     assert_eq!(
         unlocked.recv_timeout(Duration::from_millis(500)),
@@ -685,7 +687,7 @@ fn constraint_and_status_watch_errors() {
         Err(Error::ParameterHasInvalidConstraintType)
     ));
     assert!(matches!(
-        camera.notify_when_status(Parameter::ExposureTime, 0),
+        camera.notify_when_status_untyped(Parameter::ExposureTime, 0),
         Err(Error::ParameterHasInvalidValueType)
     ));
 
