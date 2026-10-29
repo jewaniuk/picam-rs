@@ -4,9 +4,11 @@
 //! reading from hardware, waitable statuses, setting values online, and
 //! changes during an acquisition. For identifying cameras: no camera
 //! connected, IDs that match none, demo cameras, handles whose camera has
-//! closed, and names of values PICam doesn't know. The comments name the
-//! methods whose docs each group of assertions backs, typed and `_untyped`
-//! alike.
+//! closed, and names of values PICam doesn't know. For acquisition: a
+//! readout that times out, readout counts PICam refuses, uncommitted
+//! parameters for a stream, a buffer too big to allocate, and waiting after
+//! the end. The comments name the methods whose docs each group of
+//! assertions backs, typed and `_untyped` alike.
 
 mod common;
 
@@ -731,4 +733,91 @@ fn names_of_unknown_values() {
     let undefined = Some(Error::EnumerationValueNotDefined);
     assert_eq!(Parameter::Unknown(9999).name(library).err(), undefined);
     assert_eq!(AdcQuality::Unknown(99).name(library).err(), undefined);
+}
+
+/// Checks the errors for acquiring: a readout slower than its timeout,
+/// readout counts PICam refuses, a stream with uncommitted parameters, a
+/// buffer too big to allocate, and waiting once the acquisition has ended
+/// (seen with SDK 5.15).
+#[test]
+fn acquisition_errors() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "ERR0012";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let (id, mut camera) = open(library, Model::PIXIS_100F, SERIAL_NUMBER);
+    let wait = Some(Duration::from_secs(5));
+
+    // `acquire`, with a readout slower than its timeout (manual 6.4.1)
+    camera
+        .set(params::EXPOSURE_TIME, 500.0)
+        .expect("exposure time should be set");
+    assert_eq!(camera.commit_parameters(), Ok(vec![]));
+    assert_eq!(
+        camera.acquire(1, Some(Duration::from_millis(1))).err(),
+        Some(Error::TimeOutOccurred)
+    );
+    camera
+        .set(params::EXPOSURE_TIME, 1.0)
+        .expect("exposure time should be set");
+    assert_eq!(camera.commit_parameters(), Ok(vec![]));
+
+    // `acquire`, with a count that isn't positive, or more than picam's own
+    // memory holds without a buffer
+    let invalid_count = Some(Error::InvalidReadoutCount);
+    assert_eq!(camera.acquire(0, wait).err(), invalid_count);
+    assert_eq!(camera.acquire(-1, wait).err(), invalid_count);
+    let maximum = camera
+        .get(params::EXACT_READOUT_COUNT_MAXIMUM)
+        .expect("the exact readout count maximum should be read");
+    assert_eq!(
+        camera.acquire(maximum + 1, wait).err(),
+        Some(Error::InvalidAcquisitionBuffer)
+    );
+
+    // `start_acquisition_stream`, with a change not yet committed (manual
+    // 6.4.2)
+    camera
+        .set(params::EXPOSURE_TIME, 2.0)
+        .expect("exposure time should be set");
+    assert_eq!(
+        camera.start_acquisition_stream().err(),
+        Some(Error::ParametersNotCommitted)
+    );
+    assert_eq!(camera.commit_parameters(), Ok(vec![]));
+
+    // `set_acquisition_buffer`, more than the os will give
+    assert_eq!(
+        camera.set_acquisition_buffer(usize::MAX),
+        Err(Error::InsufficientMemory)
+    );
+
+    // `Acquisition::wait`, once the acquisition has ended
+    camera
+        .set(params::READOUT_COUNT, 1)
+        .expect("readout count should be set");
+    assert_eq!(camera.commit_parameters(), Ok(vec![]));
+    let mut acquisition = camera
+        .start_acquisition()
+        .expect("acquisition should start");
+    loop {
+        let update = acquisition
+            .wait(wait)
+            .expect("the acquisition should update");
+        if update.is_some_and(|update| !update.running()) {
+            break;
+        }
+    }
+    assert_eq!(
+        acquisition.wait(wait).err(),
+        Some(Error::AcquisitionNotInProgress)
+    );
+    acquisition
+        .finish()
+        .expect("an acquisition that has ended should finish");
+
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
 }
