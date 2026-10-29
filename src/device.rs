@@ -59,7 +59,7 @@ macro_rules! impl_parameter_methods {
                 CollectionConstraint, ConstraintCategory, ConstraintType, RangeConstraint,
             };
             use $crate::convert::{collect_raw_array, duration_from_ms, timeout_ms};
-            use $crate::error::{Error, Result, picam_call};
+            use $crate::error::{Error, Result, free_on_error, picam_call};
             use $crate::parameter::sealed::RawHandle;
             use $crate::parameter::{
                 Dynamics, EnumeratedType, Parameter, PicamValue, ReadablePicamValue, TypedParameter,
@@ -360,11 +360,12 @@ macro_rules! impl_parameter_methods {
                 pub fn parameters(&self) -> Result<Vec<Parameter>> {
                     let mut array: *const sys::PicamParameter = std::ptr::null();
                     let mut count: sys::piint = 0;
-                    picam_call!(sys::Picam_GetParameters(
+                    let result = picam_call!(sys::Picam_GetParameters(
                         self.handle,
                         &mut array,
                         &mut count
-                    ))?;
+                    ));
+                    free_on_error!(result, array, sys::Picam_DestroyParameters)?;
 
                     let parameters =
                         // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
@@ -426,11 +427,12 @@ macro_rules! impl_parameter_methods {
                 pub fn commit_parameters(&self) -> Result<Vec<Parameter>> {
                     let mut array: *const sys::PicamParameter = std::ptr::null();
                     let mut count: sys::piint = 0;
-                    picam_call!(sys::Picam_CommitParameters(
+                    let result = picam_call!(sys::Picam_CommitParameters(
                         self.handle,
                         &mut array,
                         &mut count
-                    ))?;
+                    ));
+                    free_on_error!(result, array, sys::Picam_DestroyParameters)?;
 
                     let failed =
                         // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
@@ -488,11 +490,12 @@ macro_rules! impl_parameter_methods {
                     parameter: Parameter,
                 ) -> Result<Vec<i32>> {
                     let mut ptr: *const sys::PicamStatusPurview = std::ptr::null();
-                    picam_call!(sys::Picam_GetStatusParameterPurview(
+                    let result = picam_call!(sys::Picam_GetStatusParameterPurview(
                         self.handle,
                         parameter.to_raw(),
                         &mut ptr
-                    ))?;
+                    ));
+                    free_on_error!(result, ptr, sys::Picam_DestroyStatusPurviews)?;
 
                     let values = if ptr.is_null() {
                         Vec::new()
@@ -685,12 +688,13 @@ macro_rules! impl_parameter_methods {
                     category: ConstraintCategory,
                 ) -> Result<CollectionConstraint> {
                     let mut ptr: *const sys::PicamCollectionConstraint = std::ptr::null();
-                    picam_call!(sys::Picam_GetParameterCollectionConstraint(
+                    let result = picam_call!(sys::Picam_GetParameterCollectionConstraint(
                         self.handle,
                         parameter.into().to_raw(),
                         category.to_raw(),
                         &mut ptr
-                    ))?;
+                    ));
+                    free_on_error!(result, ptr, sys::Picam_DestroyCollectionConstraints)?;
 
                     if ptr.is_null() {
                         return Err(Error::UnexpectedNullPointer);
@@ -724,12 +728,13 @@ macro_rules! impl_parameter_methods {
                     category: ConstraintCategory,
                 ) -> Result<RangeConstraint> {
                     let mut ptr: *const sys::PicamRangeConstraint = std::ptr::null();
-                    picam_call!(sys::Picam_GetParameterRangeConstraint(
+                    let result = picam_call!(sys::Picam_GetParameterRangeConstraint(
                         self.handle,
                         parameter.into().to_raw(),
                         category.to_raw(),
                         &mut ptr
-                    ))?;
+                    ));
+                    free_on_error!(result, ptr, sys::Picam_DestroyRangeConstraints)?;
 
                     if ptr.is_null() {
                         return Err(Error::UnexpectedNullPointer);
@@ -797,12 +802,13 @@ macro_rules! impl_parameter_methods {
                 ) -> Result<Vec<CollectionConstraint>> {
                     let mut array: *const sys::PicamCollectionConstraint = std::ptr::null();
                     let mut count: sys::piint = 0;
-                    picam_call!(sys::PicamAdvanced_GetParameterCollectionConstraints(
+                    let result = picam_call!(sys::PicamAdvanced_GetParameterCollectionConstraints(
                         self.handle,
                         parameter.into().to_raw(),
                         &mut array,
                         &mut count
-                    ))?;
+                    ));
+                    free_on_error!(result, array, sys::Picam_DestroyCollectionConstraints)?;
 
                     let constraints =
                         // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
@@ -830,12 +836,13 @@ macro_rules! impl_parameter_methods {
                 ) -> Result<Vec<RangeConstraint>> {
                     let mut array: *const sys::PicamRangeConstraint = std::ptr::null();
                     let mut count: sys::piint = 0;
-                    picam_call!(sys::PicamAdvanced_GetParameterRangeConstraints(
+                    let result = picam_call!(sys::PicamAdvanced_GetParameterRangeConstraints(
                         self.handle,
                         parameter.into().to_raw(),
                         &mut array,
                         &mut count
-                    ))?;
+                    ));
+                    free_on_error!(result, array, sys::Picam_DestroyRangeConstraints)?;
 
                     let constraints =
                         // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null

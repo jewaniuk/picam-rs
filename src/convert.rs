@@ -1,7 +1,7 @@
 use std::ffi::CStr;
 use std::time::Duration;
 
-use crate::error::{Error, Result, picam_call};
+use crate::error::{Error, Result, free_on_error, picam_call};
 use crate::library::Library;
 use crate::sys;
 
@@ -87,11 +87,12 @@ pub(crate) fn enumeration_string(
     value: sys::piint,
 ) -> Result<String> {
     let mut ptr: *const sys::pichar = std::ptr::null();
-    picam_call!(sys::Picam_GetEnumerationString(
+    let result = picam_call!(sys::Picam_GetEnumerationString(
         enumerated_type,
         value,
         &mut ptr
-    ))?;
+    ));
+    free_on_error!(result, ptr, sys::Picam_DestroyString)?;
 
     if ptr.is_null() {
         return Err(Error::UnexpectedNullPointer);

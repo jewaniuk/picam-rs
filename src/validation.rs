@@ -5,7 +5,7 @@
 use crate::camera::Camera;
 use crate::constraint::ConstraintScope;
 use crate::convert::collect_raw_array;
-use crate::error::{Error, Result, picam_call};
+use crate::error::{Error, Result, free_on_error, picam_call};
 use crate::parameter::Parameter;
 use crate::sys;
 
@@ -118,11 +118,12 @@ impl Camera {
     /// error if PICam is unable to validate it.
     pub fn validate_parameter(&self, parameter: impl Into<Parameter>) -> Result<ValidationResult> {
         let mut ptr: *const sys::PicamValidationResult = std::ptr::null();
-        picam_call!(sys::PicamAdvanced_ValidateParameter(
+        let result = picam_call!(sys::PicamAdvanced_ValidateParameter(
             self.raw_handle(),
             parameter.into().to_raw(),
             &mut ptr
-        ))?;
+        ));
+        free_on_error!(result, ptr, sys::Picam_DestroyValidationResult)?;
 
         if ptr.is_null() {
             return Err(Error::UnexpectedNullPointer);
@@ -145,10 +146,11 @@ impl Camera {
     /// validate them.
     pub fn validate_parameters(&self) -> Result<ValidationResults> {
         let mut ptr: *const sys::PicamValidationResults = std::ptr::null();
-        picam_call!(sys::PicamAdvanced_ValidateParameters(
+        let result = picam_call!(sys::PicamAdvanced_ValidateParameters(
             self.raw_handle(),
             &mut ptr
-        ))?;
+        ));
+        free_on_error!(result, ptr, sys::Picam_DestroyValidationResults)?;
 
         if ptr.is_null() {
             return Err(Error::UnexpectedNullPointer);
@@ -188,11 +190,12 @@ impl Camera {
         parameter: impl Into<Parameter>,
     ) -> Result<DependentValidationResult> {
         let mut ptr: *const sys::PicamDependentValidationResult = std::ptr::null();
-        picam_call!(sys::PicamAdvanced_ValidateDependentParameter(
+        let result = picam_call!(sys::PicamAdvanced_ValidateDependentParameter(
             self.raw_handle(),
             parameter.into().to_raw(),
             &mut ptr
-        ))?;
+        ));
+        free_on_error!(result, ptr, sys::Picam_DestroyDependentValidationResult)?;
 
         if ptr.is_null() {
             return Err(Error::UnexpectedNullPointer);
