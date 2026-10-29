@@ -419,7 +419,11 @@ macro_rules! impl_parameter_methods {
                 /// it's set.
                 ///
                 /// Returns the parameters that failed to commit, if any. An empty
-                /// `Vec` means every pending change was accepted.
+                /// `Vec` means every pending change was accepted. PICam reports a
+                /// failure with [`Error::InvalidParameterValues`], which this returns
+                /// as the list instead, and then commits none of the changes: the
+                /// hardware keeps its values and [`Self::are_parameters_committed`]
+                /// stays false (seen with SDK 5.15).
                 ///
                 /// # Errors
                 ///
@@ -432,10 +436,18 @@ macro_rules! impl_parameter_methods {
                         &mut array,
                         &mut count
                     ));
+                    // a commit that fails validation gives `InvalidParameterValues`
+                    // along with the parameters that failed, which are the answer
+                    // rather than an error (manual 5.4.6.2, seen with SDK 5.15)
+                    let result = match result {
+                        Err(Error::InvalidParameterValues) if !array.is_null() => Ok(()),
+                        other => other,
+                    };
                     free_on_error!(result, array, sys::Picam_DestroyParameters)?;
 
                     let failed =
-                        // SAFETY: see `collect_raw_array`; PICam guarantees this when `array` is non-null
+                        // SAFETY: see `collect_raw_array`; PICam guarantees this when `array`
+                        // is non-null, as it is with `InvalidParameterValues` (seen with SDK 5.15)
                         unsafe { collect_raw_array(array, count, |&raw| Parameter::from_raw(raw)) };
 
                     if !array.is_null() {
