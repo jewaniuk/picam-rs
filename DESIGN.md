@@ -321,11 +321,11 @@ These largely mirror patterns already in `camera.rs`.
 ### 6. Finishing
 
 - [x] the API review: `Camera::device` returns the `CameraDevice` without a `Result`, and the status methods are typed, with `Duration` timeouts (decided with the maintainer on 2026-10-29)
-- [ ] a pass through the manual to fill in `# Errors` sections (parts 1 and 2a of 3 done: the parameter methods, and identification and lifecycle)
+- [x] a pass through the manual to fill in `# Errors` sections (parts 1, 2a and 2b: the parameter methods, identification and lifecycle, and acquisition and discovery)
 - [ ] a crate-level README with an experimental notice
 - [x] revisit the shared `commit_parameters` and `are_parameters_committed` docs, which read oddly on a `CameraDevice`, where `set` isn't pending (left until then, decided with the maintainer on 2026-10-26)
 - [ ] hardware testing from the README's "to test" list, then publishing
 
 ## Open questions
 
-None at the moment.
+- **`commit_parameters` on an error:** on the NIRVANA LN 640 demo, committing non-destructive readout returned `Err(InvalidParameterValues)` rather than `Ok` with the failed parameters (seen with SDK 5.15). `commit_parameters` returns through `?` before it frees PICam's failed-parameter array, so if PICam allocates that array while also returning an error, it leaks and the failed list is lost. Whether PICam does is unchecked. A candidate for a small follow-up that checks it on a demo camera, frees the array on both paths, and names the error.
