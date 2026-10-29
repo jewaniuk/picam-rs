@@ -17,7 +17,7 @@ use windows_sys::Win32::System::Memory::{
 };
 
 use crate::camera::Camera;
-use crate::convert::define_picam_enum;
+use crate::convert::{define_picam_enum, timeout_ms};
 use crate::enums::{GateTracking, ModulationTracking, PixelFormat, TimeStamps};
 use crate::error::{Error, Result, picam_call};
 use crate::parameter::{Parameter, Roi, params};
@@ -1935,16 +1935,6 @@ fn float_bit_depth(bit_depth: i32) -> Result<u32> {
     }
 }
 
-/// Converts a timeout into PICam's milliseconds, rounding up, where -1 waits
-/// forever (manual 6.4.1).
-fn timeout_ms(timeout: Option<Duration>) -> i32 {
-    match timeout {
-        None => -1,
-        // beyond picam's limit, about 24 days, waits as long as it can
-        Some(timeout) => i32::try_from(timeout.as_nanos().div_ceil(1_000_000)).unwrap_or(i32::MAX),
-    }
-}
-
 /// Turns acquisition errors PICam reported into an `Err`.
 fn check_errors(errors: sys::PicamAcquisitionErrorsMask) -> Result<()> {
     let errors = AcquisitionErrors::from_bits_retain(errors.0);
@@ -2111,18 +2101,6 @@ mod tests {
                 bytes[offset..offset + 4].copy_from_slice(&[r as u8, f as u8, 0xaa, 0xbb]);
             }
         }
-    }
-
-    #[test]
-    fn timeouts_round_up_to_milliseconds() {
-        assert_eq!(timeout_ms(None), -1);
-        assert_eq!(timeout_ms(Some(Duration::ZERO)), 0);
-        assert_eq!(timeout_ms(Some(Duration::from_micros(1500))), 2);
-        assert_eq!(timeout_ms(Some(Duration::from_secs(5))), 5000);
-        assert_eq!(
-            timeout_ms(Some(Duration::from_secs(40 * 24 * 60 * 60))),
-            i32::MAX
-        );
     }
 
     #[test]

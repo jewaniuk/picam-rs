@@ -6,10 +6,12 @@
 mod common;
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use picam_rs::{
-    Camera, CameraId, ConstraintCategory, ConstraintScope, ConstraintSeverity, ConstraintType,
-    Library, Parameter, Roi, ShutterTimingMode, ValueAccess, ValueType, params,
+    AdcQuality, Camera, CameraId, ConstraintCategory, ConstraintScope, ConstraintSeverity,
+    ConstraintType, Error, Library, Model, Parameter, Roi, SensorTemperatureStatus,
+    ShutterTimingMode, ValueAccess, ValueType, params,
 };
 
 /// Connects a demo camera of the first model PICam offers.
@@ -314,5 +316,95 @@ fn enum_values_through_camera() {
 
     drop(camera);
     id.disconnect_demo(&test_library.library)
+        .expect("demo camera should disconnect");
+}
+
+/// Lists, estimates and waits for a status through the typed status methods
+/// and their untyped twins. The demo's sensor temperature is always locked
+/// (seen with sdk 5.15).
+#[test]
+fn status_values_through_camera() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "PARAM0006";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let id = CameraId::connect_demo(library, Model::PIXIS_100F, SERIAL_NUMBER)
+        .expect("demo camera should connect");
+    let camera = Camera::open(&id, Arc::clone(library)).expect("demo camera should open");
+    let status = params::SENSOR_TEMPERATURE_STATUS;
+    assert_eq!(camera.can_wait_for_status(status), Ok(true));
+    let locked: i32 = camera
+        .get_untyped(Parameter::SensorTemperatureStatus)
+        .expect("the temperature status should be read");
+
+    let purview = camera
+        .status_parameter_purview(status)
+        .expect("the purview should be listed");
+    let codes = camera
+        .status_parameter_purview_untyped(Parameter::SensorTemperatureStatus)
+        .expect("the purview codes should be listed");
+    assert_eq!(purview.len(), codes.len());
+    assert!(codes.contains(&locked));
+    assert!(purview.contains(&SensorTemperatureStatus::Locked));
+    assert!(purview.contains(&SensorTemperatureStatus::Unlocked));
+
+    // already locked, and the demo can't say when it would unlock (seen with
+    // sdk 5.15)
+    assert_eq!(
+        camera.estimate_time_to_status_parameter_value(status, SensorTemperatureStatus::Locked),
+        Ok(Some(Duration::ZERO))
+    );
+    assert_eq!(
+        camera.estimate_time_to_status_parameter_value(status, SensorTemperatureStatus::Unlocked),
+        Ok(None)
+    );
+
+    assert_eq!(
+        camera.wait_for_status_parameter_value(
+            status,
+            SensorTemperatureStatus::Locked,
+            Some(Duration::from_secs(1))
+        ),
+        Ok(())
+    );
+    assert_eq!(
+        camera.wait_for_status_parameter_value(
+            status,
+            SensorTemperatureStatus::Unlocked,
+            Some(Duration::from_millis(100))
+        ),
+        Err(Error::TimeOutOccurred)
+    );
+    assert_eq!(
+        camera.wait_for_status_parameter_value_untyped(
+            Parameter::SensorTemperatureStatus,
+            locked,
+            Some(Duration::from_secs(1))
+        ),
+        Ok(())
+    );
+
+    // an enum parameter that isn't a waitable status compiles, and picam
+    // refuses it, as it does a parameter that isn't an enum
+    assert_eq!(
+        camera.wait_for_status_parameter_value(
+            params::ADC_QUALITY,
+            AdcQuality::LowNoise,
+            Some(Duration::from_millis(100))
+        ),
+        Err(Error::ParameterIsNotWaitableStatus)
+    );
+    assert_eq!(
+        camera.wait_for_status_parameter_value_untyped(
+            Parameter::ExposureTime,
+            0,
+            Some(Duration::from_millis(100))
+        ),
+        Err(Error::ParameterHasInvalidValueType)
+    );
+
+    drop(camera);
+    id.disconnect_demo(library)
         .expect("demo camera should disconnect");
 }

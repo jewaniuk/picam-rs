@@ -1,4 +1,5 @@
 use std::ffi::CStr;
+use std::time::Duration;
 
 use crate::error::{Error, Result, picam_call};
 use crate::library::Library;
@@ -153,6 +154,22 @@ pub(crate) unsafe fn collect_raw_array<T, U>(
         .collect()
 }
 
+/// Converts a timeout into PICam's milliseconds, rounding up, where -1 waits
+/// forever (manual 5.4.2.18 and 6.4.1).
+pub(crate) fn timeout_ms(timeout: Option<Duration>) -> i32 {
+    match timeout {
+        None => -1,
+        // beyond picam's limit, about 24 days, waits as long as it can
+        Some(timeout) => i32::try_from(timeout.as_nanos().div_ceil(1_000_000)).unwrap_or(i32::MAX),
+    }
+}
+
+/// Converts PICam's milliseconds into a duration, where a negative count
+/// means none, such as an estimate PICam can't make (manual 5.4.2.17).
+pub(crate) fn duration_from_ms(ms: i32) -> Option<Duration> {
+    u64::try_from(ms).ok().map(Duration::from_millis)
+}
+
 /// A single firmware component's name and version/detail string, as
 /// reported by a camera or accessory.
 #[derive(Debug, Clone)]
@@ -169,5 +186,30 @@ impl FirmwareDetail {
             name: c_char_array_to_string(&raw.name),
             detail: c_char_array_to_string(&raw.detail),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timeouts_round_up_to_milliseconds() {
+        assert_eq!(timeout_ms(None), -1);
+        assert_eq!(timeout_ms(Some(Duration::ZERO)), 0);
+        assert_eq!(timeout_ms(Some(Duration::from_micros(1500))), 2);
+        assert_eq!(timeout_ms(Some(Duration::from_secs(5))), 5000);
+        assert_eq!(
+            timeout_ms(Some(Duration::from_secs(40 * 24 * 60 * 60))),
+            i32::MAX
+        );
+    }
+
+    #[test]
+    fn durations_from_milliseconds() {
+        assert_eq!(duration_from_ms(-1), None);
+        assert_eq!(duration_from_ms(i32::MIN), None);
+        assert_eq!(duration_from_ms(0), Some(Duration::ZERO));
+        assert_eq!(duration_from_ms(1500), Some(Duration::from_millis(1500)));
     }
 }

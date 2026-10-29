@@ -89,7 +89,7 @@ fn device_holds_the_committed_values() {
     let id = CameraId::connect_demo(library, Model::PIXIS_100F, SERIAL_NUMBER)
         .expect("demo camera should connect");
     let camera = Camera::open(&id, Arc::clone(library)).expect("demo camera should open");
-    let device = camera.device().expect("the device should be found");
+    let device = camera.device();
 
     let committed = camera
         .get(params::EXPOSURE_TIME)
@@ -176,7 +176,7 @@ fn commit_to_device() {
     let id = CameraId::connect_demo(library, Model::PIXIS_100F, SERIAL_NUMBER)
         .expect("demo camera should connect");
     let camera = Camera::open(&id, Arc::clone(library)).expect("demo camera should open");
-    let device = camera.device().expect("the device should be found");
+    let device = camera.device();
 
     let pending = camera
         .get(params::EXPOSURE_TIME)
@@ -205,6 +205,60 @@ fn commit_to_device() {
         Err(Error::InvalidParameterValue)
     );
     assert_eq!(device.get(params::READOUT_CONTROL_MODE), Ok(mode));
+
+    drop(camera);
+    id.disconnect_demo(library)
+        .expect("demo camera should disconnect");
+}
+
+/// Checks that the device reports the camera model's pending values as
+/// uncommitted and commits them, and that a value set through the device
+/// takes effect at once, or is refused at once (seen with sdk 5.15).
+#[test]
+fn device_commits_the_models_values() {
+    // each test uses its own serial number so demo cameras never collide
+    const SERIAL_NUMBER: &str = "DEVICE006";
+
+    let test_library = common::library();
+    let library = &test_library.library;
+    let id = CameraId::connect_demo(library, Model::PIXIS_100F, SERIAL_NUMBER)
+        .expect("demo camera should connect");
+    let camera = Camera::open(&id, Arc::clone(library)).expect("demo camera should open");
+    let device = camera.device();
+
+    let committed = camera
+        .get(params::EXPOSURE_TIME)
+        .expect("exposure time should be read");
+    let pending = committed + 10.0;
+    camera
+        .set(params::EXPOSURE_TIME, pending)
+        .expect("exposure time should be set");
+    assert_eq!(device.are_parameters_committed(), Ok(false));
+    assert_eq!(camera.are_parameters_committed(), Ok(false));
+    assert_eq!(device.get(params::EXPOSURE_TIME), Ok(committed));
+
+    // committing through the device commits the model's pending value
+    assert_eq!(device.commit_parameters(), Ok(vec![]));
+    assert_eq!(device.get(params::EXPOSURE_TIME), Ok(pending));
+    assert_eq!(device.are_parameters_committed(), Ok(true));
+    assert_eq!(camera.are_parameters_committed(), Ok(true));
+
+    // a value set through the device leaves nothing to commit
+    let direct = pending + 10.0;
+    device
+        .set(params::EXPOSURE_TIME, direct)
+        .expect("exposure time should be set on the device");
+    assert_eq!(device.get(params::EXPOSURE_TIME), Ok(direct));
+    assert_eq!(device.are_parameters_committed(), Ok(true));
+    assert_eq!(camera.are_parameters_committed(), Ok(true));
+
+    // and an invalid one is refused then, not at a commit
+    assert_eq!(
+        device.set(params::EXPOSURE_TIME, -5.0),
+        Err(Error::InvalidParameterValue)
+    );
+    assert_eq!(device.get(params::EXPOSURE_TIME), Ok(direct));
+    assert_eq!(camera.get(params::EXPOSURE_TIME), Ok(direct));
 
     drop(camera);
     id.disconnect_demo(library)
@@ -292,7 +346,7 @@ fn device_changes_are_refused_while_acquiring() {
         .expect("acquisition should start");
     {
         let during = acquisition.camera();
-        let device = during.device().expect("the device should be found");
+        let device = during.device();
         // seen with sdk 5.15, on this and two other demo models
         let refused = Some(Error::AcquisitionInProgress);
         let (mut accepted, mut refusals) = (0, 0);

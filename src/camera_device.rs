@@ -41,15 +41,11 @@ impl_parameter_methods!(CameraDevice<'_>, "camera device");
 impl Camera {
     /// The camera's device handle, for parameter calls on the physical
     /// camera (PICam manual 7.4.3.5).
-    ///
-    /// # Errors
-    ///
-    /// Doesn't fail now; the `Result` is kept so the signature stays the same.
-    pub fn device(&self) -> Result<CameraDevice<'_>> {
-        Ok(CameraDevice {
+    pub fn device(&self) -> CameraDevice<'_> {
+        CameraDevice {
             handle: self.device_handle(),
             _camera: PhantomData,
-        })
+        }
     }
 
     /// Configures the device with every value stored in the camera's model
