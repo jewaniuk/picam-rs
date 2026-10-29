@@ -112,10 +112,10 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::UnexpectedNullPointer`] if PICam reports
-    /// success but returns no result, or an error if PICam is unable to
-    /// validate it, for example because `parameter` doesn't apply to this
-    /// camera.
+    /// Returns [`crate::Error::UnexpectedNullPointer`] if PICam reports success
+    /// but returns no result, [`crate::Error::ParameterDoesNotExist`] if
+    /// `parameter` doesn't apply to this camera (seen with SDK 5.15), or an
+    /// error if PICam is unable to validate it.
     pub fn validate_parameter(&self, parameter: impl Into<Parameter>) -> Result<ValidationResult> {
         let mut ptr: *const sys::PicamValidationResult = std::ptr::null();
         picam_call!(sys::PicamAdvanced_ValidateParameter(
@@ -179,10 +179,10 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns [`crate::Error::UnexpectedNullPointer`] if PICam reports
-    /// success but returns no result, or an error if PICam is unable to
-    /// validate them, for example because `parameter` doesn't apply to this
-    /// camera.
+    /// Returns [`crate::Error::UnexpectedNullPointer`] if PICam reports success
+    /// but returns no result, [`crate::Error::ParameterDoesNotExist`] if
+    /// `parameter` doesn't apply to this camera (seen with SDK 5.15), or an
+    /// error if PICam is unable to validate them.
     pub fn validate_dependent_parameter(
         &self,
         parameter: impl Into<Parameter>,

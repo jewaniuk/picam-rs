@@ -54,8 +54,9 @@ impl Camera {
     /// # Errors
     ///
     /// Returns [`crate::Error::InvalidParameterValue`] if a value fails
-    /// validation (seen on a demo camera with SDK 5.15), or an error if PICam
-    /// is unable to configure the device.
+    /// validation (seen with SDK 5.15), [`crate::Error::AcquisitionInProgress`]
+    /// during an acquisition (seen with SDK 5.15), or an error if PICam is
+    /// unable to configure the device.
     pub fn commit_parameters_to_device(&self) -> Result<()> {
         picam_call!(sys::PicamAdvanced_CommitParametersToCameraDevice(
             self.raw_handle()
@@ -72,7 +73,10 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to refresh it.
+    /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't
+    /// apply to this camera (seen with SDK 5.15),
+    /// [`crate::Error::AcquisitionInProgress`] during an acquisition (seen with
+    /// SDK 5.15), or an error if PICam is unable to refresh it.
     pub fn refresh_parameter_from_device(&self, parameter: impl Into<Parameter>) -> Result<()> {
         picam_call!(sys::PicamAdvanced_RefreshParameterFromCameraDevice(
             self.raw_handle(),
@@ -85,7 +89,8 @@ impl Camera {
     ///
     /// # Errors
     ///
-    /// Returns an error if PICam is unable to refresh them.
+    /// Returns [`crate::Error::AcquisitionInProgress`] during an acquisition
+    /// (seen with SDK 5.15), or an error if PICam is unable to refresh them.
     pub fn refresh_parameters_from_device(&self) -> Result<()> {
         picam_call!(sys::PicamAdvanced_RefreshParametersFromCameraDevice(
             self.raw_handle()

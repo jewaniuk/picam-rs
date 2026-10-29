@@ -36,9 +36,9 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::ParameterDoesNotExist`] if
-                #[doc = concat!(" `parameter` doesn't apply to this ", $noun, ", or an error if")]
-                /// PICam is unable to read it.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+                #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15), or an error if PICam")]
+                /// is unable to read it.
                 pub fn get<T: PicamValue>(&self, parameter: TypedParameter<T>) -> Result<T> {
                     T::get(RawHandle(self.handle), parameter.parameter())
                 }
@@ -51,14 +51,16 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
-                /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool` share
-                /// PICam's integer calls, so either is accepted for integer, on/off and
-                /// enum parameters) or `T` is an enum and `parameter` isn't an enum
-                /// parameter, [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum
-                /// other than the one `parameter`'s values belong to,
-                /// [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply to
-                #[doc = concat!(" this ", $noun, ", or an error if PICam is unable to read it.")]
+                /// - [`crate::Error::ParameterHasInvalidValueType`] if PICam's call for `T`
+                ///   doesn't accept `parameter`'s value type (`i32` and `bool` share PICam's
+                ///   integer calls, so either is accepted for integer, on/off and enum
+                ///   parameters) or `T` is an enum and `parameter` isn't an enum parameter
+                ///   (seen with SDK 5.15)
+                /// - [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum other than the
+                ///   one `parameter`'s values belong to
+                /// - [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply to
+                #[doc = concat!("   this ", $noun, " (seen with SDK 5.15)")]
+                /// - otherwise an error if PICam is unable to read it
                 pub fn get_untyped<T: PicamValue>(&self, parameter: Parameter) -> Result<T> {
                     T::check_type(RawHandle(self.handle), parameter)?;
                     T::get(RawHandle(self.handle), parameter)
@@ -68,9 +70,15 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::ParameterValueIsReadOnly`] if
-                /// `parameter` can't be set, [`crate::Error::InvalidParameterValue`]
-                /// if `value` is out of range, or an error if PICam is unable to set it.
+                /// - [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply to
+                #[doc = concat!("   this ", $noun, " (seen with SDK 5.15)")]
+                /// - [`crate::Error::ParameterValueIsReadOnly`] if `parameter` is read-only
+                ///   (seen with SDK 5.15)
+                /// - [`crate::Error::InvalidParameterValue`] if `value` is out of range or not
+                ///   one of the values allowed (seen with SDK 5.15)
+                /// - [`crate::Error::AcquisitionInProgress`] during an acquisition, unless
+                ///   `parameter` can be set online (seen with SDK 5.15)
+                /// - otherwise an error if PICam is unable to set it
                 pub fn set<T: PicamValue>(
                     &self,
                     parameter: TypedParameter<T>,
@@ -86,15 +94,22 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
-                /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool` share
-                /// PICam's integer calls, so either is accepted for integer, on/off and
-                /// enum parameters) or `T` is an enum and `parameter` isn't an enum
-                /// parameter, [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum
-                /// other than the one `parameter`'s values belong to,
-                /// [`crate::Error::ParameterValueIsReadOnly`] if `parameter` can't be set,
-                /// [`crate::Error::InvalidParameterValue`] if `value` is out of range, or
-                /// an error if PICam is unable to set it.
+                /// - [`crate::Error::ParameterHasInvalidValueType`] if PICam's call for `T`
+                ///   doesn't accept `parameter`'s value type (`i32` and `bool` share PICam's
+                ///   integer calls, so either is accepted for integer, on/off and enum
+                ///   parameters) or `T` is an enum and `parameter` isn't an enum parameter
+                ///   (seen with SDK 5.15)
+                /// - [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum other than the
+                ///   one `parameter`'s values belong to
+                /// - [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply to
+                #[doc = concat!("   this ", $noun, " (seen with SDK 5.15)")]
+                /// - [`crate::Error::ParameterValueIsReadOnly`] if `parameter` is read-only
+                ///   (seen with SDK 5.15)
+                /// - [`crate::Error::InvalidParameterValue`] if `value` is out of range or not
+                ///   one of the values allowed (seen with SDK 5.15)
+                /// - [`crate::Error::AcquisitionInProgress`] during an acquisition, unless
+                ///   `parameter` can be set online (seen with SDK 5.15)
+                /// - otherwise an error if PICam is unable to set it
                 pub fn set_untyped<T: PicamValue>(
                     &self,
                     parameter: Parameter,
@@ -109,7 +124,10 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to read the default value.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+                #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15),")]
+                /// [`crate::Error::ParameterValueIsReadOnly`] if `parameter` is read-only (seen
+                /// with SDK 5.15), or an error if PICam is unable to read the default value.
                 pub fn default_value<T: PicamValue>(
                     &self,
                     parameter: TypedParameter<T>,
@@ -125,13 +143,18 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
-                /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool` share
-                /// PICam's integer calls, so either is accepted for integer, on/off and
-                /// enum parameters) or `T` is an enum and `parameter` isn't an enum
-                /// parameter, [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum
-                /// other than the one `parameter`'s values belong to, or an error if PICam
-                /// is unable to read the default value.
+                /// - [`crate::Error::ParameterHasInvalidValueType`] if PICam's call for `T`
+                ///   doesn't accept `parameter`'s value type (`i32` and `bool` share PICam's
+                ///   integer calls, so either is accepted for integer, on/off and enum
+                ///   parameters) or `T` is an enum and `parameter` isn't an enum parameter
+                ///   (seen with SDK 5.15)
+                /// - [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum other than the
+                ///   one `parameter`'s values belong to
+                /// - [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply to
+                #[doc = concat!("   this ", $noun, " (seen with SDK 5.15)")]
+                /// - [`crate::Error::ParameterValueIsReadOnly`] if `parameter` is read-only
+                ///   (seen with SDK 5.15)
+                /// - otherwise an error if PICam is unable to read the default value
                 pub fn default_value_untyped<T: PicamValue>(
                     &self,
                     parameter: Parameter,
@@ -145,7 +168,10 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to check this.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+                #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15),")]
+                /// [`crate::Error::ParameterValueIsReadOnly`] if `parameter` is read-only (seen
+                /// with SDK 5.15), or an error if PICam is unable to check this.
                 pub fn can_set<T: PicamValue>(
                     &self,
                     parameter: TypedParameter<T>,
@@ -162,13 +188,18 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
-                /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool` share
-                /// PICam's integer calls, so either is accepted for integer, on/off and
-                /// enum parameters) or `T` is an enum and `parameter` isn't an enum
-                /// parameter, [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum
-                /// other than the one `parameter`'s values belong to, or an error if PICam
-                /// is unable to check this.
+                /// - [`crate::Error::ParameterHasInvalidValueType`] if PICam's call for `T`
+                ///   doesn't accept `parameter`'s value type (`i32` and `bool` share PICam's
+                ///   integer calls, so either is accepted for integer, on/off and enum
+                ///   parameters) or `T` is an enum and `parameter` isn't an enum parameter
+                ///   (seen with SDK 5.15)
+                /// - [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum other than the
+                ///   one `parameter`'s values belong to
+                /// - [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply to
+                #[doc = concat!("   this ", $noun, " (seen with SDK 5.15)")]
+                /// - [`crate::Error::ParameterValueIsReadOnly`] if `parameter` is read-only
+                ///   (seen with SDK 5.15)
+                /// - otherwise an error if PICam is unable to check this
                 pub fn can_set_untyped<T: PicamValue>(
                     &self,
                     parameter: Parameter,
@@ -182,7 +213,9 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to check this.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+                #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15), or an error if PICam")]
+                /// is unable to check this.
                 pub fn can_set_online(&self, parameter: impl Into<Parameter>) -> Result<bool> {
                     can_set_online(self.handle, parameter.into())
                 }
@@ -192,7 +225,9 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to check this.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+                #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15), or an error if PICam")]
+                /// is unable to check this.
                 pub fn can_read(&self, parameter: impl Into<Parameter>) -> Result<bool> {
                     can_read(self.handle, parameter.into())
                 }
@@ -201,7 +236,9 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to check this.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+                #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15), or an error if PICam")]
+                /// is unable to check this.
                 pub fn can_wait_for_status(&self, parameter: impl Into<Parameter>) -> Result<bool> {
                     can_wait_for_status(self.handle, parameter.into())
                 }
@@ -211,7 +248,9 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to check this.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+                #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15), or an error if PICam")]
+                /// is unable to check this.
                 pub fn is_relevant(&self, parameter: impl Into<Parameter>) -> Result<bool> {
                     is_relevant(self.handle, parameter.into())
                 }
@@ -220,7 +259,9 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to check this.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+                #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15), or an error if PICam")]
+                /// is unable to check this.
                 pub fn value_type(&self, parameter: impl Into<Parameter>) -> Result<ValueType> {
                     value_type(self.handle, parameter.into()).map(ValueType::from_raw)
                 }
@@ -232,7 +273,11 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to check this.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+                #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15),")]
+                /// [`crate::Error::ParameterHasInvalidValueType`] if `parameter` isn't an enum
+                /// parameter (seen with SDK 5.15), or an error if PICam is unable to check
+                /// this.
                 pub fn enumerated_type(
                     &self,
                     parameter: impl Into<Parameter>,
@@ -244,7 +289,9 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to check this.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+                #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15), or an error if PICam")]
+                /// is unable to check this.
                 pub fn value_access(&self, parameter: impl Into<Parameter>) -> Result<ValueAccess> {
                     value_access(self.handle, parameter.into()).map(ValueAccess::from_raw)
                 }
@@ -253,7 +300,9 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to check this.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+                #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15), or an error if PICam")]
+                /// is unable to check this.
                 pub fn constraint_type(
                     &self,
                     parameter: impl Into<Parameter>,
@@ -331,7 +380,8 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to attempt the commit at all.
+                /// Returns [`crate::Error::AcquisitionInProgress`] during an acquisition (seen
+                /// with SDK 5.15), or an error if PICam is unable to attempt the commit at all.
                 pub fn commit_parameters(&self) -> Result<Vec<Parameter>> {
                     let mut array: *const sys::PicamParameter = std::ptr::null();
                     let mut count: sys::piint = 0;
@@ -355,7 +405,8 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to do this.
+                /// Returns [`crate::Error::AcquisitionInProgress`] during an acquisition (seen
+                /// with SDK 5.15), or an error if PICam is unable to do this.
                 pub fn restore_parameters_to_default_values(&self) -> Result<()> {
                     picam_call!(sys::Picam_RestoreParametersToDefaultValues(self.handle))
                 }
@@ -367,8 +418,10 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to list them, for example
-                /// because `parameter` isn't a waitable status.
+                /// Returns [`crate::Error::ParameterIsNotWaitableStatus`] if `parameter` isn't
+                /// a waitable status, including a
+                #[doc = concat!(" parameter that doesn't apply to this ", $noun, " (seen with SDK")]
+                /// 5.15), or an error if PICam is unable to list them.
                 pub fn status_parameter_purview<T: WaitablePicamValue>(
                     &self,
                     parameter: TypedParameter<T>,
@@ -386,8 +439,10 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to list them, for example
-                /// because `parameter` isn't a waitable status.
+                /// Returns [`crate::Error::ParameterIsNotWaitableStatus`] if `parameter` isn't
+                /// a waitable status, including a
+                #[doc = concat!(" parameter that doesn't apply to this ", $noun, " (seen with SDK")]
+                /// 5.15), or an error if PICam is unable to list them.
                 pub fn status_parameter_purview_untyped(
                     &self,
                     parameter: Parameter,
@@ -421,8 +476,12 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to estimate this, for example
-                /// because `parameter` isn't a waitable status.
+                /// Returns [`crate::Error::ParameterIsNotWaitableStatus`] if `parameter` isn't
+                /// a waitable status, including a
+                #[doc = concat!(" parameter that doesn't apply to this ", $noun, " (seen with SDK")]
+                /// 5.15), [`crate::Error::InvalidParameterValue`] if `value` isn't in the
+                /// status's purview (seen with SDK 5.15), or an error if PICam is unable to
+                /// estimate this.
                 pub fn estimate_time_to_status_parameter_value<T: WaitablePicamValue>(
                     &self,
                     parameter: TypedParameter<T>,
@@ -440,8 +499,14 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to estimate this, for example
-                /// because `parameter` isn't a waitable status.
+                /// - [`crate::Error::ParameterHasInvalidValueType`] if `parameter`'s values
+                ///   aren't integers (seen with SDK 5.15)
+                /// - [`crate::Error::ParameterIsNotWaitableStatus`] if `parameter` isn't a
+                ///   waitable status, including a parameter
+                #[doc = concat!("   that doesn't apply to this ", $noun, " (seen with SDK 5.15)")]
+                /// - [`crate::Error::InvalidParameterValue`] if `value` isn't in the status's
+                ///   purview (seen with SDK 5.15)
+                /// - otherwise an error if PICam is unable to estimate this
                 pub fn estimate_time_to_status_parameter_value_untyped(
                     &self,
                     parameter: Parameter,
@@ -464,9 +529,14 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::TimeOutOccurred`] if `timeout` elapses
-                /// first, or an error if PICam is unable to wait for this, for example
-                /// because `parameter` isn't a waitable status.
+                /// - [`crate::Error::TimeOutOccurred`] if `timeout` elapses first (PICam manual
+                ///   5.4.2.18)
+                /// - [`crate::Error::ParameterIsNotWaitableStatus`] if `parameter` isn't a
+                ///   waitable status, including a parameter
+                #[doc = concat!("   that doesn't apply to this ", $noun, " (seen with SDK 5.15)")]
+                /// - [`crate::Error::InvalidParameterValue`] if `value` isn't in the status's
+                ///   purview (seen with SDK 5.15)
+                /// - otherwise an error if PICam is unable to wait for this
                 pub fn wait_for_status_parameter_value<T: WaitablePicamValue>(
                     &self,
                     parameter: TypedParameter<T>,
@@ -486,9 +556,16 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::TimeOutOccurred`] if `timeout` elapses
-                /// first, or an error if PICam is unable to wait for this, for example
-                /// because `parameter` isn't a waitable status.
+                /// - [`crate::Error::TimeOutOccurred`] if `timeout` elapses first (PICam manual
+                ///   5.4.2.18)
+                /// - [`crate::Error::ParameterHasInvalidValueType`] if `parameter`'s values
+                ///   aren't integers (seen with SDK 5.15)
+                /// - [`crate::Error::ParameterIsNotWaitableStatus`] if `parameter` isn't a
+                ///   waitable status, including a parameter
+                #[doc = concat!("   that doesn't apply to this ", $noun, " (seen with SDK 5.15)")]
+                /// - [`crate::Error::InvalidParameterValue`] if `value` isn't in the status's
+                ///   purview (seen with SDK 5.15)
+                /// - otherwise an error if PICam is unable to wait for this
                 pub fn wait_for_status_parameter_value_untyped(
                     &self,
                     parameter: Parameter,
@@ -509,7 +586,10 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to read it.
+                /// Returns [`crate::Error::ParameterIsNotReadable`] if `parameter` can't be
+                /// read from hardware, including a
+                #[doc = concat!(" parameter that doesn't apply to this ", $noun, " (seen with SDK")]
+                /// 5.15), or an error if PICam is unable to read it.
                 pub fn read<T: ReadablePicamValue>(
                     &self,
                     parameter: TypedParameter<T>,
@@ -525,13 +605,17 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::ParameterHasInvalidValueType`] if PICam's call
-                /// for `T` doesn't accept `parameter`'s value type (`i32` and `bool` share
-                /// PICam's integer calls, so either is accepted for integer, on/off and
-                /// enum parameters) or `T` is an enum and `parameter` isn't an enum
-                /// parameter, [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum
-                /// other than the one `parameter`'s values belong to, or an error if PICam
-                /// is unable to read it.
+                /// - [`crate::Error::ParameterHasInvalidValueType`] if PICam's call for `T`
+                ///   doesn't accept `parameter`'s value type (`i32` and `bool` share PICam's
+                ///   integer calls, so either is accepted for integer, on/off and enum
+                ///   parameters) or `T` is an enum and `parameter` isn't an enum parameter
+                ///   (seen with SDK 5.15)
+                /// - [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum other than the
+                ///   one `parameter`'s values belong to
+                /// - [`crate::Error::ParameterIsNotReadable`] if `parameter` can't be read from
+                ///   hardware, including a parameter
+                #[doc = concat!("   that doesn't apply to this ", $noun, " (seen with SDK 5.15)")]
+                /// - otherwise an error if PICam is unable to read it
                 pub fn read_untyped<T: ReadablePicamValue>(
                     &self,
                     parameter: Parameter,
@@ -548,9 +632,13 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
-                /// if `parameter` isn't collection-constrained, or an error if PICam
-                /// is unable to query this.
+                /// - [`crate::Error::ParameterHasInvalidConstraintType`] if `parameter` isn't
+                ///   collection-constrained (seen with SDK 5.15)
+                /// - [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply to
+                #[doc = concat!("   this ", $noun, " (seen with SDK 5.15)")]
+                /// - [`crate::Error::InvalidConstraintCategory`] if `category` is one PICam
+                ///   doesn't know (seen with SDK 5.15)
+                /// - otherwise an error if PICam is unable to query this
                 pub fn collection_constraint(
                     &self,
                     parameter: impl Into<Parameter>,
@@ -583,9 +671,13 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
-                /// if `parameter` isn't range-constrained, or an error if PICam
-                /// is unable to query this.
+                /// - [`crate::Error::ParameterHasInvalidConstraintType`] if `parameter` isn't
+                ///   range-constrained (seen with SDK 5.15)
+                /// - [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply to
+                #[doc = concat!("   this ", $noun, " (seen with SDK 5.15)")]
+                /// - [`crate::Error::InvalidConstraintCategory`] if `category` is one PICam
+                ///   doesn't know (seen with SDK 5.15)
+                /// - otherwise an error if PICam is unable to query this
                 pub fn range_constraint(
                     &self,
                     parameter: impl Into<Parameter>,
@@ -617,9 +709,9 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter`
-                #[doc = concat!(" doesn't apply to this ", $noun, ", or an error if PICam is unable to")]
-                /// query this.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+                #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15), or an error if PICam")]
+                /// is unable to query this.
                 pub fn dynamics(&self, parameter: impl Into<Parameter>) -> Result<Dynamics> {
                     let mut dynamics = sys::PicamDynamicsMask(0);
                     picam_call!(sys::PicamAdvanced_GetParameterDynamics(
@@ -636,9 +728,9 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter`
-                #[doc = concat!(" doesn't apply to this ", $noun, ", or an error if PICam is unable to")]
-                /// query this.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+                #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15), or an error if PICam")]
+                /// is unable to query this.
                 pub fn extrinsic_dynamics(&self, parameter: impl Into<Parameter>) -> Result<Dynamics> {
                     let mut dynamics = sys::PicamDynamicsMask(0);
                     picam_call!(sys::PicamAdvanced_GetParameterExtrinsicDynamics(
@@ -654,9 +746,11 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
-                /// if `parameter` isn't collection-constrained, or an error if PICam
-                /// is unable to query this.
+                /// Returns [`crate::Error::ParameterHasInvalidConstraintType`] if `parameter`
+                /// isn't collection-constrained (seen with SDK 5.15),
+                /// [`crate::Error::ParameterDoesNotExist`] if `parameter`
+                #[doc = concat!(" doesn't apply to this ", $noun, " (seen with SDK 5.15), or an")]
+                /// error if PICam is unable to query this.
                 pub fn collection_constraints(
                     &self,
                     parameter: impl Into<Parameter>,
@@ -685,9 +779,11 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::ParameterHasInvalidConstraintType`]
-                /// if `parameter` isn't range-constrained, or an error if PICam
-                /// is unable to query this.
+                /// Returns [`crate::Error::ParameterHasInvalidConstraintType`] if `parameter`
+                /// isn't range-constrained (seen with SDK 5.15),
+                /// [`crate::Error::ParameterDoesNotExist`] if `parameter`
+                #[doc = concat!(" doesn't apply to this ", $noun, " (seen with SDK 5.15), or an")]
+                /// error if PICam is unable to query this.
                 pub fn range_constraints(
                     &self,
                     parameter: impl Into<Parameter>,
@@ -722,9 +818,9 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter`
-                #[doc = concat!(" doesn't apply to this ", $noun, ", or an error if PICam is")]
-                /// unable to register its callback.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+                #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15), or an error if PICam")]
+                /// is unable to register its callback.
                 pub fn watch_value<T: PicamValue>(
                     &self,
                     parameter: TypedParameter<T>,
@@ -737,10 +833,16 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum other
-                /// than the one `parameter` uses, [`crate::Error::ParameterDoesNotExist`] if
-                #[doc = concat!(" `parameter` doesn't apply to this ", $noun, ", or an error if PICam")]
-                /// is unable to register its callback.
+                /// - [`crate::Error::ParameterHasInvalidValueType`] if PICam's call for `T`
+                ///   doesn't accept `parameter`'s value type (`i32` and `bool` share PICam's
+                ///   integer calls, so either is accepted for integer, on/off and enum
+                ///   parameters) or `T` is an enum and `parameter` isn't an enum parameter
+                ///   (seen with SDK 5.15)
+                /// - [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum other than the
+                ///   one `parameter`'s values belong to
+                /// - [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply to
+                #[doc = concat!("   this ", $noun, " (seen with SDK 5.15)")]
+                /// - otherwise an error if PICam is unable to register its callback
                 pub fn watch_value_untyped<T: PicamValue>(
                     &self,
                     parameter: Parameter,
@@ -756,9 +858,9 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter`
-                #[doc = concat!(" doesn't apply to this ", $noun, ", or an error if PICam is")]
-                /// unable to register its callback.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+                #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15), or an error if PICam")]
+                /// is unable to register its callback.
                 pub fn watch_extrinsic_value<T: ReadablePicamValue>(
                     &self,
                     parameter: TypedParameter<T>,
@@ -771,10 +873,16 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum other
-                /// than the one `parameter` uses, [`crate::Error::ParameterDoesNotExist`] if
-                #[doc = concat!(" `parameter` doesn't apply to this ", $noun, ", or an error if PICam")]
-                /// is unable to register its callback.
+                /// - [`crate::Error::ParameterHasInvalidValueType`] if PICam's call for `T`
+                ///   doesn't accept `parameter`'s value type (`i32` and `bool` share PICam's
+                ///   integer calls, so either is accepted for integer, on/off and enum
+                ///   parameters) or `T` is an enum and `parameter` isn't an enum parameter
+                ///   (seen with SDK 5.15)
+                /// - [`crate::Error::EnumeratedTypeMismatch`] if `T` is an enum other than the
+                ///   one `parameter`'s values belong to
+                /// - [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply to
+                #[doc = concat!("   this ", $noun, " (seen with SDK 5.15)")]
+                /// - otherwise an error if PICam is unable to register its callback
                 pub fn watch_extrinsic_value_untyped<T: ReadablePicamValue>(
                     &self,
                     parameter: Parameter,
@@ -789,7 +897,9 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to register its callback.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+                #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15), or an error if PICam")]
+                /// is unable to register its callback.
                 pub fn watch_relevance(
                     &self,
                     parameter: impl Into<Parameter>,
@@ -806,7 +916,9 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to register its callback.
+                /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
+                #[doc = concat!(" to this ", $noun, " (seen with SDK 5.15), or an error if PICam")]
+                /// is unable to register its callback.
                 pub fn watch_value_access(
                     &self,
                     parameter: impl Into<Parameter>,
@@ -823,7 +935,11 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to register its callback.
+                /// Returns [`crate::Error::ParameterHasInvalidConstraintType`] if `parameter`
+                /// isn't collection-constrained (seen with SDK 5.15),
+                /// [`crate::Error::ParameterDoesNotExist`] if `parameter`
+                #[doc = concat!(" doesn't apply to this ", $noun, " (seen with SDK 5.15), or an")]
+                /// error if PICam is unable to register its callback.
                 pub fn watch_collection_constraint(
                     &self,
                     parameter: impl Into<Parameter>,
@@ -845,7 +961,11 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to register its callback.
+                /// Returns [`crate::Error::ParameterHasInvalidConstraintType`] if `parameter`
+                /// isn't range-constrained (seen with SDK 5.15),
+                /// [`crate::Error::ParameterDoesNotExist`] if `parameter`
+                #[doc = concat!(" doesn't apply to this ", $noun, " (seen with SDK 5.15), or an")]
+                /// error if PICam is unable to register its callback.
                 pub fn watch_range_constraint(
                     &self,
                     parameter: impl Into<Parameter>,
@@ -870,8 +990,10 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to set the notification, for example
-                /// because `parameter` isn't a status that can be waited on.
+                /// Returns [`crate::Error::ParameterIsNotWaitableStatus`] if `parameter` isn't
+                /// a waitable status, including a
+                #[doc = concat!(" parameter that doesn't apply to this ", $noun, " (seen with SDK")]
+                /// 5.15), or an error if PICam is unable to set the notification.
                 pub fn notify_when_status<T: WaitablePicamValue>(
                     &self,
                     parameter: TypedParameter<T>,
@@ -885,8 +1007,12 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns an error if PICam is unable to set the notification, for
-                /// example because `parameter` isn't a status that can be waited on.
+                /// Returns [`crate::Error::ParameterHasInvalidValueType`] if `parameter`'s
+                /// values aren't integers (seen with SDK 5.15),
+                /// [`crate::Error::ParameterIsNotWaitableStatus`] if `parameter` isn't a
+                /// waitable status, including a parameter
+                #[doc = concat!(" that doesn't apply to this ", $noun, " (seen with SDK 5.15), or")]
+                /// an error if PICam is unable to set the notification.
                 pub fn notify_when_status_untyped(
                     &self,
                     parameter: Parameter,
