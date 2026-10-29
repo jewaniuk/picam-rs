@@ -59,7 +59,8 @@ impl Accessory {
     /// # Errors
     ///
     /// Returns [`crate::Error::NoAccessoriesAvailable`] if no accessory is
-    /// connected, or an error if PICam is unable to open it.
+    /// connected (seen with SDK 5.15), or an error if PICam is unable to open
+    /// it.
     pub fn open_first(library: Arc<Library>) -> Result<Self> {
         tracing::debug!("opening first available accessory");
         let mut handle: sys::PicamHandle = std::ptr::null_mut();

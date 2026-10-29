@@ -6,9 +6,49 @@
 /// in the docs. `$ty` must also have a private
 /// `extrinsic_handle(&self) -> Result<sys::PicamHandle>`, the handle PICam
 /// registers extrinsic value callbacks and status notifications on: a device
-/// or accessory handle (PICam manual 7.4.9.3 and 7.4.9.9).
+/// or accessory handle (PICam manual 7.4.9.3 and 7.4.9.9). `acquires` marks a
+/// type that acquires, a camera or camera device, whose `set`, commit and
+/// restore are refused during an acquisition. An accessory doesn't, and its
+/// docs leave those errors out.
 macro_rules! impl_parameter_methods {
+    // cameras and camera devices acquire, and picam refuses changes during an
+    // acquisition
+    ($ty:ty, $noun:literal, acquires) => {
+        $crate::device::impl_parameter_methods!(
+            @impl $ty,
+            $noun,
+            set_tail: concat!(
+                " - [`crate::Error::AcquisitionInProgress`] during an acquisition, unless\n",
+                "   `parameter` can be set online (seen with SDK 5.15)\n",
+                " - otherwise an error if PICam is unable to set it",
+            ),
+            commit: concat!(
+                " Returns [`crate::Error::AcquisitionInProgress`] during an acquisition (seen\n",
+                " with SDK 5.15), or an error if PICam is unable to attempt the commit at all.",
+            ),
+            restore: concat!(
+                " Returns [`crate::Error::AcquisitionInProgress`] during an acquisition (seen\n",
+                " with SDK 5.15), or an error if PICam is unable to do this.",
+            )
+        );
+    };
+    // accessories don't acquire
     ($ty:ty, $noun:literal) => {
+        $crate::device::impl_parameter_methods!(
+            @impl $ty,
+            $noun,
+            set_tail: " - otherwise an error if PICam is unable to set it",
+            commit: " Returns an error if PICam is unable to attempt the commit at all.",
+            restore: " Returns an error if PICam is unable to do this."
+        );
+    };
+    (
+        @impl $ty:ty,
+        $noun:literal,
+        set_tail: $set_tail:expr,
+        commit: $commit:expr,
+        restore: $restore:expr
+    ) => {
         // the method bodies name these directly, so they're imported here
         // rather than at each invocation
         const _: () = {
@@ -76,9 +116,7 @@ macro_rules! impl_parameter_methods {
                 ///   (seen with SDK 5.15)
                 /// - [`crate::Error::InvalidParameterValue`] if `value` is out of range or not
                 ///   one of the values allowed (seen with SDK 5.15)
-                /// - [`crate::Error::AcquisitionInProgress`] during an acquisition, unless
-                ///   `parameter` can be set online (seen with SDK 5.15)
-                /// - otherwise an error if PICam is unable to set it
+                #[doc = $set_tail]
                 pub fn set<T: PicamValue>(
                     &self,
                     parameter: TypedParameter<T>,
@@ -107,9 +145,7 @@ macro_rules! impl_parameter_methods {
                 ///   (seen with SDK 5.15)
                 /// - [`crate::Error::InvalidParameterValue`] if `value` is out of range or not
                 ///   one of the values allowed (seen with SDK 5.15)
-                /// - [`crate::Error::AcquisitionInProgress`] during an acquisition, unless
-                ///   `parameter` can be set online (seen with SDK 5.15)
-                /// - otherwise an error if PICam is unable to set it
+                #[doc = $set_tail]
                 pub fn set_untyped<T: PicamValue>(
                     &self,
                     parameter: Parameter,
@@ -166,6 +202,9 @@ macro_rules! impl_parameter_methods {
                 /// Reports whether `value` could currently be set for `parameter`, a
                 /// handle from [`params`](crate::params), without actually setting it.
                 ///
+                /// A `value` out of range, or not one of the values allowed, gives `Ok(false)`
+                /// rather than an error (seen with SDK 5.15).
+                ///
                 /// # Errors
                 ///
                 /// Returns [`crate::Error::ParameterDoesNotExist`] if `parameter` doesn't apply
@@ -182,6 +221,9 @@ macro_rules! impl_parameter_methods {
 
                 /// Reports whether a `value` of a type the caller chooses could currently
                 /// be set for `parameter`, without actually setting it.
+                ///
+                /// A `value` out of range, or not one of the values allowed, gives `Ok(false)`
+                /// rather than an error (seen with SDK 5.15).
                 ///
                 /// Prefer [`Self::can_set`]. This is for parameters with no handle in
                 /// [`params`](crate::params).
@@ -380,8 +422,7 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::AcquisitionInProgress`] during an acquisition (seen
-                /// with SDK 5.15), or an error if PICam is unable to attempt the commit at all.
+                #[doc = $commit]
                 pub fn commit_parameters(&self) -> Result<Vec<Parameter>> {
                     let mut array: *const sys::PicamParameter = std::ptr::null();
                     let mut count: sys::piint = 0;
@@ -405,8 +446,7 @@ macro_rules! impl_parameter_methods {
                 ///
                 /// # Errors
                 ///
-                /// Returns [`crate::Error::AcquisitionInProgress`] during an acquisition (seen
-                /// with SDK 5.15), or an error if PICam is unable to do this.
+                #[doc = $restore]
                 pub fn restore_parameters_to_default_values(&self) -> Result<()> {
                     picam_call!(sys::Picam_RestoreParametersToDefaultValues(self.handle))
                 }

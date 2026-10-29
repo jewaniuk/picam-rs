@@ -42,7 +42,9 @@ macro_rules! define_picam_enum {
             ///
             /// # Errors
             ///
-            /// Returns an error if PICam is unable to name this value.
+            /// Returns [`crate::Error::EnumerationValueNotDefined`] for a value
+            /// PICam doesn't know, such as an `Unknown` one (seen with SDK
+            /// 5.15), or an error if PICam is unable to name this value.
             pub fn name(self, library: &$crate::Library) -> $crate::Result<String> {
                 $crate::convert::enumeration_string(
                     library,
