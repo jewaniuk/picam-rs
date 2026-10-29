@@ -89,7 +89,7 @@ fn device_holds_the_committed_values() {
     let id = CameraId::connect_demo(library, Model::PIXIS_100F, SERIAL_NUMBER)
         .expect("demo camera should connect");
     let camera = Camera::open(&id, Arc::clone(library)).expect("demo camera should open");
-    let device = camera.device().expect("the device should be found");
+    let device = camera.device();
 
     let committed = camera
         .get(params::EXPOSURE_TIME)
@@ -176,7 +176,7 @@ fn commit_to_device() {
     let id = CameraId::connect_demo(library, Model::PIXIS_100F, SERIAL_NUMBER)
         .expect("demo camera should connect");
     let camera = Camera::open(&id, Arc::clone(library)).expect("demo camera should open");
-    let device = camera.device().expect("the device should be found");
+    let device = camera.device();
 
     let pending = camera
         .get(params::EXPOSURE_TIME)
@@ -292,7 +292,7 @@ fn device_changes_are_refused_while_acquiring() {
         .expect("acquisition should start");
     {
         let during = acquisition.camera();
-        let device = during.device().expect("the device should be found");
+        let device = during.device();
         // seen with sdk 5.15, on this and two other demo models
         let refused = Some(Error::AcquisitionInProgress);
         let (mut accepted, mut refusals) = (0, 0);

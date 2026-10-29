@@ -281,7 +281,7 @@ fn extrinsic_watch_registers() {
     let (camera_watch, from_camera) = camera
         .watch_extrinsic_value(params::SENSOR_TEMPERATURE_READING)
         .expect("the temperature reading should be watched");
-    let device = camera.device().expect("the device should be found");
+    let device = camera.device();
     let (status_watch, statuses) = device
         .watch_extrinsic_value(params::SENSOR_TEMPERATURE_STATUS)
         .expect("the temperature status should be watched");
@@ -321,7 +321,7 @@ fn device_value_watch() {
     let test_library = common::library();
     let library = &test_library.library;
     let (id, camera) = open(library, Model::PIXIS_100F, SERIAL_NUMBER);
-    let device = camera.device().expect("the device should be found");
+    let device = camera.device();
 
     let (exposure_watch, exposures) = device
         .watch_value(params::EXPOSURE_TIME)
