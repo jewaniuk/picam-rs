@@ -10,6 +10,7 @@ use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rerun-if-env-changed=PICAM_DIR");
+    println!("cargo:rerun-if-env-changed=DOCS_RS");
 
     // docs.rs builds docs without linking, and has no SDK to link against
     if env::var_os("DOCS_RS").is_some() {

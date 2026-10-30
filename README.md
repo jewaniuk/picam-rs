@@ -47,28 +47,28 @@ fn main() -> picam_rs::Result<()> {
 }
 ```
 
-Without a camera, connect one of PICam's demo cameras first with `CameraId::connect_demo`.
+Without a camera, connect one of PICam's demo cameras with `CameraId::connect_demo` and open it with `Camera::open`.
 
 - **Parameters:** typed handles in `params` fix each value's type at compile time. The `_untyped` methods cover parameters with no handle.
-- **Acquired data:** borrowed from PICam's memory without copying, and the borrow checker stops the next acquisition while it's in use.
-- **Callbacks:** watches, discovery and streamed acquisitions deliver events through channels, so no user code runs inside PICam.
-- **Threads:** `Camera` is neither `Send` nor `Sync`. You decide how to share it.
+- **Acquired data:** borrowed from PICam's memory without copying, unless you give PICam a buffer or stream the acquisition, and the borrow checker stops the next acquisition while it's in use.
+- **Callbacks:** watches, discovery and streamed acquisitions deliver events through channels, so no user code runs inside PICam. The exception is `EmCalibration::calibrate`'s progress closure.
+- **Threads:** `Camera` is neither `Send` nor `Sync`, so it stays on the thread that opened it, and other threads send that thread their requests.
 
 ## Untested on hardware
 
 These have only been checked on demo cameras, or not at all where no demo exists. [HARDWARE_TESTS.md](HARDWARE_TESTS.md) lists every item and how to check it.
 
-- Accessories: everything past listing them, since there are no demo accessories.
+- Handles to cameras that have since closed.
+- Accessories: everything, since there are no demo accessories.
 - EM gain calibration, which PICam won't run on a demo camera.
-- Acquisition: overrunning the camera's buffer at high frame rates, long or fast acquisitions, stopping and ending them, PICam's acquisition errors, non-destructive readout, and pixel row order.
-- Streamed acquisitions: how PICam batches and times its callbacks on real cameras.
+- Acquisition: overrunning the camera's buffer at high frame rates, long or fast acquisitions, stopping and ending them, clearing the readout count online, refusing parameter changes while running, PICam's acquisition errors, non-destructive readout, and pixel row order.
+- Streamed acquisitions: overrun, and how PICam batches and times its callbacks on real cameras.
 - Frame metadata: time stamps, frame numbers and bit depths, and gate and modulation tracking on PI-MAX cameras.
 - Parameters: `read` and `set_online`, the parameters no demo camera has, failed commits, status waits on a cooling camera, and the errors the docs name.
 - Camera devices: that `CameraDevice` values match the hardware, and that its handle stays the same while the camera is open.
-- Watches and notifications: extrinsic readings, value access changes, status notifications, and constraint callbacks.
+- Watches and notifications: extrinsic readings, value access changes, acquisition states, status notifications, and constraint callbacks.
 - Discovery: real cameras and accessories being plugged in, unplugged and powered off.
 - Defect maps and residual charge erasure.
-- Handles to cameras that have since closed.
 
 If you try the crate on real hardware and find that one of these works or doesn't, please [open an issue](https://github.com/jewaniuk/picam-rs/issues/new?template=hardware-report.md) with your camera model, PICam version and what you saw.
 

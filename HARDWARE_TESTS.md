@@ -2,6 +2,10 @@
 
 Behaviour that has only been checked on PICam's demo cameras, or not at all where no demo exists, and needs checking on real hardware. If you check one, please [open an issue](https://github.com/jewaniuk/picam-rs/issues/new?template=hardware-report.md) saying whether it works.
 
+## Handles
+
+- [ ] a `CameraHandle` whose camera had closed gave `InvalidHandle` from every method on a demo camera (`tests/errors.rs`), need to check on hardware, in case PICam reuses a closed handle's value for a camera opened later
+
 ## Accessories
 
 - [ ] no demo accessories exist, so `Accessory` and `AccessoryId` were only checked with nothing connected, need to open a real accessory and check `id`, `is_connected`, `AccessoryId::is_connected`, `is_open_elsewhere`, `firmware_details`, `list_open_accessories` and, on a light source, `light_source_reference`, then configure it through the shared parameter methods (`parameters`, a `get` and `set`, and a `range_constraint` or `collection_constraint`), checking that `set` takes effect without a commit and `are_parameters_committed` stays `true` (manual 5.4.6), and that a value type accessories don't use (`get_untyped::<i64>`, or `params::ROIS`) is refused, then drop the `Accessory` and query a leftover `AccessoryHandle` from `list_open_accessories` to see what comes back, like `CameraHandle` above
@@ -84,7 +88,3 @@ Behaviour that has only been checked on PICam's demo cameras, or not at all wher
 
 - [ ] demo cameras have no sensor defects, so `pixel_defect_map`, `star_defect_map` and `star_defect_maps` only returned empty maps, need to read them on a camera with known defects
 - [ ] `Camera::erase_residual` was never called, since the PIXIS 100F demo camera the test uses can't erase residual charge, need to check it on a camera whose `can_erase_residual` is true
-
-## Handles
-
-- [ ] a `CameraHandle` whose camera had closed gave `InvalidHandle` from every method on a demo camera (`tests/errors.rs`), need to check on hardware, in case PICam reuses a closed handle's value for a camera opened later
