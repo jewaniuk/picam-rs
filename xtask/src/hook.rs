@@ -18,7 +18,7 @@ use crate::gate::{self, Output};
 /// The exit code that makes Claude Code block a tool call.
 const BLOCK: u8 = 2;
 
-/// Runs before every Bash command. Blocks pushes to `main`, force pushes,
+/// Runs before every Bash and PowerShell command. Blocks pushes to `main`, force pushes,
 /// branch deletion and `gh pr merge`, runs the gate before any other `git
 /// push` or `gh pr create`, and asks the user before anything that runs a
 /// hardware test.
