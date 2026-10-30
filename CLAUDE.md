@@ -127,6 +127,17 @@ Follow `DESIGN.md`'s Testing section. In short:
 
 Every chunk adds tests for what it wraps where a demo camera allows it. When something can't be tested on a demo camera, say so in the report and add it to `HARDWARE_TESTS.md`.
 
+## Hardware tests
+
+The `tests/hardware_*.rs` files drive real devices. Each test is `#[ignore]`d and runs only when `PICAM_RS_HARDWARE` names it, and the pre-bash hook, which runs for the Bash and PowerShell tools, asks the maintainer before any command that mentions `PICAM_RS_HARDWARE`, a `hardware_` test or running ignored tests. It has only been tried on Bash, so run hardware tests through Bash. On top of that, for every run:
+
+1. Before running, tell the maintainer which test it is and quote its doc comment: what it changes on the device, how long it takes, and any preparation.
+2. Wait for the maintainer's explicit yes for that run. Approval of one run doesn't cover the next.
+3. Run that one test, with `--exact` and `--nocapture`.
+4. Show the output, and explain anything that differs from what the test expected.
+
+Never commit hardware test output: it holds serial numbers, and an accessory's calibration data stays out of the repository. `PICAM_RS_HARDWARE_DEMO=1` rehearses a PIXIS test on a demo camera, and still needs the maintainer's yes, since the hook can't tell a rehearsal from a real run.
+
 ## Reference material
 
 The PICam Programmer's Manual and other reference material live in `reference/`, which is gitignored and exists only on the lab computer. `reference/README.md` explains what is there and how to search it. Search for the section you need rather than reading whole documents. Cite the manual section in code comments and reports when it settles a behaviour, but never copy its text into the repository.

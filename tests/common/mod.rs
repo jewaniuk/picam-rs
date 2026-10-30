@@ -37,6 +37,41 @@ pub fn lock() -> MutexGuard<'static, ()> {
     PICAM.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// What a hardware test runs against.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Hardware {
+    /// The real device attached to this computer.
+    Real,
+    /// A demo PIXIS 100F, to rehearse a test without hardware.
+    Demo,
+}
+
+/// Says whether the maintainer approved running hardware test `test`, by
+/// naming it in `PICAM_RS_HARDWARE`, and what it then runs against: a demo
+/// camera when `PICAM_RS_HARDWARE_DEMO` is set to anything but `0`,
+/// otherwise the real device.
+///
+/// Otherwise it prints why the test was skipped and returns `None`, before
+/// the test touches PICam at all. See `HARDWARE_TESTS.md`.
+pub fn hardware_approved(test: &str) -> Option<Hardware> {
+    if std::env::var("PICAM_RS_HARDWARE").as_deref() != Ok(test) {
+        println!(
+            "skipped `{test}`: not approved. It runs only with PICAM_RS_HARDWARE={test} \
+             (see HARDWARE_TESTS.md)"
+        );
+        return None;
+    }
+    // any value but 0 rehearses, so a typo like `true` never reaches hardware
+    let demo = std::env::var("PICAM_RS_HARDWARE_DEMO");
+    if demo.is_ok_and(|value| value != "0") {
+        println!("`{test}`: rehearsing on a demo camera");
+        Some(Hardware::Demo)
+    } else {
+        println!("`{test}`: running on real hardware");
+        Some(Hardware::Real)
+    }
+}
+
 /// Takes the global PICam lock and initializes a fresh library under it.
 ///
 /// # Panics
