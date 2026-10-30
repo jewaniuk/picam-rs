@@ -110,27 +110,28 @@ fn check_bash(root: &Path) -> Result<Option<String>, String> {
 
 /// Says why `command` might run a hardware test, if it might: it mentions
 /// `PICAM_RS_HARDWARE`, a `hardware_` test, or running ignored tests, in any
-/// shell's syntax or quoting. Hardware tests drive real devices, so the
+/// shell's syntax, quoting or case. Hardware tests drive real devices, so the
 /// maintainer approves every run (CLAUDE.md, "Hardware tests"). Matching
 /// any mention also asks for harmless commands like a `grep`, which is the
 /// safe side to err on.
 fn hardware_run(command: &str) -> Option<String> {
-    let runs_hardware = [
-        "PICAM_RS_HARDWARE",
+    // lowercase, since windows doesn't care about the case of variable names
+    let command = command.to_lowercase();
+    let mention = [
+        "picam_rs_hardware",
         "hardware_",
         "--ignored",
         "--include-ignored",
         // cargo nextest's flag for running ignored tests
         "--run-ignored",
     ]
-    .iter()
-    .any(|mention| command.contains(mention));
-    runs_hardware.then(|| {
-        "this runs a hardware test, which drives real devices. Approve it only \
-         if the agent has explained this run and you agreed to it \
-         (CLAUDE.md, \"Hardware tests\")"
-            .to_string()
-    })
+    .into_iter()
+    .find(|mention| command.contains(mention))?;
+    Some(format!(
+        "this command mentions `{mention}`, so it may run a hardware test, which \
+         drives real devices. If it does, approve it only if the agent has \
+         explained this run and you agreed to it (CLAUDE.md, \"Hardware tests\")"
+    ))
 }
 
 /// Checks the arguments of a `git push` for anything an agent must never
@@ -215,6 +216,7 @@ mod tests {
             "cargo nextest run -p picam-rs --run-ignored only",
             "cargo test -p picam-rs -- '--ignored'",
             "grep -n hardware_ tests/hardware_pixis.rs",
+            "$env:picam_rs_hardware = 'cooling'",
         ] {
             assert!(hardware_run(command).is_some(), "should ask: {command}");
         }

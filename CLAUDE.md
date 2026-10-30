@@ -129,7 +129,7 @@ Every chunk adds tests for what it wraps where a demo camera allows it. When som
 
 ## Hardware tests
 
-The `tests/hardware_*.rs` files drive real devices. Each test is `#[ignore]`d and runs only when `PICAM_RS_HARDWARE` names it, and the pre-bash hook asks the maintainer before any Bash command that mentions `PICAM_RS_HARDWARE`, a `hardware_` test or running ignored tests. The hook only covers the Bash tool, so run hardware tests only through Bash. On top of that, for every run:
+The `tests/hardware_*.rs` files drive real devices. Each test is `#[ignore]`d and runs only when `PICAM_RS_HARDWARE` names it, and the pre-bash hook, which runs for the Bash and PowerShell tools, asks the maintainer before any command that mentions `PICAM_RS_HARDWARE`, a `hardware_` test or running ignored tests. It has only been tried on Bash, so run hardware tests through Bash. On top of that, for every run:
 
 1. Before running, tell the maintainer which test it is and quote its doc comment: what it changes on the device, how long it takes, and any preparation.
 2. Wait for the maintainer's explicit yes for that run. Approval of one run doesn't cover the next.
