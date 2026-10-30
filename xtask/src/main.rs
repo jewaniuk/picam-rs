@@ -7,8 +7,8 @@
 //!   wrapper, using `dead_code` warnings from `cargo check` on the raw
 //!   bindings in `sys` as the signal. Pass `--list` to also print every
 //!   function that is still unwrapped, grouped by header.
-//! - `generate`: writes the files in `src/generated/`, the lists taken
-//!   straight from the PICam headers. Pass `--check` to write nothing and
+//! - `generate`: writes the files in `src/generated/`, the raw bindings and
+//!   the lists taken straight from the PICam headers. Pass `--check` to write nothing and
 //!   fail if they are out of date, or if a hand-written enum wrapper misses a
 //!   header value. See `generate.rs`.
 //! - `gate`: runs the checks a branch must pass before it is pushed or turned
@@ -28,7 +28,7 @@ use std::process::{Command, ExitCode};
 
 use serde_json::Value;
 
-/// The headers that declare the PICam API functions, matching `build.rs`
+/// The headers that declare the PICam API functions, matching the bindings
 /// (minus `pil_platform.h`, which declares no functions).
 const HEADER_NAMES: [&str; 5] = [
     "picam.h",
@@ -38,7 +38,8 @@ const HEADER_NAMES: [&str; 5] = [
     "picam_special.h",
 ];
 
-/// Where the PICam SDK installs its headers on Windows, matching `build.rs`.
+/// Where the PICam SDK installs its headers on Windows, matching `build.rs`,
+/// which links `Picam.lib` from beside them.
 const DEFAULT_INCLUDE_DIR: &str = r"C:\Program Files\Princeton Instruments\PICam\Includes";
 
 const USAGE: &str = "usage: cargo run -p xtask -- \
