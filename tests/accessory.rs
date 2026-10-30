@@ -1,6 +1,6 @@
 //! Tests for identifying and opening accessories. PICam has no demo
 //! accessories, so these check the paths where no accessory is connected,
-//! and the rest is on the README's "to test" list.
+//! and the rest is in `HARDWARE_TESTS.md`.
 
 mod common;
 

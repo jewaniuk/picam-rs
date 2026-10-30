@@ -20,6 +20,7 @@ Decisions marked **settled** were made deliberately and should not be changed wi
 
 - Licensed `MIT OR Apache-2.0`.
 - The PICam SDK's headers, `.lib` files and DLLs are **never** committed or published. Users install the SDK themselves. `vendor/` (headers for local development) is gitignored for this reason.
+- The raw bindings bindgen generates from the headers are committed in `src/generated/bindings.rs`, without header comments, so the crate builds without the SDK's headers, for example on docs.rs (decided with the maintainer on 2026-10-29).
 - Publishing to crates.io was checked and is fine, on the condition that no SDK files and no instrument-calibration material ever enter this repository.
 
 ## Development environment
@@ -28,13 +29,13 @@ The crate only runs on Windows, the only platform the lab uses. The SDK also shi
 
 | Machine | What works | Header location |
 |---|---|---|
-| macOS dev laptop | `cargo check` only (no linking) | `vendor/`, via `PICAM_DIR` set in `.cargo/config.toml` |
+| macOS dev laptop | `cargo check` only (no linking) | none needed to build; `vendor/`, via `PICAM_DIR` set in `.cargo/config.toml`, for `xtask generate` |
 | Windows lab computers | `cargo build`, `cargo test`, demo cameras, real hardware | default SDK install path |
 
 - [`LAB_SETUP.md`](LAB_SETUP.md) is the checklist for preparing a lab computer for development.
-- `build.rs` reads the headers from `PICAM_DIR`, falling back to `C:\Program Files\Princeton Instruments\PICam\Includes`, and links `Picam.lib` from the sibling `Libraries` directory on Windows only.
+- `build.rs` only links `Picam.lib`, from the `Libraries` directory beside `PICAM_DIR`, falling back to beside `C:\Program Files\Princeton Instruments\PICam\Includes`, when targeting Windows and not on docs.rs. `xtask generate` reads the headers from the same places to write the bindings.
 - `.cargo/` and `vendor/` are gitignored, so a fresh clone on a lab computer uses the default path with no setup.
-- bindgen needs LLVM/libclang installed (`choco install llvm`).
+- bindgen, run by `xtask generate` and the gate, needs LLVM/libclang installed (`choco install llvm`). Building the crate doesn't.
 - Bindings are generated for `--target=x86_64-pc-windows-msvc` even on macOS, so type sizes match the real target.
 - The bindings were generated against **PICam SDK 5.15.11.2503 (March 2025)**. Check that the lab computer's installed SDK matches before relying on behaviour.
 
@@ -68,13 +69,13 @@ The crate only runs on Windows, the only platform the lab uses. The SDK also shi
 
 ### Single crate, private `sys` module (settled)
 
-There is no separate `picam-sys` crate. The raw bindings live in the private `sys` module (`src/sys.rs`, which `include!`s bindgen's output). Users of the crate must never need to touch, import or even see a `sys` type. See [Public API rules](#public-api-rules).
+There is no separate `picam-sys` crate. The raw bindings live in the private `sys` module (`src/sys.rs`, which `include!`s bindgen's output from `src/generated/bindings.rs`, written by `xtask generate`). Users of the crate must never need to touch, import or even see a `sys` type. See [Public API rules](#public-api-rules).
 
 ### Enums and undefined behaviour (settled)
 
 A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. PICam can return enum values the bindings don't know about, for example when the installed runtime is newer than the SDK used to generate them. So:
 
-- In `build.rs`, bindgen generates real Rust enums by default, but any enum whose values **come back from C** is generated as a newtype (`.newtype_enum(...)`): a struct wrapping a plain integer, where any value is valid. Add new entries there whenever a new such enum is wrapped. Bitmask enums use `.bitfield_enum(...)`.
+- In the bindgen setup in `xtask/src/generate.rs`, bindgen generates real Rust enums by default, but any enum whose values **come back from C** is generated as a newtype (`.newtype_enum(...)`): a struct wrapping a plain integer, where any value is valid. Add new entries there whenever a new such enum is wrapped, and rerun `generate`. Bitmask enums use `.bitfield_enum(...)`.
 - Public-facing enums are defined with `define_picam_enum!` (in `src/convert.rs`). Each generated enum has an `Unknown(i32)` variant, `pub(crate)` `from_raw`/`to_raw` conversions and a `name(&Library)` method. `Parameter` uses its own macro, `define_parameters!`, for the same reason.
 - Readable names come from `Picam_GetEnumerationString`, which needs an initialized library, so they are a `name(self, library: &Library) -> Result<String>` method rather than `Display`. Only single-value enums, `Parameter` and `Model` get `name()`:
   - Bitmask types (`RoisConstraintRules` and any later `*Mask` wrapper) rely on `bitflags`, whose `Debug` and `iter_names` already give flag names without a PICam call. The manual doesn't say what `Picam_GetEnumerationString` returns for a combination of flags.
@@ -111,11 +112,11 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 
 - `Camera` owns a `PicamHandle` and closes it on `Drop`, after clearing the watches on its model and device handles (see [Callbacks](#callbacks-settled)). It is the camera *model* handle `Picam_OpenCamera` gives (manual 4.3.2.4): a copy of the camera's parameters in memory, whose changes reach the physical camera, the *device*, only when committed (manual 2.6.1). `Picam_CloseCamera` closes both handles (manual 4.3.2.6). `Camera::open_device` opens through `PicamAdvanced_OpenCameraDevice` instead and keeps the model handle the same way (decided with the maintainer on 2026-10-26).
 - `Camera::device()` gives a `CameraDevice<'_>`, a view of the device handle with the parameter methods `Camera` and `Accessory` share. It borrows the camera, so it can't outlive it, and it has no `Drop`. Setting a value through it also sets it on the model (manual 5.4.1.3) (decided with the maintainer on 2026-10-26). One can be made between an acquisition's updates through `Acquisition::camera`, but PICam then refuses every change through it with `Error::AcquisitionInProgress`, except to the parameters it can set online, the same ones `Camera::set_online` changes (seen on three demo models with SDK 5.15, and checked on the PIXIS 100F by `tests/camera_device.rs`). So it can't change the data layout the acquisition views rely on.
-- `Camera` looks its device handle up once when it opens (`Camera::open_device` gets it directly) and keeps it, closing the camera again if the lookup fails. `Picam_CloseCamera` closes both handles, so the device handle needs no cleanup of its own. Keeping it assumes it stays the same for as long as the camera is open, which the manual doesn't say. This is on the README's "to test" list. The `picam_special.h` functions refuse the model handle with `Error::InvalidHandle` (seen on a demo camera with SDK 5.15), so they use it, as do `CameraDevice`, extrinsic watches and clearing watches on close, which therefore can't fail to find it (decided with the maintainer on 2026-10-26, replacing a lookup for each call).
+- `Camera` looks its device handle up once when it opens (`Camera::open_device` gets it directly) and keeps it, closing the camera again if the lookup fails. `Picam_CloseCamera` closes both handles, so the device handle needs no cleanup of its own. Keeping it assumes it stays the same for as long as the camera is open, which the manual doesn't say. This is in `HARDWARE_TESTS.md`. The `picam_special.h` functions refuse the model handle with `Error::InvalidHandle` (seen on a demo camera with SDK 5.15), so they use it, as do `CameraDevice`, extrinsic watches and clearing watches on close, which therefore can't fail to find it (decided with the maintainer on 2026-10-26, replacing a lookup for each call).
 - `Camera` also owns the acquisition buffer it gives PICam, if any (see [Acquisition](#acquisition-settled)). It's memory the OS allocates, held by a raw pointer, which keeps `Camera` neither `Send` nor `Sync` as before.
 - `Camera` is deliberately **not** `Send` or `Sync`. This falls out naturally from the raw-pointer handle and must stay that way: downstream code decides how to manage thread safety (the same choice as `tlpm-rs`'s `PowerMeter`). Never add `unsafe impl Send/Sync` without the maintainer's approval.
 - `CameraId` identifies a camera whether or not it is open. It is spelled `CameraId`, not `CameraID`, following Rust naming conventions.
-- `CameraHandle<'a>` is a non-owning view of a handle that is open somewhere in the process, returned by `Camera::list_open_cameras` (model handles) and `Camera::list_open_camera_devices` (device handles). `handle_type` says which, and `model` and `device` look up the other. It never closes the handle, and its lifetime ties it to the `Library`. A call on a handle that has since been closed should fail with `Error::InvalidHandle`, which is listed in the README's "to test" list to confirm on hardware.
+- `CameraHandle<'a>` is a non-owning view of a handle that is open somewhere in the process, returned by `Camera::list_open_cameras` (model handles) and `Camera::list_open_camera_devices` (device handles). `handle_type` says which, and `model` and `device` look up the other. It never closes the handle, and its lifetime ties it to the `Library`. A call on a handle that has since been closed should fail with `Error::InvalidHandle`, which `HARDWARE_TESTS.md` lists to confirm on hardware.
 - Method names say what they do. For example, `list_open_cameras` (not `open_cameras`) so it isn't mistaken for a way to open cameras.
 - Demo cameras: `CameraId::connect_demo(&library, model, serial_number)` creates one and `id.disconnect_demo(&library)` removes it; `Camera::available_demo_models(&library)` lists the models.
 
@@ -242,8 +243,8 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 ## Progress tracking
 
 - `cargo run -p xtask -- progress` counts `dead_code` warnings from `cargo check` and reports how many of the 199 header functions are wired into the safe layer, overall and per header. Add `--list` to print every function still unwrapped. It also reports how many of the 58 header enums are wrapped, counting an enum once `src/` names its raw type as `sys::<Name>`. Unused-code warnings can't show this for enums, because a raw struct that an unwrapped function takes keeps the enums in its fields from being reported. It is plain Rust (the `xtask` workspace member, never published), so it runs the same on macOS and Windows. Because the tool relies on these warnings, the crate deliberately has **no** `#![allow(dead_code)]`; don't add one.
-- `cargo run -p xtask -- generate` writes the files in `src/generated/` from the installed headers, and `generate --check` checks them and the hand-written enums without writing anything. See [Enums and undefined behaviour](#enums-and-undefined-behaviour-settled).
-- The README's "to test" list collects behaviour that can only be confirmed on real hardware or with the SDK running. Add to it whenever an assumption can't be checked from the manual.
+- `cargo run -p xtask -- generate` writes the files in `src/generated/`, the raw bindings and the lists, from the installed headers, and `generate --check` checks them and the hand-written enums without writing anything. See [Enums and undefined behaviour](#enums-and-undefined-behaviour-settled).
+- `HARDWARE_TESTS.md` collects behaviour that can only be confirmed on real hardware or with the SDK running, grouped by area. Add to it whenever an assumption can't be checked from the manual. The README summarizes it by area for users, so an item in a new area needs a line there too.
 
 ## Roadmap
 
@@ -282,7 +283,7 @@ Decided with the maintainer on 2026-10-25. Two chunks, after stage 1, because th
   - Before the untyped fallback reads or writes an enum value, it checks the parameter's enumerated type with `Picam_GetParameterEnumeratedType`, since PICam reads every enum through the same integer call and can't catch a mismatch itself. This waits for this chunk because no enum value types exist before it.
   - Generate the 39 hardware enums, `ActiveShutter` through `VacuumStatus`. The six `*Mask` enums use `bitflags`, and the rest use `define_picam_enum!`.
   - Docs are short and generated: each enum names its `Parameter`, and each value names its PICam constant.
-  - Enum parameters switch from `i32` to their enum through a mapping table in the generator, matched by name with overrides. It is checked against `Camera::enumerated_type` on the demo models, and any parameter no demo model has goes on the README's "to test" list.
+  - Enum parameters switch from `i32` to their enum through a mapping table in the generator, matched by name with overrides. It is checked against `Camera::enumerated_type` on the demo models, and any parameter no demo model has goes in `HARDWARE_TESTS.md`.
   - The acquisition enums (`AcquisitionState`, `AcquisitionErrorsMask` and `AcquisitionStateErrorsMask`) wait for acquisition. The advanced API's (`DiscoveryAction`, `HandleType` and `DynamicsMask`) wait for stage 4.
 
 ### 3. Remaining `picam.h` (7 functions, plus `Picam_DestroyCalibrations` in stage 5)
@@ -323,9 +324,9 @@ These largely mirror patterns already in `camera.rs`.
 
 - [x] the API review: `Camera::device` returns the `CameraDevice` without a `Result`, and the status methods are typed, with `Duration` timeouts (decided with the maintainer on 2026-10-29)
 - [x] a pass through the manual to fill in `# Errors` sections (parts 1, 2a and 2b: the parameter methods, identification and lifecycle, and acquisition and discovery)
-- [ ] a crate-level README with an experimental notice
+- [x] a crate-level README with an experimental notice, with the full hardware test list in `HARDWARE_TESTS.md`, the crates.io metadata, and committed bindings so docs.rs can build the crate
 - [x] revisit the shared `commit_parameters` and `are_parameters_committed` docs, which read oddly on a `CameraDevice`, where `set` isn't pending (left until then, decided with the maintainer on 2026-10-26)
-- [ ] hardware testing from the README's "to test" list, then publishing
+- [ ] hardware testing from `HARDWARE_TESTS.md`, then publishing
 
 ## Open questions
 

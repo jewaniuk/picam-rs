@@ -6,7 +6,7 @@ Instructions for agents working on `picam-rs`. This file says **how** to work: t
 
 ## The project
 
-`picam-rs` is a safe, idiomatic Rust wrapper around the Teledyne Princeton Instruments PICam C API (SDK 5.15), which controls their scientific cameras. The goal is to wrap all 199 API functions. The raw bindgen output lives in the private `sys` module, and no `sys` type may ever appear in the public API.
+`picam-rs` is a safe, idiomatic Rust wrapper around the Teledyne Princeton Instruments PICam C API (SDK 5.15), which controls their scientific cameras. The goal is to wrap all 199 API functions. The raw bindgen output, which `xtask generate` writes to `src/generated/bindings.rs`, lives in the private `sys` module, and no `sys` type may ever appear in the public API.
 
 This repository is **public**. Never commit PICam SDK files (headers, libraries, DLLs), text or excerpts from the PICam manual, or anything about calibrating a specific instrument.
 
@@ -19,7 +19,7 @@ This repository is **public**. Never commit PICam SDK files (headers, libraries,
 | format | `cargo fmt --all` |
 | the gate, which must pass before pushing | `cargo run -p xtask -- gate` (`generate --check`, format check, `cargo clippy -p picam-rs --all-targets -- -D warnings -A dead_code`, then the `picam-rs` and `xtask` tests) |
 | progress | `cargo run -p xtask -- progress` (add `--list` for every unwrapped function) |
-| regenerate the lists taken from the headers | `cargo run -p xtask -- generate` |
+| regenerate the bindings and lists taken from the headers | `cargo run -p xtask -- generate` |
 | check them without writing | `cargo run -p xtask -- generate --check` (the gate runs this) |
 | public API listing | `cargo public-api --package picam-rs` |
 
@@ -57,7 +57,7 @@ Stop and ask the maintainer **before**:
 1. changing anything `DESIGN.md` marks as settled, or changing an existing public signature or type
 2. adding a public type, trait or module that the approved plan doesn't mention
 3. adding or changing a dependency
-4. editing `build.rs`, beyond adding `newtype_enum`/`bitfield_enum` lines
+4. editing `build.rs`, or the bindgen setup in `xtask/src/generate.rs` beyond adding `newtype_enum`/`bitfield_enum` lines
 5. writing an `unsafe` pattern not already used in the crate, or any `unsafe impl Send` or `unsafe impl Sync`
 6. writing acquisition or callback code before its design discussion (below) has ended with the maintainer's approval
 7. using a new pattern because the existing ones don't fit cleanly
@@ -94,7 +94,7 @@ Any `Send`/`Sync` question that acquisition or callbacks raise, such as stopping
 
 - every raw call goes through `picam_call!`
 - PICam-allocated memory: copy into owned types, then call the matching `Picam_Destroy*`, and only on a non-null pointer, and free it on errors too (`free_on_error!`)
-- enums whose values come from C: a `newtype_enum` line in `build.rs` plus a `define_picam_enum!` wrapper, never a raw Rust enum
+- enums whose values come from C: a `newtype_enum` line in the bindgen setup in `xtask/src/generate.rs` plus a `define_picam_enum!` wrapper, never a raw Rust enum
 - public types are re-exported from `lib.rs`; modules stay private, except the generated `params` module
 - every public item and field has a `///` doc, every fallible public function has `# Errors`, every `unsafe fn` has `# Safety`, and every `unsafe` block has a `// SAFETY:` comment
 - inline `//` comments are lowercase with minimal punctuation
@@ -125,7 +125,7 @@ Follow `DESIGN.md`'s Testing section. In short:
 - every file in `tests/` starts with a `//!` doc comment
 - drop things part-way through a test explicitly with `drop(...)`, and name values that must live to the end `_name`, never `_`
 
-Every chunk adds tests for what it wraps where a demo camera allows it. When something can't be tested on a demo camera, say so in the report and add it to the README's "to test" list.
+Every chunk adds tests for what it wraps where a demo camera allows it. When something can't be tested on a demo camera, say so in the report and add it to `HARDWARE_TESTS.md`.
 
 ## Reference material
 
@@ -144,7 +144,7 @@ You may make these changes without asking, as long as the report mentions each o
 
 - tick roadmap boxes in `DESIGN.md` and update its "functions wrapped" count
 - add to `DESIGN.md`'s open questions
-- add items to the README's "to test" list
+- add items to `HARDWARE_TESTS.md`
 - update the status column of `DESIGN.md`'s module map
 
 Anything else in `DESIGN.md` falls under stop-and-ask rule 11.
@@ -160,7 +160,7 @@ The PR description, with these sections in order:
 5. **Deviations:** anything that doesn't follow `DESIGN.md` or the reference implementations exactly, and why.
 6. **Tests:** what was added, the results, and what couldn't be tested and why.
 7. **Review:** each reviewer finding with its severity, and what was done about it (fixed, or why not). Nits that were skipped can be summarized in one line.
-8. **Assumptions to check on hardware:** each one is also added to the README's "to test" list.
+8. **Assumptions to check on hardware:** each one is also added to `HARDWARE_TESTS.md`.
 9. **Open questions.**
 
 Write "none" under a section rather than leaving it out.
