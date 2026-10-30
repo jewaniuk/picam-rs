@@ -349,9 +349,9 @@ fn cooling() {
 ///
 /// **Time:** seconds.
 ///
-/// **Preparation:** the camera cooled and locked at the set point, by
-/// `cooling` or by LightField, and the same `PICAM_RS_SET_POINT` as the run
-/// that cooled it.
+/// **Preparation:** the camera cooled and locked, by `cooling` or by
+/// LightField, with `PICAM_RS_SET_POINT` at the set point it was cooled to
+/// (LightField's, if LightField cooled it).
 #[test]
 #[ignore = "hardware: needs a PIXIS, see HARDWARE_TESTS.md"]
 fn cooling_locked() {
@@ -371,7 +371,8 @@ fn cooling_locked() {
     assert_eq!(
         temperature_status(&camera),
         Ok(SensorTemperatureStatus::Locked),
-        "cool the camera first, with `cooling` or LightField"
+        "cool the camera first, with `cooling` or LightField, and give the set point it was \
+         cooled to as `PICAM_RS_SET_POINT`"
     );
 
     let start = Instant::now();
