@@ -3,7 +3,9 @@
 //! Claude Code sends each hook a JSON description of the tool call on stdin
 //! and acts on the exit code: 0 lets the call go ahead, and 2 blocks it and
 //! shows stderr to the agent so it can see why. Any other exit code only
-//! warns, so everything here that means "block" must exit with 2.
+//! warns, so everything here that means "block" must exit with 2. To have
+//! Claude Code ask the user instead, a hook prints a JSON decision on stdout
+//! and exits with 0.
 
 use std::io::Read;
 use std::path::Path;
@@ -17,13 +19,25 @@ use crate::gate::{self, Output};
 const BLOCK: u8 = 2;
 
 /// Runs before every Bash command. Blocks pushes to `main`, force pushes,
-/// branch deletion and `gh pr merge`, and runs the gate before any other
-/// `git push` or `gh pr create`.
+/// branch deletion and `gh pr merge`, runs the gate before any other `git
+/// push` or `gh pr create`, and asks the user before anything that runs a
+/// hardware test.
 ///
 /// Fails closed: if the hook input can't be read, the command is blocked.
 pub fn pre_bash(root: &Path) -> ExitCode {
     match check_bash(root) {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(None) => ExitCode::SUCCESS,
+        Ok(Some(reason)) => {
+            let decision = serde_json::json!({
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "ask",
+                    "permissionDecisionReason": reason,
+                }
+            });
+            println!("{decision}");
+            ExitCode::SUCCESS
+        }
         Err(reason) => {
             eprintln!("{reason}");
             ExitCode::from(BLOCK)
@@ -49,12 +63,13 @@ pub fn post_edit() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// Decides whether a Bash command may run.
+/// Decides whether a Bash command may run, and whether the user must be
+/// asked first, returning the reason to show them if so.
 ///
 /// # Errors
 ///
 /// Returns the reason to show the agent when the command is blocked.
-fn check_bash(root: &Path) -> Result<(), String> {
+fn check_bash(root: &Path) -> Result<Option<String>, String> {
     let input = read_input()?;
     let command = input["tool_input"]["command"]
         .as_str()
@@ -90,7 +105,28 @@ fn check_bash(root: &Path) -> Result<(), String> {
             format!("the gate failed, so the command was blocked. Fix this first:\n\n{e}")
         })?;
     }
-    Ok(())
+    Ok(hardware_run(command))
+}
+
+/// Says why `command` would run a hardware test, if it would: it sets
+/// `PICAM_RS_HARDWARE`, runs ignored tests, or runs a `hardware_` test
+/// binary directly. Hardware tests drive real devices, so the maintainer
+/// approves every run (CLAUDE.md, "Hardware tests").
+fn hardware_run(command: &str) -> Option<String> {
+    let runs_hardware = command.split([';', '|', '&', '\n']).any(|segment| {
+        segment.split_whitespace().any(|word| {
+            word.contains("PICAM_RS_HARDWARE=")
+                || matches!(word, "--ignored" | "--include-ignored")
+                || word.contains("deps/hardware_")
+                || word.contains("deps\\hardware_")
+        })
+    });
+    runs_hardware.then(|| {
+        "this runs a hardware test, which drives real devices. Approve it only \
+         if the agent has explained this run and you agreed to it \
+         (CLAUDE.md, \"Hardware tests\")"
+            .to_string()
+    })
 }
 
 /// Checks the arguments of a `git push` for anything an agent must never
@@ -154,4 +190,37 @@ fn read_input() -> Result<Value, String> {
         .read_to_string(&mut text)
         .map_err(|e| format!("could not read the hook input: {e}"))?;
     serde_json::from_str(&text).map_err(|e| format!("hook input is not valid JSON: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hardware_runs_need_the_user() {
+        for command in [
+            "PICAM_RS_HARDWARE=cooling cargo test -p picam-rs --test hardware_pixis -- --ignored --exact cooling",
+            "export PICAM_RS_HARDWARE=cooling",
+            "$env:PICAM_RS_HARDWARE=\"cooling\"",
+            "cargo test -- --include-ignored",
+            "cd x && cargo test -p picam-rs -- --ignored",
+            "target/debug/deps/hardware_pixis-0123.exe --ignored",
+            r"target\debug\deps\hardware_pixis-0123.exe",
+        ] {
+            assert!(hardware_run(command).is_some(), "should ask: {command}");
+        }
+    }
+
+    #[test]
+    fn other_commands_run_freely() {
+        for command in [
+            "cargo test -p picam-rs",
+            "cargo test -p picam-rs --test hardware_pixis --no-run",
+            "cargo run -p xtask -- gate",
+            "grep -n hardware_ tests/hardware_pixis.rs",
+            "git commit -m 'added the PICAM_RS_HARDWARE opt-in'",
+        ] {
+            assert!(hardware_run(command).is_none(), "shouldn't ask: {command}");
+        }
+    }
 }
