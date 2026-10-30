@@ -1,7 +1,7 @@
 //! Tests for sensor defect maps (`Camera::pixel_defect_map`,
 //! `star_defect_map` and `star_defect_maps`). Demo cameras have no defects,
 //! so these check the calls succeed with the model handle `Camera` holds and
-//! return empty maps, and real defect data is on the README's "to test" list.
+//! return empty maps, and real defect data is in `HARDWARE_TESTS.md`.
 
 mod common;
 

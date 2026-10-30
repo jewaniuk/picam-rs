@@ -9,7 +9,7 @@ Each part ends with a check. Don't move on until it passes.
 Most of these are already on lab computers that build `adam`.
 
 - [ ] **Rust:** `rustc --version` and `cargo --version` both work. If not, install from <https://rustup.rs>.
-- [ ] **LLVM** (bindgen needs libclang): `clang --version` works. If not, run `choco install llvm` in an **administrator** PowerShell.
+- [ ] **LLVM** (bindgen needs libclang, for `xtask generate` and the gate): `clang --version` works. If not, run `choco install llvm` in an **administrator** PowerShell.
 - [ ] **Git for Windows:** `git --version` works.
 - [ ] **Claude Code:** `claude --version` works.
 - [ ] **PICam SDK:** `C:\Program Files\Princeton Instruments\PICam\Includes\picam.h` exists. In **Settings > Apps > Installed apps**, check the PICam version. The bindings were generated against **5.15.11.2503**. Note the version if it differs, since behaviour may too.

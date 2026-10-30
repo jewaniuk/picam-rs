@@ -1,7 +1,6 @@
 //! Tests for EM gain calibration (`EmCalibration`). PICam refuses to open a
 //! demo camera for calibration, so these check that refusal and the empty
-//! list of open calibrations, and the rest is on the README's "to test"
-//! list.
+//! list of open calibrations, and the rest is in `HARDWARE_TESTS.md`.
 
 mod common;
 

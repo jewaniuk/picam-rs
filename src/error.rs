@@ -81,7 +81,7 @@ pub enum Error {
     #[doc(alias = "InvalidAccessoryID")]
     InvalidAccessoryId,
     /// The handle is invalid. This is expected for a handle that has since been
-    /// closed, but that is not yet confirmed (see the README's "to test" list).
+    /// closed, but that is not yet confirmed (see `HARDWARE_TESTS.md`).
     #[error("an invalid handle was supplied")]
     InvalidHandle,
     /// PICam couldn't communicate with the device.
