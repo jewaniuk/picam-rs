@@ -613,13 +613,20 @@ fn status_notification() {
         )
         .expect("the notification should be set");
     assert_eq!(first.recv_timeout(wait), Ok(Ok(())));
-    assert_eq!(first.try_recv(), Err(TryRecvError::Disconnected));
+    // the sender drops just after the send, on picam's thread, so wait for it
+    assert_eq!(
+        first.recv_timeout(wait),
+        Err(RecvTimeoutError::Disconnected)
+    );
     // the untyped twin, with picam's code for the same value
     let (second_watch, second) = camera
         .notify_when_status_untyped(status, locked)
         .expect("the notification should be set again");
     assert_eq!(second.recv_timeout(wait), Ok(Ok(())));
-    assert_eq!(second.try_recv(), Err(TryRecvError::Disconnected));
+    assert_eq!(
+        second.recv_timeout(wait),
+        Err(RecvTimeoutError::Disconnected)
+    );
 
     // dropping watches that already fired does nothing
     drop((first_watch, second_watch));
