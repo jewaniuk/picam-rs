@@ -48,7 +48,8 @@ pub enum Hardware {
 
 /// Says whether the maintainer approved running hardware test `test`, by
 /// naming it in `PICAM_RS_HARDWARE`, and what it then runs against: a demo
-/// camera when `PICAM_RS_HARDWARE_DEMO` is `1`, otherwise the real device.
+/// camera when `PICAM_RS_HARDWARE_DEMO` is set to anything but `0`,
+/// otherwise the real device.
 ///
 /// Otherwise it prints why the test was skipped and returns `None`, before
 /// the test touches PICam at all. See `HARDWARE_TESTS.md`.
@@ -60,7 +61,9 @@ pub fn hardware_approved(test: &str) -> Option<Hardware> {
         );
         return None;
     }
-    if std::env::var("PICAM_RS_HARDWARE_DEMO").as_deref() == Ok("1") {
+    // any value but 0 rehearses, so a typo like `true` never reaches hardware
+    let demo = std::env::var("PICAM_RS_HARDWARE_DEMO");
+    if demo.is_ok_and(|value| value != "0") {
         println!("`{test}`: rehearsing on a demo camera");
         Some(Hardware::Demo)
     } else {

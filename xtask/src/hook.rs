@@ -108,19 +108,23 @@ fn check_bash(root: &Path) -> Result<Option<String>, String> {
     Ok(hardware_run(command))
 }
 
-/// Says why `command` would run a hardware test, if it would: it sets
-/// `PICAM_RS_HARDWARE`, runs ignored tests, or runs a `hardware_` test
-/// binary directly. Hardware tests drive real devices, so the maintainer
-/// approves every run (CLAUDE.md, "Hardware tests").
+/// Says why `command` might run a hardware test, if it might: it mentions
+/// `PICAM_RS_HARDWARE`, a `hardware_` test, or running ignored tests, in any
+/// shell's syntax or quoting. Hardware tests drive real devices, so the
+/// maintainer approves every run (CLAUDE.md, "Hardware tests"). Matching
+/// any mention also asks for harmless commands like a `grep`, which is the
+/// safe side to err on.
 fn hardware_run(command: &str) -> Option<String> {
-    let runs_hardware = command.split([';', '|', '&', '\n']).any(|segment| {
-        segment.split_whitespace().any(|word| {
-            word.contains("PICAM_RS_HARDWARE=")
-                || matches!(word, "--ignored" | "--include-ignored")
-                || word.contains("deps/hardware_")
-                || word.contains("deps\\hardware_")
-        })
-    });
+    let runs_hardware = [
+        "PICAM_RS_HARDWARE",
+        "hardware_",
+        "--ignored",
+        "--include-ignored",
+        // cargo nextest's flag for running ignored tests
+        "--run-ignored",
+    ]
+    .iter()
+    .any(|mention| command.contains(mention));
     runs_hardware.then(|| {
         "this runs a hardware test, which drives real devices. Approve it only \
          if the agent has explained this run and you agreed to it \
@@ -206,6 +210,11 @@ mod tests {
             "cd x && cargo test -p picam-rs -- --ignored",
             "target/debug/deps/hardware_pixis-0123.exe --ignored",
             r"target\debug\deps\hardware_pixis-0123.exe",
+            "$env:PICAM_RS_HARDWARE = 'cooling'; cargo test",
+            "setx PICAM_RS_HARDWARE cooling",
+            "cargo nextest run -p picam-rs --run-ignored only",
+            "cargo test -p picam-rs -- '--ignored'",
+            "grep -n hardware_ tests/hardware_pixis.rs",
         ] {
             assert!(hardware_run(command).is_some(), "should ask: {command}");
         }
@@ -215,10 +224,9 @@ mod tests {
     fn other_commands_run_freely() {
         for command in [
             "cargo test -p picam-rs",
-            "cargo test -p picam-rs --test hardware_pixis --no-run",
+            "cargo test -p picam-rs --test errors",
             "cargo run -p xtask -- gate",
-            "grep -n hardware_ tests/hardware_pixis.rs",
-            "git commit -m 'added the PICAM_RS_HARDWARE opt-in'",
+            "git commit -m 'added hardware tests'",
         ] {
             assert!(hardware_run(command).is_none(), "shouldn't ask: {command}");
         }

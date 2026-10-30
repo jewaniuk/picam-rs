@@ -77,10 +77,30 @@ fn open_pixis(library: &Arc<Library>, hardware: Hardware) -> Camera {
         "these tests are written for a PIXIS, not a {model}"
     );
     println!("camera: {model}");
+    let set_point = params::SENSOR_TEMPERATURE_SET_POINT;
+    println!(
+        "after opening: set point {:?} (device {:?}, default {:?}), shutter {:?} {:?}, \
+         active shutter {:?}",
+        camera.get(set_point),
+        camera.device().get(set_point),
+        camera.default_value(set_point),
+        camera.get(params::SHUTTER_TIMING_MODE),
+        camera.device().get(params::SHUTTER_TIMING_MODE),
+        camera.get(params::ACTIVE_SHUTTER)
+    );
     if camera.does_parameter_exist(params::SHUTTER_TIMING_MODE) == Ok(true) {
         camera
             .set(params::SHUTTER_TIMING_MODE, ShutterTimingMode::AlwaysClosed)
             .expect("the shutter should be set to stay closed");
+    }
+    // the same set point for every test, so none warms or re-cools the camera
+    if let Ok(wanted) = std::env::var("PICAM_RS_SET_POINT") {
+        let wanted: f64 = wanted
+            .parse()
+            .expect("PICAM_RS_SET_POINT should be a number of °C");
+        camera
+            .set(set_point, wanted)
+            .expect("the set point should be accepted");
     }
     commit(&camera);
     camera
@@ -192,9 +212,16 @@ fn temperature(camera: &Camera) -> picam_rs::Result<f64> {
 /// temperature readings and the `Locked` notification on the way (the
 /// cooling items under Parameters and Watches and notifications).
 ///
-/// **Changes:** the temperature set point, to PICam's default or to
+/// **Opening:** like every test here, it opens the camera, sets the shutter
+/// to stay closed, and commits every parameter PICam opened with, including
+/// the temperature set point, or `PICAM_RS_SET_POINT` if given. Give the
+/// same `PICAM_RS_SET_POINT` to every run, so none warms or re-cools the
+/// camera.
+///
+/// **Changes:** cools to the set point committed when opening, which is
 /// `PICAM_RS_SET_POINT` (in °C) if given, such as your usual LightField set
-/// point, and commits it. Then 10 readouts of 100 ms with the shutter closed.
+/// point, or otherwise whatever PICam opened with (printed). Then 10
+/// readouts of 100 ms with the shutter closed.
 ///
 /// **Time:** until the status locks, at most `PICAM_RS_COOLING_MINUTES`
 /// (default 30).
@@ -217,24 +244,9 @@ fn cooling() {
     let status = params::SENSOR_TEMPERATURE_STATUS;
 
     println!(
-        "set point after opening: model {:?}, device {:?}, default {:?}",
-        camera.get(set_point),
-        device.get(set_point),
-        camera.default_value(set_point)
-    );
-    println!(
         "set point range: {:?}",
         camera.range_constraint(set_point, ConstraintCategory::Required)
     );
-    if let Ok(wanted) = std::env::var("PICAM_RS_SET_POINT") {
-        let wanted: f64 = wanted
-            .parse()
-            .expect("PICAM_RS_SET_POINT should be a number of °C");
-        camera
-            .set(set_point, wanted)
-            .expect("the set point should be accepted");
-        commit(&camera);
-    }
     println!(
         "set point committed: {:?}, device {:?}",
         camera.get(set_point),
@@ -339,6 +351,12 @@ fn cooling() {
 /// reopening the camera brings the same handle back (the one-camera part of
 /// the Handles item).
 ///
+/// **Opening:** like every test here, it opens the camera, sets the shutter
+/// to stay closed, and commits every parameter PICam opened with, including
+/// the temperature set point, or `PICAM_RS_SET_POINT` if given. Give the
+/// same `PICAM_RS_SET_POINT` to every run, so none warms or re-cools the
+/// camera.
+///
 /// **Changes:** opens and closes the camera twice. **Time:** seconds.
 /// **Preparation:** none.
 #[test]
@@ -383,6 +401,12 @@ fn closed_handle() {
 /// Checks the parameters no demo camera has, `read` and `set_online`, the
 /// common errors and a failed commit (the Parameters items, and whether
 /// non-destructive readout is possible at all).
+///
+/// **Opening:** like every test here, it opens the camera, sets the shutter
+/// to stay closed, and commits every parameter PICam opened with, including
+/// the temperature set point, or `PICAM_RS_SET_POINT` if given. Give the
+/// same `PICAM_RS_SET_POINT` to every run, so none warms or re-cools the
+/// camera.
 ///
 /// **Changes:** sets an out-of-range exposure (refused), a short acquisition
 /// of 5 readouts at 200 ms with an exposure change online, and kinetics
@@ -539,6 +563,12 @@ fn parameters() {
 /// through the device takes effect on the hardware, and that the device
 /// commits the model's pending values (the Camera devices items).
 ///
+/// **Opening:** like every test here, it opens the camera, sets the shutter
+/// to stay closed, and commits every parameter PICam opened with, including
+/// the temperature set point, or `PICAM_RS_SET_POINT` if given. Give the
+/// same `PICAM_RS_SET_POINT` to every run, so none warms or re-cools the
+/// camera.
+///
 /// **Changes:** exposure times of 50 and 500 ms, 3 readouts at each, and
 /// kinetics readout if the camera has it, which is restored afterwards.
 /// **Time:** under a minute. **Preparation:** none.
@@ -645,8 +675,19 @@ fn camera_device() {
 /// and the device, that `stop` between waits ends the acquisition promptly,
 /// and what `READOUT_COUNT` holds after `acquire(n)` (Acquisition items).
 ///
+/// **Opening:** like every test here, it opens the camera, sets the shutter
+/// to stay closed, and commits every parameter PICam opened with, including
+/// the temperature set point, or `PICAM_RS_SET_POINT` if given. Give the
+/// same `PICAM_RS_SET_POINT` to every run, so none warms or re-cools the
+/// camera.
+///
 /// **Changes:** 3 readouts at 20 ms, then an acquisition of 50 readouts at
-/// 20 ms, stopped part-way. **Time:** seconds. **Preparation:** none.
+/// 20 ms, stopped part-way. During it, it tries to change the region (half
+/// the rows) through the camera and its device, the exposure (to the same
+/// 20 ms) through both, and to commit. It expects PICam to refuse all but
+/// the exposure. If PICam accepts a region change on the device, it takes
+/// effect on the camera at once, until the next test opens the camera.
+/// **Time:** seconds. **Preparation:** none.
 #[test]
 #[ignore = "hardware: needs a PIXIS, see HARDWARE_TESTS.md"]
 fn during_acquisition() {
@@ -692,7 +733,6 @@ fn during_acquisition() {
     let device = during.device();
     assert_eq!(device.set(params::ROIS, smaller).err(), refused);
     assert_eq!(device.commit_parameters().err(), refused);
-    assert_eq!(device.restore_parameters_to_default_values().err(), refused);
     assert_eq!(during.commit_parameters_to_device().err(), refused);
     println!(
         "device exposure change during the acquisition (online-settable: {:?}): {:?}",
@@ -726,8 +766,16 @@ fn during_acquisition() {
 /// `EXACT_READOUT_COUNT_MAXIMUM` with a buffer, and clearing the readout
 /// count online (Acquisition items).
 ///
-/// **Changes:** buffers of 2 and 4 readouts, short acquisitions at 20 ms,
-/// each stopped as soon as it's answered the question.
+/// **Opening:** like every test here, it opens the camera, sets the shutter
+/// to stay closed, and commits every parameter PICam opened with, including
+/// the temperature set point, or `PICAM_RS_SET_POINT` if given. Give the
+/// same `PICAM_RS_SET_POINT` to every run, so none warms or re-cools the
+/// camera.
+///
+/// **Changes:** buffers of 2 and 4 readouts, and short acquisitions at
+/// 20 ms: 5 readouts, one past the exact count maximum (stopped after its
+/// first readout), and, if the camera can clear its count, one of 10 that
+/// runs past 20 readouts before it's stopped.
 /// **Time:** under 2 minutes. **Preparation:** none.
 #[test]
 #[ignore = "hardware: needs a PIXIS, see HARDWARE_TESTS.md"]
@@ -837,10 +885,18 @@ fn buffers() {
 /// camera, which frees the buffer, to check PICam has stopped writing to it
 /// (an Acquisition item).
 ///
+/// **Opening:** like every test here, it opens the camera, sets the shutter
+/// to stay closed, and commits every parameter PICam opened with, including
+/// the temperature set point, or `PICAM_RS_SET_POINT` if given. Give the
+/// same `PICAM_RS_SET_POINT` to every run, so none warms or re-cools the
+/// camera.
+///
 /// **Changes:** an acquisition at 20 ms that runs until the camera closes,
 /// then reopens the camera and acquires once. **Time:** seconds.
-/// **Preparation:** none. At worst this crashes the test program, not the
-/// camera.
+/// **Preparation:** none. Run it last: nobody knows what PICam does when a
+/// camera closes mid-acquisition, so the test program might crash, or the
+/// camera might be left acquiring and need a power cycle, which also loses
+/// the cooling.
 #[test]
 #[ignore = "hardware: needs a PIXIS, see HARDWARE_TESTS.md"]
 fn closing_while_acquiring() {
@@ -883,6 +939,12 @@ fn closing_while_acquiring() {
 /// arrive, to check that memory isn't reused during a counted acquisition,
 /// then streams without a buffer and checks frame numbers run on (the
 /// PICam-memory items under Acquisition and Streamed acquisitions).
+///
+/// **Opening:** like every test here, it opens the camera, sets the shutter
+/// to stay closed, and commits every parameter PICam opened with, including
+/// the temperature set point, or `PICAM_RS_SET_POINT` if given. Give the
+/// same `PICAM_RS_SET_POINT` to every run, so none warms or re-cools the
+/// camera.
 ///
 /// **Changes:** fast settings (fastest ADC speed, shortest exposure, rows
 /// binned if accepted), frame tracking, and acquisitions of up to 400
@@ -953,16 +1015,19 @@ fn pixel_memory() {
         .expect("the stream should start");
     let mut frame_numbers = Vec::new();
     let mut errors = Vec::new();
-    for update in updates.iter() {
-        match update {
-            Ok(update) => {
+    // bounded, in case the camera stops responding
+    loop {
+        match updates.recv_timeout(TIMEOUT) {
+            Ok(Ok(update)) => {
                 for readout in update.readouts().iter() {
                     for frame in readout.frames() {
                         frame_numbers.extend(frame.metadata().frame_number);
                     }
                 }
             }
-            Err(e) => errors.push(e),
+            Ok(Err(e)) => errors.push(e),
+            Err(RecvTimeoutError::Disconnected) => break,
+            Err(RecvTimeoutError::Timeout) => panic!("no stream update within {TIMEOUT:?}"),
         }
     }
     stream.finish().expect("the stream should finish");
@@ -981,6 +1046,12 @@ fn pixel_memory() {
 /// and the flag clearing, how a slow reader fares, and whether a fast stream
 /// overruns or batches readouts (the overrun items under Acquisition and
 /// Streamed acquisitions).
+///
+/// **Opening:** like every test here, it opens the camera, sets the shutter
+/// to stay closed, and commits every parameter PICam opened with, including
+/// the temperature set point, or `PICAM_RS_SET_POINT` if given. Give the
+/// same `PICAM_RS_SET_POINT` to every run, so none warms or re-cools the
+/// camera.
 ///
 /// **Changes:** fast settings (fastest ADC speed, shortest exposure, rows
 /// binned if accepted), frame tracking, buffers of 2 and 3 readouts, and
@@ -1123,6 +1194,12 @@ fn overrun() {
 /// sits, how the stamps and numbers count, and which bit depths and
 /// resolutions the camera offers (the Frame metadata items for a PIXIS).
 ///
+/// **Opening:** like every test here, it opens the camera, sets the shutter
+/// to stay closed, and commits every parameter PICam opened with, including
+/// the temperature set point, or `PICAM_RS_SET_POINT` if given. Give the
+/// same `PICAM_RS_SET_POINT` to every run, so none warms or re-cools the
+/// camera.
+///
 /// **Changes:** time stamps and frame tracking, and 2 acquisitions of 5
 /// readouts at 100 ms. **Time:** seconds. **Preparation:** none.
 #[test]
@@ -1193,8 +1270,15 @@ fn metadata() {
 /// parameter's access while changing modes, and the acquisition states the
 /// camera can detect (Watches and notifications items).
 ///
+/// **Opening:** like every test here, it opens the camera, sets the shutter
+/// to stay closed, and commits every parameter PICam opened with, including
+/// the temperature set point, or `PICAM_RS_SET_POINT` if given. Give the
+/// same `PICAM_RS_SET_POINT` to every run, so none warms or re-cools the
+/// camera.
+///
 /// **Changes:** the ADC quality and readout mode in the camera's model only,
-/// never committed and put back afterwards, then 3 readouts at 20 ms.
+/// each put back before the model is committed again, then 3 readouts at
+/// 20 ms.
 /// **Time:** seconds. **Preparation:** none.
 #[test]
 #[ignore = "hardware: needs a PIXIS, see HARDWARE_TESTS.md"]
@@ -1302,6 +1386,12 @@ fn watches() {
 /// Reads the camera's defect maps and asks whether it can erase residual
 /// charge, without erasing (Defect maps and residual charge items).
 ///
+/// **Opening:** like every test here, it opens the camera, sets the shutter
+/// to stay closed, and commits every parameter PICam opened with, including
+/// the temperature set point, or `PICAM_RS_SET_POINT` if given. Give the
+/// same `PICAM_RS_SET_POINT` to every run, so none warms or re-cools the
+/// camera.
+///
 /// **Changes:** nothing. **Time:** seconds. **Preparation:** none.
 #[test]
 #[ignore = "hardware: needs a PIXIS, see HARDWARE_TESTS.md"]
@@ -1345,6 +1435,12 @@ fn defect_maps() {
 /// compares how much it varies along x and along y, to check pixels are
 /// stored row by row (an Acquisition item). A spectrum varies along the
 /// wavelength axis, x, and little along the slit, y.
+///
+/// **Opening:** like every test here, it opens the camera, sets the shutter
+/// to stay closed, and commits every parameter PICam opened with, including
+/// the temperature set point, or `PICAM_RS_SET_POINT` if given. Give the
+/// same `PICAM_RS_SET_POINT` to every run, so none warms or re-cools the
+/// camera.
 ///
 /// **Changes:** the shutter to `Normal`, so it opens for the exposure, the
 /// full sensor unbinned, an exposure of `PICAM_RS_EXPOSURE_MS` (default
@@ -1390,6 +1486,16 @@ fn pixel_order() {
             .expect("the shutter should be set to open for exposures");
     }
     configure(&camera, 1, exposure);
+    // a closing delay too short for the shutter would smear the frame
+    println!(
+        "shutter: active {:?}, external type {:?}, internal type {:?}, opening delay {:?} ms, \
+         closing delay {:?} ms",
+        camera.get(params::ACTIVE_SHUTTER),
+        camera.get(params::EXTERNAL_SHUTTER_TYPE),
+        camera.get(params::INTERNAL_SHUTTER_TYPE),
+        camera.get(params::SHUTTER_OPENING_DELAY),
+        camera.get(params::SHUTTER_CLOSING_DELAY)
+    );
 
     let (columns, rows, maximum) = {
         let readouts = camera

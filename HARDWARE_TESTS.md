@@ -10,10 +10,11 @@ Behaviour that has only been checked on PICam's demo cameras, or not at all wher
 PICAM_RS_HARDWARE=cooling cargo test -p picam-rs --test hardware_pixis -- --ignored --exact cooling --nocapture
 ```
 
-Close LightField first, since PICam can't open a device that's open elsewhere. The PIXIS tests keep the shutter closed, except `pixel_order`. Two need preparation:
+Close LightField first, since PICam can't open a device that's open elsewhere. Every PIXIS test opens the camera, keeps the shutter closed (except `pixel_order`), and commits every parameter PICam opened with, including the temperature set point. `PICAM_RS_SET_POINT` sets the set point in °C instead: give the same one to every run, so no test warms or re-cools the camera. Three need care:
 
-- `cooling`: run it first, right after powering the camera on from room temperature, so it has to cool. `PICAM_RS_SET_POINT` sets the set point in °C, and `PICAM_RS_COOLING_MINUTES` how long to wait (default 30).
+- `cooling`: run it first, right after powering the camera on from room temperature, so it has to cool. `PICAM_RS_COOLING_MINUTES` sets how long to wait (default 30).
 - `pixel_order`: needs light into the spectrometer, at a level that doesn't saturate. `PICAM_RS_EXPOSURE_MS` sets the exposure (default 100).
+- `closing_while_acquiring`: run it last, since it closes the camera mid-acquisition, and the camera might need a power cycle afterwards.
 
 `PICAM_RS_HARDWARE_DEMO=1` rehearses a PIXIS test on a demo camera.
 

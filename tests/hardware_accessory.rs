@@ -20,8 +20,8 @@ use std::sync::Arc;
 use picam_rs::{Accessory, ConstraintCategory, ConstraintType, params};
 
 /// Lists the accessories PICam sees and, if one is available, opens it and
-/// reads its firmware and every parameter's type, access, value and
-/// constraints.
+/// reads its firmware, every parameter's type, access, dynamics and
+/// constraints, and the lamp's source, status, age and life expectancy.
 ///
 /// **Changes:** nothing on purpose. It never sets or commits a value, and
 /// never reads the lamp's calibration (`light_source_reference`). The manual
