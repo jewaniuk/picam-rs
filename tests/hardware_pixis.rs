@@ -208,6 +208,17 @@ fn temperature(camera: &Camera) -> picam_rs::Result<f64> {
     }
 }
 
+/// Reads the sensor temperature status, directly from the hardware when the
+/// camera allows it, since on a PIXIS `get` keeps returning the status PICam
+/// opened with.
+fn temperature_status(camera: &Camera) -> picam_rs::Result<SensorTemperatureStatus> {
+    if camera.can_read(params::SENSOR_TEMPERATURE_STATUS) == Ok(true) {
+        camera.read(params::SENSOR_TEMPERATURE_STATUS)
+    } else {
+        camera.get(params::SENSOR_TEMPERATURE_STATUS)
+    }
+}
+
 /// Cools the PIXIS to its set point, and checks the status estimate,
 /// temperature readings and the `Locked` notification on the way (the
 /// cooling items under Parameters and Watches and notifications).
@@ -220,8 +231,8 @@ fn temperature(camera: &Camera) -> picam_rs::Result<f64> {
 ///
 /// **Changes:** cools to the set point committed when opening, which is
 /// `PICAM_RS_SET_POINT` (in °C) if given, such as your usual LightField set
-/// point, or otherwise whatever PICam opened with (printed). Then 10
-/// readouts of 100 ms with the shutter closed.
+/// point, or otherwise whatever PICam opened with (printed). Nothing else:
+/// `cooling_locked` checks the rest once the camera is locked.
 ///
 /// **Time:** until the status locks, at most `PICAM_RS_COOLING_MINUTES`
 /// (default 30).
@@ -253,8 +264,9 @@ fn cooling() {
         device.get(set_point)
     );
     println!(
-        "temperature {:?} °C, status {:?}, readable directly: {:?}",
+        "temperature {:?} °C, status {:?} (stored {:?}), readable directly: {:?}",
         temperature(&camera),
+        temperature_status(&camera),
         camera.get(status),
         camera.can_read(params::SENSOR_TEMPERATURE_READING)
     );
@@ -302,7 +314,7 @@ fn cooling() {
             "{:>5.0} s: {:?} °C, status {:?}, {} extrinsic readings {:?}",
             start.elapsed().as_secs_f64(),
             temperature(&camera),
-            camera.get(status),
+            temperature_status(&camera),
             readings.len(),
             readings.last()
         );
@@ -316,18 +328,68 @@ fn cooling() {
         start.elapsed().as_secs_f64()
     );
     assert_eq!(notified, Ok(()));
-    assert_eq!(camera.get(status), Ok(SensorTemperatureStatus::Locked));
+    assert_eq!(
+        temperature_status(&camera),
+        Ok(SensorTemperatureStatus::Locked)
+    );
+}
+
+/// Checks a PIXIS that is already cooled and locked: waiting for `Locked`
+/// once locked, and the temperature readings during an acquisition (the rest
+/// of the cooling items, split from `cooling` so they can run without warming
+/// the camera up first).
+///
+/// **Opening:** like every test here, it opens the camera, sets the shutter
+/// to stay closed, and commits every parameter PICam opened with, including
+/// the temperature set point, or `PICAM_RS_SET_POINT` if given. Give the
+/// same `PICAM_RS_SET_POINT` to every run, so none warms or re-cools the
+/// camera.
+///
+/// **Changes:** 10 readouts of 100 ms with the shutter closed.
+///
+/// **Time:** seconds.
+///
+/// **Preparation:** the camera cooled and locked at the set point, by
+/// `cooling` or by LightField, and the same `PICAM_RS_SET_POINT` as the run
+/// that cooled it.
+#[test]
+#[ignore = "hardware: needs a PIXIS, see HARDWARE_TESTS.md"]
+fn cooling_locked() {
+    let Some(hardware) = common::hardware_approved("cooling_locked") else {
+        return;
+    };
+    let test_library = common::library();
+    let library = &test_library.library;
+    let mut camera = open_pixis(library, hardware);
+    let status = params::SENSOR_TEMPERATURE_STATUS;
     println!(
-        "waiting for Locked once locked: {:?}",
-        camera.wait_for_status_parameter_value(
-            status,
-            SensorTemperatureStatus::Locked,
-            Some(Duration::from_secs(5))
-        )
+        "temperature {:?} °C, status {:?} (stored {:?})",
+        temperature(&camera),
+        temperature_status(&camera),
+        camera.get(status)
+    );
+    assert_eq!(
+        temperature_status(&camera),
+        Ok(SensorTemperatureStatus::Locked),
+        "cool the camera first, with `cooling` or LightField"
+    );
+
+    let start = Instant::now();
+    let waited = camera.wait_for_status_parameter_value(
+        status,
+        SensorTemperatureStatus::Locked,
+        Some(Duration::from_secs(5)),
+    );
+    println!(
+        "waiting for Locked once locked: {waited:?} after {:.3} s",
+        start.elapsed().as_secs_f64()
     );
 
     // temperature readings while acquiring
-    let mut camera = camera;
+    let extrinsic = camera.watch_extrinsic_value(params::SENSOR_TEMPERATURE_READING);
+    if let Err(e) = &extrinsic {
+        println!("watching the temperature reading failed: {e}");
+    }
     configure(&camera, 10, 100.0);
     let readouts = camera
         .acquire(10, Some(TIMEOUT))
@@ -337,13 +399,14 @@ fn cooling() {
     if let Ok((_, readings)) = &extrinsic {
         let during: Vec<f64> = readings.try_iter().collect();
         println!(
-            "extrinsic readings since the last report, including during the acquisition: {during:?}"
+            "extrinsic readings since the watch started, including during the acquisition: \
+             {during:?}"
         );
     }
     println!(
         "temperature {:?} °C, status {:?}",
         temperature(&camera),
-        camera.get(status)
+        temperature_status(&camera)
     );
 }
 
