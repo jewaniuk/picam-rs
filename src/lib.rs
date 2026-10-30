@@ -76,3 +76,8 @@ pub use validation::{
     DependentValidationResult, FailedDependentParameter, ValidationResult, ValidationResults,
 };
 pub use watch::Watch;
+
+/// Compiles the README's example with the doctests.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;
