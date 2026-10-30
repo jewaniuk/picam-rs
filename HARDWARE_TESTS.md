@@ -2,11 +2,28 @@
 
 Behaviour that has only been checked on PICam's demo cameras, or not at all where no demo exists, and needs checking on real hardware. If you check one, please [open an issue](https://github.com/jewaniuk/picam-rs/issues/new?template=hardware-report.md) saying whether it works.
 
+## Running the hardware tests
+
+`tests/hardware_pixis.rs` checks many of these items on a PIXIS camera and its shutter, and `tests/hardware_accessory.rs` reads what PICam sees of an accessory without changing it. Each test's doc comment says which items it covers, what it changes on the device, how long it takes, and any preparation. Every test is `#[ignore]`d and runs only when `PICAM_RS_HARDWARE` names it, one at a time:
+
+```sh
+PICAM_RS_HARDWARE=cooling cargo test -p picam-rs --test hardware_pixis -- --ignored --exact cooling --nocapture
+```
+
+Close LightField first, since PICam can't open a device that's open elsewhere. The PIXIS tests keep the shutter closed, except `pixel_order`. Two need preparation:
+
+- `cooling`: run it first, right after powering the camera on from room temperature, so it has to cool. `PICAM_RS_SET_POINT` sets the set point in °C, and `PICAM_RS_COOLING_MINUTES` how long to wait (default 30).
+- `pixel_order`: needs light into the spectrometer, at a level that doesn't saturate. `PICAM_RS_EXPOSURE_MS` sets the exposure (default 100).
+
+`PICAM_RS_HARDWARE_DEMO=1` rehearses a PIXIS test on a demo camera.
+
 ## Handles
 
 - [ ] a `CameraHandle` whose camera had closed gave `InvalidHandle` from every method on a demo camera (`tests/errors.rs`), need to check on hardware, in case PICam reuses a closed handle's value for a camera opened later
 
 ## Accessories
+
+PICam's accessory API covers FERGIE accessories and, among IntelliCal units, only the IntelliCal SWIR QTH lamp (manual Table A-4).
 
 - [ ] no demo accessories exist, so `Accessory` and `AccessoryId` were only checked with nothing connected, need to open a real accessory and check `id`, `is_connected`, `AccessoryId::is_connected`, `is_open_elsewhere`, `firmware_details`, `list_open_accessories` and, on a light source, `light_source_reference`, then configure it through the shared parameter methods (`parameters`, a `get` and `set`, and a `range_constraint` or `collection_constraint`), checking that `set` takes effect without a commit and `are_parameters_committed` stays `true` (manual 5.4.6), and that a value type accessories don't use (`get_untyped::<i64>`, or `params::ROIS`) is refused, then drop the `Accessory` and query a leftover `AccessoryHandle` from `list_open_accessories` to see what comes back, like `CameraHandle` above
 - [ ] `dynamics`, `extrinsic_dynamics`, `collection_constraints` and `range_constraints` on an accessory, which only demo cameras have exercised
