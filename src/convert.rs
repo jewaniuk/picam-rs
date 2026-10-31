@@ -24,6 +24,8 @@ macro_rules! define_picam_enum {
         }
 
         impl $enum_name {
+            // an enum only ever passed into picam never converts back
+            #[allow(dead_code)]
             pub(crate) fn from_raw(raw: $raw_ty) -> Self {
                 match raw {
                     $(<$raw_ty>::$raw => $enum_name::$name,)*
