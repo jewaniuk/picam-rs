@@ -726,7 +726,11 @@ impl Drop for Camera {
 /// cannot outlive the library, though its true owner may still close it
 /// earlier. A call on an already-closed handle fails with
 /// [`crate::Error::InvalidHandle`] rather than being unsound, since
-/// PICam validates handles against its own internal table before using them.
+/// PICam validates handles against its own internal table before using them
+/// (seen on demo cameras, and on a PIXIS 100BR with PICam 5.16.3). That
+/// holds unless PICam has since given the same handle value to another
+/// camera, as demo cameras do for the next camera opened (seen with SDK 5.15
+/// and 5.16): the handle then refers to that camera instead.
 #[derive(Debug, Clone, Copy)]
 pub struct CameraHandle<'a> {
     handle: sys::PicamHandle,

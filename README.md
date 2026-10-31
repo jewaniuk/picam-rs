@@ -2,7 +2,7 @@
 
 A safe Rust wrapper around the PICam C API (SDK 5.15), which controls Teledyne Princeton Instruments scientific cameras. It wraps all 199 PICam functions.
 
-> **Experimental.** Most of this crate has only been tested against PICam's demo cameras, not real hardware, and its API may change. See [Untested on hardware](#untested-on-hardware).
+> **Experimental.** Most of this crate has only been tested against PICam's demo cameras, not real hardware, and its API may change. See [Hardware testing](#hardware-testing).
 >
 > **LLM-generated.** Much of the code was written by an LLM (Anthropic's Claude), working to a design set by the maintainer, who reviewed every change before it was merged.
 
@@ -54,19 +54,18 @@ Without a camera, connect one of PICam's demo cameras with `CameraId::connect_de
 - **Callbacks:** watches, discovery and streamed acquisitions deliver events through channels, so no user code runs inside PICam. The exception is `EmCalibration::calibrate`'s progress closure.
 - **Threads:** `Camera` is neither `Send` nor `Sync`, so it stays on the thread that opened it, and other threads send that thread their requests.
 
-## Untested on hardware
+## Hardware testing
 
-These have only been checked on demo cameras, or not at all where no demo exists. [HARDWARE_TESTS.md](HARDWARE_TESTS.md) lists every item and how to check it.
+Checked on a PIXIS 100BR with PICam 5.16.3: [HARDWARE_TESTS.md](HARDWARE_TESTS.md) gives each result. These are still unchecked on hardware, or only partly checked, and that file lists every item and how to check it.
 
-- Handles to cameras that have since closed.
 - Accessories: everything, since there are no demo accessories.
 - EM gain calibration, which PICam won't run on a demo camera.
-- Acquisition: overrunning the camera's buffer at high frame rates, long or fast acquisitions, stopping and ending them, clearing the readout count online, refusing parameter changes while running, PICam's acquisition errors, non-destructive readout, and pixel row order.
-- Streamed acquisitions: overrun, and how PICam batches and times its callbacks on real cameras.
-- Frame metadata: time stamps, frame numbers and bit depths, and gate and modulation tracking on PI-MAX cameras.
-- Parameters: `read` and `set_online`, the parameters no demo camera has, failed commits, status waits on a cooling camera, and the errors the docs name.
-- Camera devices: that `CameraDevice` values match the hardware, and that its handle stays the same while the camera is open.
-- Watches and notifications: extrinsic readings, value access changes, acquisition states, status notifications, and constraint callbacks.
+- Acquisition: PICam's acquisition errors other than lost data, ending acquisitions on a camera that stops responding, when PICam sets the overrun flag, the device handle's refusals while running, clearing the readout count online, and non-destructive readout.
+- Streamed acquisitions: overrun, and slow callbacks.
+- Frame metadata: bit depths other than 64, and gate and modulation tracking on PI-MAX cameras.
+- Parameters: the parameters no demo camera has.
+- Camera devices: that its handle stays the same while the camera is open.
+- Watches and notifications: extrinsic readings during an acquisition, value access changes, status notification errors, and constraint callbacks.
 - Discovery: real cameras and accessories being plugged in, unplugged and powered off.
 - Defect maps and residual charge erasure.
 
