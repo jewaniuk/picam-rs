@@ -10,7 +10,7 @@ This repository is public. Never commit PICam SDK files (headers, libraries, DLL
 
 - **Rust**, from <https://rustup.rs>. The minimum version is the `rust-version` in `Cargo.toml`.
 - **The PICam SDK.** The build links `Picam.lib` from `C:\Program Files\Princeton Instruments\PICam\Libraries`. For an SDK elsewhere, set `PICAM_DIR` to its `Includes` directory, and the build uses the `Libraries` directory beside it.
-- **Pleora eBUS on `PATH`** (`C:\Program Files\Common Files\Pleora\eBUS SDK`), which PICam loads when it initializes. The SDK installer doesn't add it. Add it to your user `PATH` through "Edit environment variables for your account" rather than `setx`, which can truncate a long `PATH`, then open a new terminal. `which PvBase64.dll` in Git Bash should then find it.
+- **Pleora eBUS on `PATH`** (`C:\Program Files\Common Files\Pleora\eBUS SDK`), which PICam loads when it initializes. The SDK installer doesn't add it. Add it to your user `PATH` through "Edit environment variables for your account" rather than `setx`, which can truncate a long `PATH`, then open a new terminal. Windows Terminal keeps the environment it started with, so close the whole app. `which PvBase64.dll` in Git Bash should then find it.
 - **LLVM** (`choco install llvm`), only for `xtask generate` and the gate, which run bindgen. Building the crate doesn't need it, since the bindings are committed.
 - **`cargo-public-api`**, for the PR report's public API section: `cargo install cargo-public-api --locked` and `rustup toolchain install nightly --profile minimal`.
 
@@ -24,7 +24,7 @@ On each new computer or SDK version, run these in order:
 
 1. `cargo test -p picam-rs --test library`. The important test is `reinitialize_after_drop`: the test helper relies on PICam allowing a second initialization in one process. If it fails, switch to the fallback in `DESIGN.md`'s Testing section before writing any tests.
 2. `cargo test -p picam-rs --test camera`, a demo camera from start to finish.
-3. `cargo run -p xtask -- gate`, which should pass. Turn real cameras off first: with one on, PICam's limit on demo cameras is lower, and `demo_camera_limit` counts it.
+3. `cargo run -p xtask -- gate`, which should pass. Turn real cameras off first. A real camera lowers PICam's limit on demo cameras, and the gate's `demo_camera_limit` connects up to that limit. The library's count of real cameras hasn't been checked with a camera on yet (see `HARDWARE_TESTS.md`), and getting it wrong crashes the test process.
 
 ## Commands
 
@@ -53,7 +53,14 @@ To set up Claude Code:
 2. Check that `/hooks` lists both hooks (`PreToolUse` for `Bash|PowerShell`, `PostToolUse` for `Edit|Write`) and that `/agents` lists `reviewer`.
 3. Test the guards: on `main`, ask Claude to `git push`. The hook should refuse it.
 
-Give the agent a GitHub token that can only reach this repository: a fine-grained token with read and write access to Contents and Pull requests. Sign `gh` in with it (`gh auth login`), and set only this clone to push through `gh` (`git config --local credential.https://github.com.helper '!gh auth git-credential'`, after clearing any inherited helper with an empty one).
+The agent opens PRs with the GitHub CLI (`choco install gh`). Give it a token that can only reach this repository: a fine-grained token with read and write access to Contents and Pull requests. Sign `gh` in with it (`gh auth login`, choosing HTTPS and pasting the token), then set only this clone to push through `gh`:
+
+```sh
+git config --local credential.https://github.com.helper ''
+git config --local --add credential.https://github.com.helper '!gh auth git-credential'
+```
+
+The empty helper clears any credential helper inherited from the global config, so the token is the only credential this clone uses.
 
 ## The PICam manual
 

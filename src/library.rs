@@ -39,7 +39,7 @@ impl Library {
     /// it tries, where a demo camera is a model and serial number pair,
     /// counting attempts that fail, plus every real camera PICam has listed.
     ///
-    /// With PICam 5.15, connecting a 65th different pair in one library
+    /// With PICam 5.15 and 5.16, connecting a 65th different pair in one library
     /// session corrupts PICam's heap inside `Picam_ConnectDemoCamera` and
     /// kills the process, whether the pairs differ by model, serial number or
     /// both, and even if each was disconnected before the next. Trying a pair
@@ -157,6 +157,10 @@ impl Library {
         // a real camera that appeared since the last look counts too
         self.note_real_cameras()?;
         let mut cameras = self.cameras();
+        // another thread may have tried the same pair meanwhile
+        if cameras.demo.contains(&camera) {
+            return Ok(());
+        }
         if cameras.demo.len() + cameras.real.len() >= Self::MAX_CAMERAS {
             return Err(Error::TooManyDemoCameras);
         }

@@ -58,6 +58,7 @@ Without a camera, connect one of PICam's demo cameras with `CameraId::connect_de
 
 Checked on a PIXIS 100BR with PICam 5.16.3: [HARDWARE_TESTS.md](HARDWARE_TESTS.md) gives each result. These are still unchecked on hardware, or only partly checked, and that file lists every item and how to check it.
 
+- Demo cameras: how real cameras count towards PICam's limit on demo cameras in one session.
 - Accessories: everything, since there are no demo accessories.
 - EM gain calibration, which PICam won't run on a demo camera.
 - Acquisition: PICam's acquisition errors other than lost data, ending acquisitions on a camera that stops responding, when PICam sets and clears the overrun flag, the device handle's refusals while running, clearing the readout count online, and non-destructive readout.

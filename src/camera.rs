@@ -963,10 +963,10 @@ impl CameraId {
     /// plus every real camera PICam has listed since the library started.
     /// PICam corrupts its own memory, killing the process, when one more demo
     /// camera is connected in one library session, even if the others were
-    /// disconnected (found with demo cameras on PICam 5.15, and one camera
-    /// sooner with a PIXIS 100BR connected on 5.16.3, not documented), so
-    /// this refuses instead. Every attempt counts, even one that fails, in case a failed
-    /// attempt uses up one of PICam's slots too. Trying a pair already tried
+    /// disconnected (found with demo cameras on PICam 5.15 and 5.16, and one
+    /// camera sooner with a PIXIS 100BR connected on 5.16.3, not documented),
+    /// so this refuses instead. Every attempt counts, even one that fails, in
+    /// case a failed attempt uses up one of PICam's slots too. Trying a pair already tried
     /// doesn't count again, and dropping the `Library` and making a new one
     /// starts the count again.
     ///
@@ -982,7 +982,8 @@ impl CameraId {
     ///   long for PICam (seen with SDK 5.15)
     /// - [`crate::Error::DemoAlreadyConnected`] if this model and serial number
     ///   are already connected (seen with SDK 5.15)
-    /// - otherwise an error if PICam is unable to connect it
+    /// - otherwise an error if PICam is unable to list its cameras, which
+    ///   this does to count the real ones, or to connect this one
     pub fn connect_demo(library: &Library, model: Model, serial_number: &str) -> Result<CameraId> {
         tracing::debug!("connecting demo camera: {serial_number}");
         let c_serial_number = std::ffi::CString::new(serial_number)

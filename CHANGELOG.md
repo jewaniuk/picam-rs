@@ -6,7 +6,7 @@ The first release. It wraps all 199 functions and 58 enums of the PICam C API (S
 
 - **Library and cameras:** `Library` initializes PICam for as long as it or any camera opened with it is alive. Cameras, demo cameras, camera IDs and firmware details.
 - **Parameters:** typed handles in `params` for every parameter, with untyped fallbacks. Constraints, dynamics, validation, and committing to and refreshing from the camera device.
-- **Acquisition:** `acquire`, `start_acquisition` with waits and stops, and `start_acquisition_stream`. Data is borrowed from PICam's memory without copying, unless you give PICam a buffer, and frame metadata is decoded.
+- **Acquisition:** `acquire`, `start_acquisition` with waits and stops, and `start_acquisition_stream`. Data is borrowed from PICam's memory without copying, unless you give PICam a buffer or stream the acquisition, and frame metadata is decoded.
 - **Callbacks:** watches, status notifications, acquisition state watches, and camera and accessory discovery, all delivered through channels.
 - **Accessories, EM gain calibration, defect maps and residual charge erasure.**
 

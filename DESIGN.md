@@ -30,11 +30,11 @@ The crate only runs on Windows, the only platform the lab uses. The SDK also shi
 | Machine | What works | SDK files it uses |
 |---|---|---|
 | macOS dev laptop | `cargo check` only (no linking) | none to build; the headers in `vendor/`, via `PICAM_DIR` set in `.cargo/config.toml`, for `xtask generate` |
-| Windows lab computers | `cargo build`, `cargo test`, demo cameras, real hardware | `Picam.lib` to build, and the headers for `xtask generate`, both from the default SDK install path |
+| Windows lab computers | `cargo build`, `cargo test`, demo cameras, real hardware | `Picam.lib` to build, and the headers for `xtask generate`, both from the default SDK install path, or beside `PICAM_DIR` |
 
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) covers setting up a computer for development.
 - `build.rs` only links `Picam.lib`, from the `Libraries` directory beside `PICAM_DIR`, falling back to beside `C:\Program Files\Princeton Instruments\PICam\Includes`, when targeting Windows and not on docs.rs. `xtask generate` reads the headers from the same places to write the bindings.
-- `.cargo/` and `vendor/` are gitignored, so a fresh clone on a lab computer uses the default path with no setup.
+- `.cargo/` and `vendor/` are gitignored, so a fresh clone uses the default SDK install path unless `PICAM_DIR` is set, for example on a computer with only a PICam runtime installed and the SDK's build files copied elsewhere.
 - bindgen, run by `xtask generate` and the gate, needs LLVM/libclang installed (`choco install llvm`). Building the crate doesn't.
 - Bindings are generated for `--target=x86_64-pc-windows-msvc` even on macOS, so type sizes match the real target.
 - The bindings were generated against **PICam SDK 5.15.11.2503 (March 2025)**. Check that the lab computer's installed SDK matches before relying on behaviour.

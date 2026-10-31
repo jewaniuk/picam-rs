@@ -133,9 +133,10 @@ pub(crate) fn string_to_c_char_array<const N: usize>(value: &str) -> Result<[sys
     Ok(array)
 }
 
-// picam's fixed-size string fields have the lengths its `PicamStringSize`
-// gives them, so a change in an sdk update fails to compile here rather than
-// changing the longest string `string_to_c_char_array` accepts unnoticed
+// picam's header sizes its fixed-size string fields with `PicamStringSize`,
+// and bindgen writes the lengths out as numbers, so these tie each field
+// back to the size it was declared with. `string_to_c_char_array` takes its
+// length from the field itself, so it never needs these values
 const _: fn(
     &sys::PicamCameraID,
 ) -> &[sys::pichar; sys::PicamStringSize::PicamStringSize_SensorName as usize] =

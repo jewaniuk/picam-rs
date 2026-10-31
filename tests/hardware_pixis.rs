@@ -676,7 +676,8 @@ fn camera_device() {
         );
     }
 
-    // a value set through the device reaches the hardware
+    // the camera runs at exposure times set through the device, each
+    // followed by a commit on the model
     let mut timed = Vec::new();
     for exposure in [50.0, 500.0] {
         camera
