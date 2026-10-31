@@ -623,9 +623,11 @@ fn parameters() {
     drop(camera);
 }
 
-/// Compares the camera's model with its device, checks that a value set
-/// through the device takes effect on the hardware, and that the device
-/// commits the model's pending values (the Camera devices items).
+/// Compares the camera's model with its device, times acquisitions at
+/// exposure times set through the device, and checks that the device commits
+/// the model's pending values (the Camera devices items). Each device `set`
+/// is followed by a commit on the model, so it doesn't show a device `set`
+/// taking effect on its own.
 ///
 /// **Opening:** like every test here, it opens the camera, sets the shutter
 /// to stay closed, and commits every parameter PICam opened with, including

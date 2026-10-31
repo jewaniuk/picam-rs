@@ -5,13 +5,14 @@ members = ["xtask"]
 name = "picam-rs"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.88"
 license = "MIT OR Apache-2.0"
 description = "A safe Rust wrapper around the Teledyne Princeton Instruments PICam camera API"
 repository = "https://github.com/jewaniuk/picam-rs"
 readme = "README.md"
 keywords = ["picam", "teledyne", "camera", "scientific-camera", "ffi"]
 categories = ["api-bindings", "hardware-support", "science"]
-exclude = [".claude/", ".github/", "CLAUDE.md", "LAB_SETUP.md"]
+exclude = [".claude/", ".github/", "CLAUDE.md", "CONTRIBUTING.md", "reference/", "vendor/"]
 
 [dependencies]
 bitflags = "2.13.2"

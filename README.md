@@ -1,15 +1,15 @@
 # picam-rs
 
-A safe Rust wrapper around the PICam C API (SDK 5.15), which controls Teledyne Princeton Instruments scientific cameras. It wraps all 199 PICam functions.
+A safe Rust wrapper around the PICam C API, which controls Teledyne Princeton Instruments scientific cameras. It wraps all 199 of the API's functions and all 58 of its enums. It's built against SDK 5.15 and also runs on the PICam 5.16 runtime.
 
-> **Experimental.** Most of this crate has only been tested against PICam's demo cameras, not real hardware, and its API may change. See [Hardware testing](#hardware-testing).
+> **Experimental.** Most of this crate has only been tested against PICam's demo cameras, and only part of it on real hardware (a PIXIS 100BR). Its API may change. See [Hardware testing](#hardware-testing).
 >
 > **LLM-generated.** Much of the code was written by an LLM (Anthropic's Claude), working to a design set by the maintainer, who reviewed every change before it was merged.
 
 ## Requirements
 
 - Windows, x86-64.
-- The PICam SDK, installed separately. Tested with 5.15.11.2503. The crate links `Picam.lib` from `C:\Program Files\Princeton Instruments\PICam\Libraries`, or from the `Libraries` directory next to the `Includes` directory `PICAM_DIR` points to. No SDK files ship with this crate.
+- The PICam SDK, installed separately. Tested with SDK 5.15.11.2503 on demo cameras, and with the PICam 5.16.3.2512 runtime on demo cameras and a PIXIS 100BR. The crate links `Picam.lib` from `C:\Program Files\Princeton Instruments\PICam\Libraries`, or from the `Libraries` directory next to the `Includes` directory `PICAM_DIR` points to. No SDK files ship with this crate.
 - Pleora eBUS on `PATH` (`C:\Program Files\Common Files\Pleora\eBUS SDK`), which PICam loads when it initializes. The SDK installer doesn't add it.
 
 ## Usage
@@ -71,9 +71,22 @@ Checked on a PIXIS 100BR with PICam 5.16.3: [HARDWARE_TESTS.md](HARDWARE_TESTS.m
 
 If you try the crate on real hardware and find that one of these works or doesn't, please [open an issue](https://github.com/jewaniuk/picam-rs/issues/new?template=hardware-report.md) with your camera model, PICam version and what you saw.
 
+## Troubleshooting
+
+If a program or test crashes at startup rather than returning an error, the exit code says which DLL is missing:
+
+- **`0xc0000135`** (`STATUS_DLL_NOT_FOUND`), before anything runs: Windows can't find `Picam.dll` or a DLL it loads at startup. The PICam installer normally puts `C:\Program Files\Common Files\Princeton Instruments\Picam\Runtime` on `PATH`, so check that it's there.
+- **`0xc06d007e`** (delay-load module not found), when the library initializes: PICam loaded, but a DLL it loads later is missing, usually Pleora eBUS (see [Requirements](#requirements)).
+  - To find which DLL it is, run `dumpbin /dependents` on `Pida.dll` and `Pidi.dll` in the PICam `Runtime` folder, from a Visual Studio developer prompt. Look under "delay load dependencies", then search for each DLL with `where /r "C:\Program Files" NAME.dll`.
+  - Teledyne DALSA Sapera (`SapClassBasic86.dll`, `CorApi.dll`) is listed there too, but PICam runs without it on computers with no Camera Link frame grabber.
+
 ## Tests
 
 `cargo test` runs against PICam's demo cameras, so it needs the SDK but no hardware.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setting up a development computer, the commands, and how the agent workflow fits together.
 
 ## License
 

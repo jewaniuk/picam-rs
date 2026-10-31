@@ -585,7 +585,7 @@ impl Camera {
     /// Reports whether the camera's buffer has overrun: whether, while
     /// acquiring, PICam needed its space for new data before the old was read
     /// (PICam manual 7.4.17.1). The flag clears when the next acquisition
-    /// starts.
+    /// starts (seen on demo cameras with SDK 5.15).
     ///
     /// # Errors
     ///

@@ -80,8 +80,8 @@ pub enum Error {
     #[error("an invalid accessory ID was supplied")]
     #[doc(alias = "InvalidAccessoryID")]
     InvalidAccessoryId,
-    /// The handle is invalid. This is expected for a handle that has since been
-    /// closed, but that is not yet confirmed (see `HARDWARE_TESTS.md`).
+    /// The handle is invalid, for example because its camera has since been
+    /// closed (seen on demo cameras, and on a PIXIS 100BR with PICam 5.16.3).
     #[error("an invalid handle was supplied")]
     InvalidHandle,
     /// PICam couldn't communicate with the device.
@@ -204,12 +204,13 @@ pub enum Error {
     /// A string contains an embedded null byte, so it can't be passed to PICam.
     #[error("string contains an embedded null byte")]
     InvalidString,
-    /// This [`Library`](crate::Library) has already tried to connect 64
-    /// different demo cameras (model and serial number pairs), counting
-    /// attempts that failed. PICam 5.15 corrupts its own memory when one more
-    /// is connected, so [`CameraId::connect_demo`](crate::CameraId::connect_demo)
-    /// refuses instead. Dropping the `Library` and making a new one resets the
-    /// count.
+    /// This [`Library`](crate::Library) has already reached 64 cameras: the
+    /// different demo cameras (model and serial number pairs) it has tried,
+    /// counting attempts that failed, plus every real camera PICam has listed
+    /// since it started. PICam corrupts its own memory when one more demo
+    /// camera is connected (seen with PICam 5.15 and 5.16), so
+    /// [`CameraId::connect_demo`](crate::CameraId::connect_demo) refuses
+    /// instead. Dropping the `Library` and making a new one resets the count.
     #[error("too many different demo cameras connected with this library")]
     TooManyDemoCameras,
     /// An untyped call such as

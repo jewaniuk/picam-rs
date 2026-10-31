@@ -27,12 +27,12 @@ Decisions marked **settled** were made deliberately and should not be changed wi
 
 The crate only runs on Windows, the only platform the lab uses. The SDK also ships a Linux build (CentOS 7), but it is not a target.
 
-| Machine | What works | Header location |
+| Machine | What works | SDK files it uses |
 |---|---|---|
-| macOS dev laptop | `cargo check` only (no linking) | none needed to build; `vendor/`, via `PICAM_DIR` set in `.cargo/config.toml`, for `xtask generate` |
-| Windows lab computers | `cargo build`, `cargo test`, demo cameras, real hardware | default SDK install path |
+| macOS dev laptop | `cargo check` only (no linking) | none to build; the headers in `vendor/`, via `PICAM_DIR` set in `.cargo/config.toml`, for `xtask generate` |
+| Windows lab computers | `cargo build`, `cargo test`, demo cameras, real hardware | `Picam.lib` to build, and the headers for `xtask generate`, both from the default SDK install path |
 
-- [`LAB_SETUP.md`](LAB_SETUP.md) is the checklist for preparing a lab computer for development.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) covers setting up a computer for development.
 - `build.rs` only links `Picam.lib`, from the `Libraries` directory beside `PICAM_DIR`, falling back to beside `C:\Program Files\Princeton Instruments\PICam\Includes`, when targeting Windows and not on docs.rs. `xtask generate` reads the headers from the same places to write the bindings.
 - `.cargo/` and `vendor/` are gitignored, so a fresh clone on a lab computer uses the default path with no setup.
 - bindgen, run by `xtask generate` and the gate, needs LLVM/libclang installed (`choco install llvm`). Building the crate doesn't.
@@ -106,7 +106,7 @@ A Rust `enum` holding a discriminant it doesn't declare is undefined behaviour. 
 
 - `Library::new()` calls `Picam_InitializeLibrary`; `Drop` calls `Picam_UninitializeLibrary` and logs any failure, since `Drop` can't return one. Just before, `Drop` clears the discovery watches, which belong to no camera (see [Callbacks](#callbacks-settled), decided with the maintainer on 2026-10-26).
 - Cameras hold an `Arc<Library>`, so many cameras share one library and the library outlives them all. This was chosen to fit the downstream server's design.
-- With SDK 5.15, connecting a 65th different demo camera (model and serial number pair) in one library session corrupts PICam's heap inside `Picam_ConnectDemoCamera` and kills the process, even if the others were disconnected. Reconnecting a pair already used doesn't count again, and a fresh library resets the count. This was found with demo cameras and reproduced with raw `sys` calls: a new model each time, or one model with a new serial number each time, crashes on the 65th connect, while repeating pairs never does. Safe code must not reach it, so `Library` records the pairs `CameraId::connect_demo` has connected (counting attempts, to be safe), and `connect_demo` returns `Error::TooManyDemoCameras` instead of making a 65th.
+- With SDK 5.15, connecting a 65th different demo camera (model and serial number pair) in one library session corrupts PICam's heap inside `Picam_ConnectDemoCamera` and kills the process, even if the others were disconnected. Reconnecting a pair already used doesn't count again, and a fresh library resets the count. This was found with demo cameras and reproduced with raw `sys` calls: a new model each time, or one model with a new serial number each time, crashes on the 65th connect, while repeating pairs never does. With a PIXIS 100BR connected, PICam 5.16.3 crashed on the 64th pair instead, so real cameras take places in the same 64. Safe code must not reach it, so `Library` records the pairs `CameraId::connect_demo` has connected (counting attempts, to be safe) and every real camera PICam lists, available or open elsewhere, looking when the library starts and before each new pair, and keeping a real camera counted once it's gone. `connect_demo` returns `Error::TooManyDemoCameras` instead of crossing 64 in all.
 - PICam needs an initialized library for every call except `Picam_GetVersion` and `Picam_IsLibraryInitialized` (manual 3.2). So every public function that calls PICam takes `library: &Library` (first, after any `self`), unless its receiver already holds one (`Camera`) or borrows one (`CameraHandle`). Constructors that keep the library (`Camera::open`, `Camera::open_first`) take an `Arc<Library>` instead. Calling PICam too early then fails to compile rather than returning `Error::LibraryNotInitialized`. A function that only needs the proof takes the argument and ignores it (`let _ = library;`). The two exceptions are the associated functions `Library::version()` and `Library::is_initialized()`, which take no `&Library`.
 
 ### Cameras and thread safety (settled)
@@ -249,86 +249,22 @@ When the user passes arrays **into** PICam (for example in `Vec<Roi>::set`), bui
 
 ## Roadmap
 
-As of 2026-10-27: 199 / 199 functions wrapped.
+As of 2026-10-31, all 199 functions and 58 enums are wrapped. The decisions each stage made are recorded in the settled sections above, and the full stage-by-stage checklist is in the git history.
 
-### 1. Finish the `sys`-type refactor (done)
+| Stage | What it covered | Status |
+|---|---|---|
+| 1. `sys`-type refactor | Public wrappers for every `sys` type in the API (`Model`, `CameraId`, the `define_picam_enum!` enums), sealed value traits, Rust naming for acronyms, and a clean `[lints]` table | done |
+| 2. Typed parameters | The generated `params` handles, the untyped fallback with its enumerated type check, and the 39 hardware value enums | done |
+| 3. `picam.h` | Version and initialization queries, acquisition, and frame metadata | done |
+| 4. `picam_advanced.h` | Dynamics and constraints, validation, defect maps, camera devices, user-supplied buffers, and every callback: watches, notifications, discovery, user state, acquisition states and streaming | done |
+| 5. Accessories, EM calibration and `picam_special.h` | `Accessory` and its parameters, the light source reference, `EmCalibration`, and residual charge erasure | done |
+| 6. Finishing | The API review, the `# Errors` pass, the README and crates.io metadata, committed bindings for docs.rs, and hardware testing on a PIXIS 100BR (2026-10-30) | done, apart from publishing |
 
-- [x] `define_picam_enum!` and wrappers for `ComputerInterface`, `ValueType`, `ValueAccess`, `ConstraintType`, `ConstraintScope`, `ConstraintCategory`
-- [x] wrappers for `PicamEnumeratedType`, `PicamConstraintSeverity`, `PicamRoisConstraintRulesMask` (bitmask)
-- [x] decide on and implement a public `Model` type (see [Models](#models-settled))
-- [x] replace `sys` enums in public signatures and fields with the wrappers (`CameraId`, `Camera::value_type` and friends, the constraint `category` arguments, the constraint struct fields, `available_demo_models`)
-- [x] replace `sys::piint`/`pi64s`/`piflt` with `i32`/`i64`/`f64` in public items
-- [x] `Camera::available_ids`, `Camera::unavailable_ids`, `Camera::available_demo_models`, `CameraId::connect_demo`, `CameraId::disconnect_demo`, `CameraId::is_demo`, `CameraId::is_connected`, `CameraId::is_open_elsewhere` and `CameraId::firmware_details` take `&Library`, like `Camera::list_open_cameras` and `name()`, so calling them without an initialized library doesn't compile instead of failing with `Error::LibraryNotInitialized`
-- [x] intra-doc links use the public path `crate::Error::X`, not `crate::error::Error::X`
-- [x] public names treat acronyms as words, following Rust convention: `Error::InvalidCameraId`, `Error::InvalidAccessoryId`, `Parameter::EmIccdGain`, `Parameter::EmIccdGainControlMode`, `Parameter::AdcEmGain`, `Parameter::ApplicableStarDefectMapId`, `Parameter::SensrWindowHeight` and `EnumeratedType::EmIccdGainControlMode`. Generated names get this from a rule in `xtask/src/generate.rs` rather than one-off overrides, and each renamed item carries `#[doc(alias = "...")]` with PICam's spelling so rustdoc search still finds it. In the same pass, read the full list of `Model` constants once and add overrides where names are uneven (such as `PRO_EM_1600XX_2B` next to `PI_MAX4_1024X256`, or `RETIGA_E7` next to `LANSIS_A_261BR`). Outcome: `ProEMHS` became `PRO_EM_HS`. The rest keep PICam's own grouping, since `1600xx` isn't a `width x height` size like `1024x256`
-- [x] re-export `CameraId` and `CameraHandle` from `lib.rs`
-- [x] re-export `FirmwareDetail`, the existing `define_picam_enum!` enums (`ComputerInterface`, `ValueType`, `ValueAccess`, `ConstraintType`, `ConstraintScope`, `ConstraintCategory`) and the new ones from `lib.rs`
-- [x] doc comments on the enums generated by `define_picam_enum!` and their variants, and on all public struct fields
-- [x] seal the value traits (`PicamValue`, `ReadablePicamValue`, `OnlineSettablePicamValue`). Their methods are currently public, safe and take a raw `PicamHandle`, so callers can pass PICam an arbitrary pointer from safe code, and `cargo clippy` fails with `not_unsafe_ptr_arg_deref`. Use the sealed-trait pattern: the public traits stay usable as bounds (`camera.get::<f64>(…)` is unchanged), and the methods that take a handle move to a crate-private supertrait that users can neither call nor implement.
-- [x] clear every lint in `Cargo.toml`'s `[lints]` table: all `missing_docs` (including the `Error` variants, the crate-level `//!` doc in `lib.rs` and a `//!` doc for `build.rs`), the `# Errors` sections on the trait methods, `Debug` for `Camera` and `Library`, and the stray blank line after the doc comment on `OnlineSettablePicamValue::set_online`
-- [x] once clean, `cargo clippy -p picam-rs -- -D warnings -A dead_code` passes. This is the same check the push/PR gate runs.
+Next:
 
-### 2. Typed parameters and hardware value enums
-
-Decided with the maintainer on 2026-10-25. Two chunks, after stage 1, because the generated handles copy stage 1's renamed parameter names.
-
-- [x] **typed parameter handles:**
-  - Each parameter gets a generated handle that carries its Rust value type, so `camera.get(…)` infers the type and a wrong type doesn't compile.
-  - The type comes from the value type in the parameter's `PI_V` code, and on/off parameters become `bool`.
-  - `get`, `set`, `default_value`, `can_set`, `read` and `set_online` take a handle.
-  - `Parameter` stays, for parameters learned at run time (`Camera::parameters`, `Camera::commit_parameters`, `Unknown`) and for the functions that don't touch values, which accept either.
-  - An untyped fallback stays for parameters without a handle: the `_untyped` methods.
-  - Enum parameters are typed `i32` until the next chunk.
-  - The handles live in the public `params` module (decided with the maintainer on 2026-10-25).
-- [x] **hardware value enums:**
-  - Before the untyped fallback reads or writes an enum value, it checks the parameter's enumerated type with `Picam_GetParameterEnumeratedType`, since PICam reads every enum through the same integer call and can't catch a mismatch itself. This waits for this chunk because no enum value types exist before it.
-  - Generate the 39 hardware enums, `ActiveShutter` through `VacuumStatus`. The six `*Mask` enums use `bitflags`, and the rest use `define_picam_enum!`.
-  - Docs are short and generated: each enum names its `Parameter`, and each value names its PICam constant.
-  - Enum parameters switch from `i32` to their enum through a mapping table in the generator, matched by name with overrides. It is checked against `Camera::enumerated_type` on the demo models, and any parameter no demo model has goes in `HARDWARE_TESTS.md`.
-  - The acquisition enums (`AcquisitionState`, `AcquisitionErrorsMask` and `AcquisitionStateErrorsMask`) wait for acquisition. The advanced API's (`DiscoveryAction`, `HandleType` and `DynamicsMask`) wait for stage 4.
-
-### 3. Remaining `picam.h` (7 functions, plus `Picam_DestroyCalibrations` in stage 5)
-
-- [x] quick wins: `Picam_GetVersion`, `Picam_IsLibraryInitialized`. `Picam_DestroyCalibrations` moved to stage 5: it frees only the array `PicamAccessory_GetLightSourceReference` allocates (manual 4.3.3.4 and 7.4.6.1), so it is wrapped with that call
-- [x] acquisition: `Picam_Acquire`, `Picam_StartAcquisition`, `Picam_StopAcquisition`, `Picam_IsAcquisitionRunning`, `Picam_WaitForAcquisitionUpdate`. This is the most important remaining piece and needs careful design: who owns the frame buffers, and how data is copied out. An agent may write it, but only after the longer design discussion in `CLAUDE.md`, with the actual code shown and approved first (decided with the maintainer on 2026-10-25). See [Acquisition](#acquisition-settled).
-- [x] decode frame metadata (time stamps, frame tracking, gate and modulation tracking), as its own chunk, after checking on demo cameras what each produces
-
-### 4. `picam_advanced.h` (76 functions)
-
-Callback registration (`Register*`/`Unregister*` pairs), parameter validation, camera devices, defect maps, user-supplied acquisition buffers, and camera and accessory discovery (`picam_accessory.h`'s discovery functions come here, with the discovery callback their results arrive through). It is very repetitive and well suited to macros, but callbacks across the FFI boundary are the hardest part of the crate to get right, so they go through the design discussion in `CLAUDE.md`, with the actual code shown and approved first (decided with the maintainer on 2026-10-25).
-
-- [x] parameter dynamics (`Dynamics`, `dynamics`, `extrinsic_dynamics`) and the calls listing every constraint on a parameter (`collection_constraints` and the rest)
-- [x] parameter validation (`validate_parameter`, `validate_parameters`, `validate_dependent_parameter`)
-- [x] pixel and star defect maps
-- [x] camera devices and handle types (`Camera::open_device`, `Camera::device` and `CameraDevice`, `Camera::list_open_camera_devices`, `HandleType` and `CameraHandle`'s `handle_type`, `model` and `device`)
-- [x] committing to and refreshing from the camera device
-- [x] user-supplied acquisition buffers, under the acquisition design discussion (see [Acquisition](#acquisition-settled))
-- callbacks, designed with the maintainer on 2026-10-26 (see [Callbacks](#callbacks-settled)):
-  - [x] parameter value, extrinsic value, relevance and access watches, with the machinery
-  - [x] dependent constraint watches and status notifications
-  - [x] camera and accessory discovery
-  - [x] user state (`Get/SetUserState`) and `Calibrate`'s progress callback
-  - [x] acquisition state watches
-  - [x] the acquisition-updated callback, as streaming acquisitions (see [Acquisition](#acquisition-settled))
-
-### 5. `picam_accessory.h` (18), `picam_em_calibration.h` (11), `picam_special.h` (2)
-
-These largely mirror patterns already in `camera.rs`.
-
-- [x] accessory identification and access (`Accessory`, `AccessoryId`, `AccessoryHandle`), firmware details and the light source reference, with `Picam_DestroyCalibrations` from `picam.h`, which frees the reference
-- [x] `picam_special.h`: `Camera::can_erase_residual` and `Camera::erase_residual`, through the camera's device handle (wrapping `PicamAdvanced_GetCameraDevice` privately)
-- [x] accessory parameters: `Accessory` shares `Camera`'s parameter methods through `impl_parameter_methods!` (no new functions)
-- [x] `picam_em_calibration.h`, apart from `Calibrate` and its progress callback, which wait for the callbacks
-- accessory discovery (`DiscoverAccessories`, `StopDiscoveringAccessories`, `IsDiscoveringAccessories`) moved to stage 4's callbacks, with the discovery callback its results arrive through
-
-### 6. Finishing
-
-- [x] the API review: `Camera::device` returns the `CameraDevice` without a `Result`, and the status methods are typed, with `Duration` timeouts (decided with the maintainer on 2026-10-29)
-- [x] a pass through the manual to fill in `# Errors` sections (parts 1, 2a and 2b: the parameter methods, identification and lifecycle, and acquisition and discovery)
-- [x] a crate-level README with an experimental notice, with the full hardware test list in `HARDWARE_TESTS.md`, the crates.io metadata, and committed bindings so docs.rs can build the crate
-- [x] revisit the shared `commit_parameters` and `are_parameters_committed` docs, which read oddly on a `CameraDevice`, where `set` isn't pending (left until then, decided with the maintainer on 2026-10-26)
-- [ ] hardware testing from `HARDWARE_TESTS.md`, then publishing
+- [ ] publish 0.1.0
+- [ ] the open items in `HARDWARE_TESTS.md`, as hardware becomes available
 
 ## Open questions
 
-- With a real camera connected, PICam crashed on the 64th different demo camera rather than the 65th (a PIXIS 100BR, PICam 5.16.3), so its limit seems to count real cameras too, while `Library::MAX_DEMO_CAMERAS` counts only demo cameras. A fix is planned for the next chunk, once it's settled how real cameras count.
+None at the moment. Behaviour still to check on hardware is listed in `HARDWARE_TESTS.md`.

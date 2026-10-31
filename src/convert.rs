@@ -133,6 +133,30 @@ pub(crate) fn string_to_c_char_array<const N: usize>(value: &str) -> Result<[sys
     Ok(array)
 }
 
+// picam's fixed-size string fields have the lengths its `PicamStringSize`
+// gives them, so a change in an sdk update fails to compile here rather than
+// changing the longest string `string_to_c_char_array` accepts unnoticed
+const _: fn(
+    &sys::PicamCameraID,
+) -> &[sys::pichar; sys::PicamStringSize::PicamStringSize_SensorName as usize] =
+    |id| &id.sensor_name;
+const _: fn(
+    &sys::PicamCameraID,
+) -> &[sys::pichar; sys::PicamStringSize::PicamStringSize_SerialNumber as usize] =
+    |id| &id.serial_number;
+const _: fn(
+    &sys::PicamAccessoryID,
+) -> &[sys::pichar; sys::PicamStringSize::PicamStringSize_SerialNumber as usize] =
+    |id| &id.serial_number;
+const _: fn(
+    &sys::PicamFirmwareDetail,
+) -> &[sys::pichar; sys::PicamStringSize::PicamStringSize_FirmwareName as usize] =
+    |detail| &detail.name;
+const _: fn(
+    &sys::PicamFirmwareDetail,
+) -> &[sys::pichar; sys::PicamStringSize::PicamStringSize_FirmwareDetail as usize] =
+    |detail| &detail.detail;
+
 /// Converts a PICam-allocated array into an owned `Vec`, treating a null
 /// pointer (PICam's convention for "nothing to report" in at least some
 /// functions) as an empty `Vec` rather than dereferencing it.

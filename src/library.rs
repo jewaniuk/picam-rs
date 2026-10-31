@@ -2,8 +2,9 @@
 
 use std::collections::HashSet;
 use std::fmt;
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
+use crate::camera::Camera;
 use crate::error::{Error, Result, picam_call};
 use crate::model::Model;
 use crate::sys;
@@ -17,16 +18,26 @@ use crate::watch;
 /// obtain a `Camera` (or anything else) without a live `Library`, and
 /// initialization/uninitialization become `new`/`Drop`.
 pub struct Library {
-    /// The demo cameras, as model and serial number, that `connect_demo` has
-    /// tried so far, see `MAX_DEMO_CAMERAS`. Also keeps `Library` from being
-    /// constructed outside this module.
-    demo_cameras: Mutex<HashSet<(Model, String)>>,
+    /// The cameras that count towards PICam's limit, see `MAX_CAMERAS`. Also
+    /// keeps `Library` from being constructed outside this module.
+    cameras: Mutex<Cameras>,
+}
+
+/// The cameras, as model and serial number, that count towards PICam's limit
+/// in one library session, see `Library::MAX_CAMERAS`.
+#[derive(Default)]
+struct Cameras {
+    /// The demo cameras `connect_demo` has tried so far.
+    demo: HashSet<(Model, String)>,
+    /// Every real camera PICam has listed since the library started, kept
+    /// even once it's gone.
+    real: HashSet<(Model, String)>,
 }
 
 impl Library {
-    /// The most different demo cameras one `Library` tries to connect, where
-    /// a demo camera is a model and serial number pair, counting attempts
-    /// that fail.
+    /// The most cameras one `Library` connects: the different demo cameras
+    /// it tries, where a demo camera is a model and serial number pair,
+    /// counting attempts that fail, plus every real camera PICam has listed.
     ///
     /// With PICam 5.15, connecting a 65th different pair in one library
     /// session corrupts PICam's heap inside `Picam_ConnectDemoCamera` and
@@ -34,10 +45,14 @@ impl Library {
     /// both, and even if each was disconnected before the next. Trying a pair
     /// already tried doesn't count again, and uninitializing and
     /// reinitializing the library resets the count. This was found with demo
-    /// cameras and reproduced with raw PICam calls, not documented, so
-    /// [`CameraId::connect_demo`](crate::CameraId::connect_demo) returns
-    /// [`Error::TooManyDemoCameras`] instead of crossing it.
-    pub(crate) const MAX_DEMO_CAMERAS: usize = 64;
+    /// cameras and reproduced with raw PICam calls, not documented. With a
+    /// PIXIS 100BR connected, PICam 5.16.3 crashed on the 64th pair instead,
+    /// so real cameras take places too. So
+    /// [`CameraId::connect_demo`](crate::CameraId::connect_demo) also counts
+    /// every real camera PICam has listed since the library started,
+    /// available or open elsewhere, and returns
+    /// [`Error::TooManyDemoCameras`] instead of crossing the limit.
+    pub(crate) const MAX_CAMERAS: usize = 64;
 
     /// Initializes the PICam library.
     ///
@@ -45,13 +60,18 @@ impl Library {
     ///
     /// Returns [`crate::Error::LibraryAlreadyInitialized`] if a `Library` is
     /// already active elsewhere in the process (seen with SDK 5.15), or an
-    /// error if PICam is unable to initialize.
+    /// error if PICam is unable to initialize or to list its cameras.
     pub fn new() -> Result<Self> {
         tracing::debug!("initializing PICam library");
         picam_call!(sys::Picam_InitializeLibrary())?;
-        Ok(Self {
-            demo_cameras: Mutex::new(HashSet::new()),
-        })
+        // dropped on an error below, which uninitializes picam again
+        let library = Self {
+            cameras: Mutex::default(),
+        };
+        // a camera picam found as it started counts towards its limit, even
+        // if it's gone before the first demo camera
+        library.note_real_cameras()?;
+        Ok(library)
     }
 
     /// Reports the installed PICam runtime's version.
@@ -93,42 +113,65 @@ impl Library {
         Ok(initialized != 0)
     }
 
+    /// Locks the cameras counted towards PICam's limit.
+    fn cameras(&self) -> MutexGuard<'_, Cameras> {
+        // the sets can't be left half-updated, so a panic elsewhere while
+        // they were locked is no reason to stop
+        self.cameras.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Records every real camera PICam lists now, available or open
+    /// elsewhere, as counting towards its limit.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if PICam is unable to list its cameras.
+    fn note_real_cameras(&self) -> Result<()> {
+        let mut ids = Camera::available_ids(self)?;
+        ids.extend(Camera::unavailable_ids(self)?);
+        let real: Vec<_> = ids
+            .into_iter()
+            // one picam can't tell apart counts as real, since counting one
+            // too many only refuses a demo camera early
+            .filter(|id| id.is_demo(self) != Ok(true))
+            .map(|id| (id.model, id.serial_number))
+            .collect();
+        self.cameras().real.extend(real);
+        Ok(())
+    }
+
     /// Records that the demo camera `model`, `serial_number` is about to be
-    /// connected, refusing a new one once `MAX_DEMO_CAMERAS` have been.
+    /// connected, refusing a new one once the demo cameras tried and the real
+    /// cameras listed reach `MAX_CAMERAS`.
     ///
     /// # Errors
     ///
     /// Returns [`Error::TooManyDemoCameras`] if this demo camera is new and
-    /// the limit has been reached.
+    /// the limit has been reached, or an error if PICam is unable to list its
+    /// cameras.
     pub(crate) fn note_demo_camera(&self, model: Model, serial_number: &str) -> Result<()> {
-        // the set can't be left half-updated, so a panic elsewhere while it
-        // was locked is no reason to stop
-        let mut demo_cameras = self
-            .demo_cameras
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
         let camera = (model, serial_number.to_string());
-        if demo_cameras.contains(&camera) {
+        if self.cameras().demo.contains(&camera) {
             return Ok(());
         }
-        if demo_cameras.len() >= Self::MAX_DEMO_CAMERAS {
+        // a real camera that appeared since the last look counts too
+        self.note_real_cameras()?;
+        let mut cameras = self.cameras();
+        if cameras.demo.len() + cameras.real.len() >= Self::MAX_CAMERAS {
             return Err(Error::TooManyDemoCameras);
         }
-        demo_cameras.insert(camera);
+        cameras.demo.insert(camera);
         Ok(())
     }
 }
 
 impl fmt::Debug for Library {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // the count is enough, the set itself can hold 64 entries
-        let demo_cameras_tried = self
-            .demo_cameras
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .len();
+        // the counts are enough, the sets themselves can hold 64 entries
+        let cameras = self.cameras();
         f.debug_struct("Library")
-            .field("demo_cameras_tried", &demo_cameras_tried)
+            .field("demo_cameras_tried", &cameras.demo.len())
+            .field("real_cameras_seen", &cameras.real.len())
             .finish()
     }
 }

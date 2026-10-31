@@ -78,26 +78,36 @@ fn demo_camera_round_trip() {
         .expect("demo camera should disconnect");
 }
 
-/// Connects 64 different demo cameras, then checks a 65th is refused with
+/// Connects as many different demo cameras as the limit of 64 allows, less
+/// one for each real camera PICam lists, then checks one more is refused with
 /// `Error::TooManyDemoCameras` rather than reaching PICam, which corrupts its
-/// heap at that point (seen with SDK 5.15), and that a demo camera already
-/// used still connects. A demo camera counts once per model and serial
-/// number pair, so the 65th here reuses a model with a new serial number,
+/// heap at that point (seen with SDK 5.15, and on PICam 5.16.3 one camera
+/// sooner with a PIXIS 100BR connected), and that a demo camera already used
+/// still connects. A demo camera counts once per model and serial number
+/// pair, so the one refused here reuses a model with a new serial number,
 /// which crashed the process before the limit was added.
 #[test]
 fn demo_camera_limit() {
-    const CAMERAS_ALLOWED: usize = 64;
-
     let test_library = common::library();
     let library = &test_library.library;
+
+    // real cameras take places too, counted the way the library counts them
+    let mut ids = Camera::available_ids(library).expect("cameras should be listed");
+    ids.extend(Camera::unavailable_ids(library).expect("cameras should be listed"));
+    let real_cameras = ids
+        .iter()
+        .filter(|id| id.is_demo(library) != Ok(true))
+        .count();
+    let cameras_allowed = 64 - real_cameras;
+
     let models = Camera::available_demo_models(library).expect("demo models should be listed");
     assert!(
-        models.len() >= CAMERAS_ALLOWED,
-        "this test needs {CAMERAS_ALLOWED} demo models, PICam offers {}",
+        models.len() >= cameras_allowed,
+        "this test needs {cameras_allowed} demo models, PICam offers {}",
         models.len()
     );
 
-    for (index, &model) in models.iter().take(CAMERAS_ALLOWED).enumerate() {
+    for (index, &model) in models.iter().take(cameras_allowed).enumerate() {
         // each demo camera gets its own serial number so they never collide
         let id = CameraId::connect_demo(library, model, &format!("LIMIT{index:04}"))
             .unwrap_or_else(|e| panic!("demo {model:?} should connect: {e}"));
@@ -108,7 +118,8 @@ fn demo_camera_limit() {
     let result = CameraId::connect_demo(library, models[0], "LIMIT9999");
     assert!(
         matches!(result, Err(Error::TooManyDemoCameras)),
-        "a 65th different demo camera should be refused, got {result:?}"
+        "demo camera {} should be refused, got {result:?}",
+        cameras_allowed + 1
     );
 
     let id = CameraId::connect_demo(library, models[0], "LIMIT0000")
