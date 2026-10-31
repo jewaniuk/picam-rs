@@ -646,6 +646,11 @@ macro_rules! impl_parameter_methods {
                 /// [`params`](crate::params), directly from hardware, bypassing PICam's
                 /// cached/committed value.
                 ///
+                /// `get` can return a stale status: on a PIXIS 100BR, it kept
+                /// `SensorTemperatureStatus` at its value from when the camera opened
+                /// while the sensor cooled and locked (seen with PICam 5.16.3). So read
+                /// a status here when [`can_read`](Self::can_read) says it can be.
+                ///
                 /// # Errors
                 ///
                 /// Returns [`crate::Error::ParameterIsNotReadable`] if `parameter` can't be
