@@ -60,12 +60,12 @@ Checked on a PIXIS 100BR with PICam 5.16.3: [HARDWARE_TESTS.md](HARDWARE_TESTS.m
 
 - Accessories: everything, since there are no demo accessories.
 - EM gain calibration, which PICam won't run on a demo camera.
-- Acquisition: PICam's acquisition errors other than lost data, ending acquisitions on a camera that stops responding, when PICam sets the overrun flag, the device handle's refusals while running, clearing the readout count online, and non-destructive readout.
-- Streamed acquisitions: overrun, and slow callbacks.
+- Acquisition: PICam's acquisition errors other than lost data, ending acquisitions on a camera that stops responding, when PICam sets and clears the overrun flag, the device handle's refusals while running, clearing the readout count online, and non-destructive readout.
+- Streamed acquisitions: overrun, slow callbacks, reading the overrun flag while the callback is unregistered, and whether PICam writes to its own memory during a callback.
 - Frame metadata: bit depths other than 64, and gate and modulation tracking on PI-MAX cameras.
 - Parameters: the parameters no demo camera has.
-- Camera devices: that its handle stays the same while the camera is open.
-- Watches and notifications: extrinsic readings during an acquisition, value access changes, status notification errors, and constraint callbacks.
+- Camera devices: that a value set through `CameraDevice` takes effect on its own, and that its handle stays the same while the camera is open.
+- Watches and notifications: extrinsic readings during an acquisition and the thread they arrive on, value access changes, status notification errors and notifications set as one fires, and constraint callbacks.
 - Discovery: real cameras and accessories being plugged in, unplugged and powered off.
 - Defect maps and residual charge erasure.
 
