@@ -1,5 +1,5 @@
-//! A read-only hardware check of the accessories PICam can see, such as an
-//! IntelliCal lamp, for the Accessories items in `HARDWARE_TESTS.md`.
+//! A read-only hardware check of the accessories PICam can see, for the
+//! Accessories items in `HARDWARE_TESTS.md`.
 //!
 //! The test is `#[ignore]`d and also needs its name in `PICAM_RS_HARDWARE`,
 //! so it only runs when approved:
@@ -9,9 +9,9 @@
 //! ```
 //!
 //! Among IntelliCal units, PICam's accessory API only lists the IntelliCal
-//! SWIR QTH lamp (manual Table A-4), so this first settles whether PICam can
-//! see the lamp at all. Keep the output, but don't commit it: it holds serial
-//! numbers.
+//! SWIR QTH lamp (manual Table A-4). With an IntelliCal of another kind
+//! connected, PICam 5.16.3 listed no accessories at all. Keep the output, but
+//! don't commit it: it holds serial numbers.
 
 mod common;
 
@@ -28,8 +28,8 @@ use picam_rs::{Accessory, ConstraintCategory, ConstraintType, params};
 /// doesn't say whether opening an accessory changes it, so switch the lamp
 /// off before running this.
 ///
-/// **Time:** seconds. **Preparation:** the IntelliCal connected by USB and
-/// powered on, its lamp off, and LightField closed.
+/// **Time:** seconds. **Preparation:** an accessory PICam supports connected
+/// by USB and powered on, its lamp off, and LightField closed.
 #[test]
 #[ignore = "hardware: needs an accessory, see HARDWARE_TESTS.md"]
 fn detect_accessories() {

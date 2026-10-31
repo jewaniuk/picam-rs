@@ -223,7 +223,8 @@ impl EmCalibration {
         // `state` outlives the call, and picam hands it only to
         // `calibration_progress::<F>` (manual 8.3.1.1). calibrate blocks
         // until calibration ends (manual 8.4.4.1), so picam is assumed never
-        // to call it afterwards, which the readme lists to check on hardware
+        // to call it afterwards, which `HARDWARE_TESTS.md` lists to check on
+        // hardware
         let result = picam_call!(sys::PicamEMCalibration_Calibrate(
             self.handle,
             Some(calibration_progress::<F>),

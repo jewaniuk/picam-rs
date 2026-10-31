@@ -6,7 +6,7 @@ Instructions for agents working on `picam-rs`. This file says **how** to work: t
 
 ## The project
 
-`picam-rs` is a safe, idiomatic Rust wrapper around the Teledyne Princeton Instruments PICam C API (SDK 5.15), which controls their scientific cameras. The goal is to wrap all 199 API functions. The raw bindgen output, which `xtask generate` writes to `src/generated/bindings.rs`, lives in the private `sys` module, and no `sys` type may ever appear in the public API.
+`picam-rs` is a safe, idiomatic Rust wrapper around the Teledyne Princeton Instruments PICam C API (built against SDK 5.15), which controls their scientific cameras. It wraps all 199 API functions and 58 enums. The raw bindgen output, which `xtask generate` writes to `src/generated/bindings.rs`, lives in the private `sys` module, and no `sys` type may ever appear in the public API.
 
 This repository is **public**. Never commit PICam SDK files (headers, libraries, DLLs), text or excerpts from the PICam manual, or anything about calibrating a specific instrument.
 
@@ -27,7 +27,7 @@ Hooks in `.claude/settings.json` format every Rust file you edit, and run the ga
 
 ## Workflow for each chunk
 
-Work is done one **chunk** at a time: one coherent group of roughly 10 to 20 functions, or one roadmap bullet. The aim is a PR the maintainer can review in about 15 minutes. If a roadmap bullet is much bigger than that, propose splitting it.
+Work is done one **chunk** at a time: one coherent change, or one roadmap item. The aim is a PR the maintainer can review in about 15 minutes. If a change is much bigger than that, propose splitting it.
 
 1. **Plan, in plan mode.** Research without editing anything, then present a plan covering:
    - which functions or roadmap items the chunk covers
@@ -165,7 +165,7 @@ Anything else in `DESIGN.md` falls under stop-and-ask rule 11.
 The PR description, with these sections in order:
 
 1. **Summary:** two or three sentences.
-2. **Progress:** functions wrapped before and after, from `cargo run -p xtask -- progress`.
+2. **Progress:** functions and enums wrapped before and after, from `cargo run -p xtask -- progress`.
 3. **Public API changes:** the difference in `cargo public-api --package picam-rs` output between `main` and the branch. If the tool isn't available, say so and list the changes by hand.
 4. **New `unsafe` blocks:** file and line for each, with one line on why it is sound.
 5. **Deviations:** anything that doesn't follow `DESIGN.md` or the reference implementations exactly, and why.

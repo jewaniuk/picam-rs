@@ -958,28 +958,32 @@ impl CameraId {
     /// Returns the new camera's [`CameraId`], pass it to [`Camera::open`] to
     /// actually open it.
     ///
-    /// One `library` tries at most 64 different demo cameras, counting each
-    /// model and serial number pair once. PICam 5.15 corrupts its own memory,
-    /// killing the process, when a 65th different pair is connected in one
-    /// library session, even if the others were disconnected (found with demo
-    /// cameras, not documented), so this refuses instead. Every attempt
-    /// counts, even one that fails, in case a failed attempt uses up one of
-    /// PICam's slots too. Trying a pair already tried doesn't count again, and
-    /// dropping the `Library` and making a new one starts the count again.
+    /// One `library` connects at most 64 cameras in all: the different demo
+    /// cameras it has tried, counting each model and serial number pair once,
+    /// plus every real camera PICam has listed since the library started.
+    /// PICam corrupts its own memory, killing the process, when one more demo
+    /// camera is connected in one library session, even if the others were
+    /// disconnected (found with demo cameras on PICam 5.15 and 5.16, and one
+    /// camera sooner with a PIXIS 100BR connected on 5.16.3, not documented),
+    /// so this refuses instead. Every attempt counts, even one that fails, in
+    /// case a failed attempt uses up one of PICam's slots too. Trying a pair already tried
+    /// doesn't count again, and dropping the `Library` and making a new one
+    /// starts the count again.
     ///
     /// # Errors
     ///
     /// - [`crate::Error::InvalidString`] if `serial_number` contains an
     ///   embedded null byte
-    /// - [`crate::Error::TooManyDemoCameras`] if this would be the 65th
-    ///   different demo camera for `library`
+    /// - [`crate::Error::TooManyDemoCameras`] if this is a new demo camera and
+    ///   `library` has already reached 64 cameras in all
     /// - [`crate::Error::InvalidDemoModel`] if `model` isn't a demo model, such
     ///   as a series or an accessory (seen with SDK 5.15)
     /// - [`crate::Error::InvalidDemoSerialNumber`] if `serial_number` is too
     ///   long for PICam (seen with SDK 5.15)
     /// - [`crate::Error::DemoAlreadyConnected`] if this model and serial number
     ///   are already connected (seen with SDK 5.15)
-    /// - otherwise an error if PICam is unable to connect it
+    /// - otherwise an error if PICam is unable to list its cameras, which
+    ///   this does to count the real ones, or to connect this one
     pub fn connect_demo(library: &Library, model: Model, serial_number: &str) -> Result<CameraId> {
         tracing::debug!("connecting demo camera: {serial_number}");
         let c_serial_number = std::ffi::CString::new(serial_number)

@@ -1,12 +1,17 @@
 //! A safe Rust wrapper around the Teledyne Princeton Instruments PICam C API,
 //! which controls their scientific cameras.
 //!
-//! **This crate is experimental.** Much of it has not been tested against
-//! real hardware, and its API may change.
+//! It wraps all 199 of the API's functions and all 58 of its enums.
+//!
+//! **This crate is experimental.** Much of it has only been tested against
+//! PICam's demo cameras, with only part checked on real hardware (a PIXIS
+//! 100BR), and its API may change.
 //!
 //! It only runs on Windows, and needs the PICam SDK installed: the build
-//! reads its headers and links `Picam.lib`, either from `PICAM_DIR` or from
-//! the SDK's default install path. No SDK files are shipped with this crate.
+//! links `Picam.lib`, from the `Libraries` directory beside `PICAM_DIR` or
+//! from the SDK's default install path. The raw bindings come with the
+//! crate, so building doesn't read the SDK's headers, and no SDK files are
+//! shipped with it.
 //!
 //! Everything starts with a [`Library`], which initializes PICam and keeps it
 //! initialized for as long as it or any [`Camera`] opened with it is alive:

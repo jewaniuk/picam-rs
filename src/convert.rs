@@ -133,6 +133,31 @@ pub(crate) fn string_to_c_char_array<const N: usize>(value: &str) -> Result<[sys
     Ok(array)
 }
 
+// picam's header sizes its fixed-size string fields with `PicamStringSize`,
+// and bindgen writes the lengths out as numbers, so these tie each field
+// back to the size it was declared with. `string_to_c_char_array` takes its
+// length from the field itself, so it never needs these values
+const _: fn(
+    &sys::PicamCameraID,
+) -> &[sys::pichar; sys::PicamStringSize::PicamStringSize_SensorName as usize] =
+    |id| &id.sensor_name;
+const _: fn(
+    &sys::PicamCameraID,
+) -> &[sys::pichar; sys::PicamStringSize::PicamStringSize_SerialNumber as usize] =
+    |id| &id.serial_number;
+const _: fn(
+    &sys::PicamAccessoryID,
+) -> &[sys::pichar; sys::PicamStringSize::PicamStringSize_SerialNumber as usize] =
+    |id| &id.serial_number;
+const _: fn(
+    &sys::PicamFirmwareDetail,
+) -> &[sys::pichar; sys::PicamStringSize::PicamStringSize_FirmwareName as usize] =
+    |detail| &detail.name;
+const _: fn(
+    &sys::PicamFirmwareDetail,
+) -> &[sys::pichar; sys::PicamStringSize::PicamStringSize_FirmwareDetail as usize] =
+    |detail| &detail.detail;
+
 /// Converts a PICam-allocated array into an owned `Vec`, treating a null
 /// pointer (PICam's convention for "nothing to report" in at least some
 /// functions) as an empty `Vec` rather than dereferencing it.

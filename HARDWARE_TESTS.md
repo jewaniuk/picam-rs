@@ -25,6 +25,10 @@ Close LightField first, since PICam can't open a device that's open elsewhere. E
 - [x] a `CameraHandle` whose camera had closed gave `InvalidHandle` from every method on a demo camera (`tests/errors.rs`), need to check on hardware, in case PICam reuses a closed handle's value for a camera opened later
   - PIXIS 100BR, PICam 5.16.3: `InvalidHandle` after closing. Reopening the camera gave a different handle value, and the old one still gave `InvalidHandle`. Demo cameras do reuse a closed handle's value for the next camera opened (seen with SDK 5.15 and PICam 5.16.3), so there a stale handle refers to the new camera.
 
+## Demo cameras
+
+- [ ] the demo camera limit's count of real cameras rests on one result: with a PIXIS 100BR on, PICam 5.16.3 crashed on the 64th different demo camera rather than the 65th. `Library` assumes each real camera PICam lists takes one of the 64 places, including one open elsewhere and one since unplugged, and keeps counting it once it's gone. Need to run `demo_camera_limit` (`tests/camera.rs`) with one or more real cameras on, both available and open elsewhere, and check that it passes without a crash
+
 ## Accessories
 
 PICam's accessory API covers FERGIE accessories and, among IntelliCal units, only the IntelliCal SWIR QTH lamp (manual Table A-4). The lab's IntelliCal is a He and Ne/Ar unit, which PICam doesn't support: with it connected, PICam 5.16.3 listed no accessories, available or unavailable. So these items stay open until someone with a supported accessory checks them.

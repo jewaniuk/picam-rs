@@ -21,7 +21,8 @@ use crate::sys;
 /// [`crate::Acquisition::camera`]. PICam then refuses every change through it
 /// with [`crate::Error::AcquisitionInProgress`], except to the parameters it
 /// can set online, as [`Camera::set_online`] does (seen on demo cameras with
-/// SDK 5.15), so the acquisition's data layout can't change.
+/// SDK 5.15, and for `set` and the commits on a PIXIS 100BR with PICam
+/// 5.16.3), so the acquisition's data layout can't change.
 #[derive(Debug)]
 pub struct CameraDevice<'a> {
     handle: sys::PicamHandle,
