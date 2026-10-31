@@ -6,7 +6,7 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(clippy::all)]
-// the bindings hold all of picam.h, and the parts the wrapper doesn't need
+// the bindings hold all of the picam headers, and the parts the wrapper doesn't need
 // aren't worth a warning in every build. `xtask progress` still sees them,
 // since it checks with `--force-warn dead_code`
 #![allow(dead_code)]

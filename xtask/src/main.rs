@@ -169,7 +169,7 @@ fn progress(root: &Path, list_unwrapped: bool) -> Result<(), String> {
 fn dead_code_messages(root: &Path) -> Result<Vec<String>, String> {
     let output = cargo(root)
         // `cargo rustc` passes the flag to picam-rs alone, and it turns back on
-        // the warnings `sys` allows
+        // the warnings the crate allows
         .args([
             "rustc",
             "--package",
@@ -183,7 +183,7 @@ fn dead_code_messages(root: &Path) -> Result<Vec<String>, String> {
             "dead_code",
         ])
         .output()
-        .map_err(|e| format!("could not run cargo check: {e}"))?;
+        .map_err(|e| format!("could not run cargo rustc: {e}"))?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut dead_code = Vec::new();
@@ -212,7 +212,7 @@ fn dead_code_messages(root: &Path) -> Result<Vec<String>, String> {
     if !output.status.success() {
         // failed without a compiler error, e.g. the build script panicked
         return Err(format!(
-            "cargo check failed:\n\n{}",
+            "cargo rustc failed:\n\n{}",
             String::from_utf8_lossy(&output.stderr)
         ));
     }
