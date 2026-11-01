@@ -4,9 +4,9 @@
 //! Run with `cargo run -p xtask -- <task>`. Tasks:
 //!
 //! - `progress`: reports how much of the PICam C API is wired into the safe
-//!   wrapper, using `dead_code` warnings from `cargo check` on the raw
-//!   bindings in `sys` as the signal. Pass `--list` to also print every
-//!   function that is still unwrapped, grouped by header.
+//!   wrapper, using `dead_code` warnings on the raw bindings in `sys` as the
+//!   signal. `sys` allows them, so it forces them back on. Pass `--list` to
+//!   also print every function that is still unwrapped, grouped by header.
 //! - `generate`: writes the files in `src/generated/`, the raw bindings and
 //!   the lists taken straight from the PICam headers. Pass `--check` to
 //!   write nothing and fail if they are out of date, or if a hand-written
@@ -68,13 +68,13 @@ fn main() -> ExitCode {
     }
 }
 
-/// Runs `cargo check` on `picam-rs`, then prints `dead_code` warnings by item
-/// kind, how many header functions are wrapped, overall and per header, and
-/// how many header enums are.
+/// Checks `picam-rs` with `dead_code` warnings forced on, then prints them by
+/// item kind, how many header functions are wrapped, overall and per header,
+/// and how many header enums are.
 ///
 /// # Errors
 ///
-/// Returns an error if `cargo check` can't be run, if `picam-rs` doesn't
+/// Returns an error if `cargo` can't be run, if `picam-rs` doesn't
 /// compile, or if a header can't be read.
 fn progress(root: &Path, list_unwrapped: bool) -> Result<(), String> {
     let dead_code_messages = dead_code_messages(root)?;
@@ -160,17 +160,30 @@ fn progress(root: &Path, list_unwrapped: bool) -> Result<(), String> {
     Ok(())
 }
 
-/// Runs `cargo check` on `picam-rs` and returns the text of every
-/// `dead_code` warning.
+/// Checks `picam-rs` with `dead_code` warnings forced on, overriding the
+/// crate's own allows, and returns the text of every one.
 ///
 /// # Errors
 ///
 /// Returns an error if `cargo` can't be run or `picam-rs` doesn't compile.
 fn dead_code_messages(root: &Path) -> Result<Vec<String>, String> {
     let output = cargo(root)
-        .args(["check", "--message-format=json", "--package", "picam-rs"])
+        // `cargo rustc` passes the flag to picam-rs alone, and it turns back on
+        // the warnings the crate allows
+        .args([
+            "rustc",
+            "--package",
+            "picam-rs",
+            "--lib",
+            "--profile",
+            "check",
+            "--message-format=json",
+            "--",
+            "--force-warn",
+            "dead_code",
+        ])
         .output()
-        .map_err(|e| format!("could not run cargo check: {e}"))?;
+        .map_err(|e| format!("could not run cargo rustc: {e}"))?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut dead_code = Vec::new();
@@ -199,7 +212,7 @@ fn dead_code_messages(root: &Path) -> Result<Vec<String>, String> {
     if !output.status.success() {
         // failed without a compiler error, e.g. the build script panicked
         return Err(format!(
-            "cargo check failed:\n\n{}",
+            "cargo rustc failed:\n\n{}",
             String::from_utf8_lossy(&output.stderr)
         ));
     }

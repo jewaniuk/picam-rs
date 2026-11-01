@@ -17,7 +17,7 @@ This repository is **public**. Never commit PICam SDK files (headers, libraries,
 | build | `cargo build -p picam-rs` |
 | all tests (needs the SDK installed) | `cargo test -p picam-rs` |
 | format | `cargo fmt --all` |
-| the gate, which must pass before pushing | `cargo run -p xtask -- gate` (`generate --check`, format check, `cargo clippy -p picam-rs --all-targets -- -D warnings -A dead_code`, then the `picam-rs` and `xtask` tests) |
+| the gate, which must pass before pushing | `cargo run -p xtask -- gate` (`generate --check`, format check, `cargo clippy -p picam-rs --all-targets -- -D warnings`, then the `picam-rs` and `xtask` tests) |
 | progress | `cargo run -p xtask -- progress` (add `--list` for every unwrapped function) |
 | regenerate the bindings and lists taken from the headers | `cargo run -p xtask -- generate` |
 | check them without writing | `cargo run -p xtask -- generate --check` (the gate runs this) |
@@ -98,7 +98,7 @@ Any `Send`/`Sync` question that acquisition or callbacks raise, such as stopping
 - public types are re-exported from `lib.rs`; modules stay private, except the generated `params` module
 - every public item and field has a `///` doc, every fallible public function has `# Errors`, every `unsafe fn` has `# Safety`, and every `unsafe` block has a `// SAFETY:` comment
 - inline `//` comments are lowercase with minimal punctuation
-- never add `#![allow(dead_code)]`, because the progress tool depends on those warnings
+- in `src/`, `dead_code` is allowed only in `src/sys.rs` and on `define_picam_enum!`'s `from_raw`, and never anywhere else. The progress tool passes `--force-warn dead_code` to see through those allows
 - never edit `src/generated/` by hand: change `xtask/src/generate.rs` and rerun `cargo run -p xtask -- generate`. A new long list taken straight from a header should be generated the same way. After an SDK update, run `generate`, review the diff, and add any values `generate --check` reports to the hand-written wrappers
 
 ### Reference implementations

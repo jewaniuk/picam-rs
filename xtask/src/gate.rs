@@ -43,8 +43,6 @@ pub fn run(root: &Path, output: Output) -> Result<(), String> {
                 "--",
                 "-D",
                 "warnings",
-                "-A",
-                "dead_code",
             ],
         ),
     ];
